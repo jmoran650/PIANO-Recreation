@@ -1,0 +1,78 @@
+// --- Initialization ---
+initialize SharedAgentState    // Central shared state (readable/writable by all modules)
+initialize Environment         // External world simulation
+
+// Initialize concurrent modules as stateless functions
+initialize MemoryModule                // Stores/retrieves long/short-term memories
+initialize ActionAwarenessModule       // Monitors current performance and adjusts actions
+initialize GoalGenerationModule        // Generates new objectives based on experience
+initialize SocialAwarenessModule       // Interprets/responds to social cues
+initialize TalkingModule               // Interprets and generates speech outputs
+initialize SkillExecutionModule        // Prepares and executes physical/environmental actions
+
+// Initialize the Cognitive Controller (CC)
+// Acts as a centralized bottleneck to ensure coherent, high-level decision-making.
+initialize CognitiveController        
+
+
+// --- Main Execution Loop ---
+while simulation_is_running:
+    
+    // 1. Perception: Update shared agent state from environment
+    sensory_input = Environment.getSensoryData()
+    SharedAgentState.update(sensory_input)
+    
+    // 2. Concurrent Module Processing:
+    // Each module operates concurrently and accesses the shared agent state.
+    parallel:
+        memory_out         = MemoryModule.process(SharedAgentState)
+        action_awareness   = ActionAwarenessModule.process(SharedAgentState)
+        goal_plan          = GoalGenerationModule.process(SharedAgentState)
+        social_analysis    = SocialAwarenessModule.process(SharedAgentState)
+        speech_interpret   = TalkingModule.process(SharedAgentState)
+        skill_preparation  = SkillExecutionModule.prepare(SharedAgentState)
+    end parallel
+    
+    // 3. Information Aggregation via the Bottleneck:
+    // The Cognitive Controller (CC) receives a filtered version of the shared state,
+    // along with outputs from the various modules.
+    filtered_state  = SharedAgentState.filterForDecision()  // Explicit control over data flow
+    aggregated_info = aggregate(
+                          memory_out,
+                          action_awareness,
+                          goal_plan,
+                          social_analysis,
+                          speech_interpret,
+                          skill_preparation,
+                          filtered_state
+                      )
+    
+    // 4. High-Level Decision-Making:
+    // The Cognitive Controller produces a coherent high-level decision
+    // ensuring that outputs across modalities are aligned.
+    high_level_decision = CognitiveController.decide(aggregated_info)
+    
+    // 5. Broadcast Decision to Output Modules:
+    // The decision is sent to both the Talking and Skill Execution modules,
+    // guaranteeing that speech and action are coherent.
+    speech_output = TalkingModule.generate(high_level_decision)
+    action_command = SkillExecutionModule.execute(high_level_decision)
+    
+    // 6. Execute Outputs in the Environment:
+    Environment.execute({
+        "action": action_command,
+        "speech": speech_output
+    })
+    
+    // 7. Logging & State Update:
+    // Log the decision and outcomes for learning, debugging, or future planning.
+    SharedAgentState.log({
+        "decision": high_level_decision,
+        "action": action_command,
+        "speech": speech_output,
+        "sensory": sensory_input
+    })
+    
+    // 8. Maintain Real-Time Responsiveness:
+    // Wait for the next cycle while preserving concurrency (allowing fast reflexes and slow planning)
+    wait(delta_time)
