@@ -46,100 +46,167 @@ Additional Info:
 Directory Structure
 ================================================================
 src/
-  observer.js
+  observer.ts
 .gitignore
-index.js
+index.ts
 input.txt
 package.json
 pseudo.txt
 README.md
+tsconfig.json
 
 ================================================================
 Files
 ================================================================
 
 ================
-File: src/observer.js
+File: src/observer.ts
 ================
-const Vec3 = require('vec3'); // ensure you have a Vec3 library
+// src/observer.ts
 
-class Observer {
-  constructor(bot, options = {}) {
-    this.bot = bot;
-    this.radius = options.radius || 16;
-  }
+import { Bot } from 'mineflayer'
+import type { Entity } from 'prismarine-entity'
+import type { Block } from 'prismarine-block'
+import Vec3 from 'vec3'
 
-  // Returns an array of blocks (objects) that are visible to the bot.
-  findVisibleBlocks() {
-    const startTime = Date.now();
-    const blockPositions = this.bot.findBlocks({
-      point: this.bot.entity.position,
-      maxDistance: this.radius,
-      matching: () => true // Match all blocks
-    });
-    const visibleBlocks = blockPositions
-      .map(pos => this.bot.blockAt(pos))
-      .filter(block => block && this.bot.canSeeBlock(block));
-    const endTime = Date.now();
-    console.log(`findVisibleBlocks took ${endTime - startTime} ms`);
-    return visibleBlocks;
-  }
+type Vec3Type = ReturnType<typeof Vec3>
 
-  // Returns an array of mobs (non-player entities) visible to the bot.
-  async findVisibleMobs() {
-    const startTime = Date.now();
-    await this.bot.waitForChunksToLoad();
-    const visibleMobs = [];
-    // Use the bot's eye position (assume roughly 80% of its height)
-    console.log("OBSERVER entities from observer: ", this.bot.entities);
-    console.log("OBSERVER Nearest entity", this.bot.nearestEntity());
-
-    const eyePos = this.bot.entity.position.offset(0, this.bot.entity.eyeHeight, 0)
-    
-    for (const id in this.bot.entities) {
-      const entity = this.bot.entities[id];
-      // Skip our own entity and players (players have a 'username' property)
-      if (entity === this.bot.entity || entity.username) continue;
-
-      // Use entity's approximate eye height (default to 1.0 if not provided)
-      const mobEyePos = entity.position.offset(0, (entity.height || 1.0) * 0.8, 0);
-      const distance = eyePos.distanceTo(mobEyePos);
-      if (distance > this.radius) continue;
-
-      // Check line-of-sight between bot's eye and mob's eye positions
-        visibleMobs.push(entity);
-
-    }
-    const endTime = Date.now();
-    console.log(`findVisibleMobs took ${endTime - startTime} ms`);
-    console.log("visible mobs: ", visibleMobs);
-    return visibleMobs;
-  }
-
-  // A simple raycasting function that returns true if the line of sight is clear
-  // between two Vec3 points. It samples along the ray and treats any block that is not air as an obstruction.
-  lineOfSightClear(start, end) {
-    const distance = start.distanceTo(end);
-    // Sample every 0.5 blocks along the ray
-    const step = 0.5;
-    const steps = Math.ceil(distance / step);
-    // Calculate the increment vector for each step
-    const delta = end.minus(start).scaled(1 / steps);
-    let current = start.clone();
-    for (let i = 0; i < steps; i++) {
-      const block = this.bot.blockAt(current);
-      // If a block is found and it's not air, assume it obstructs the view.
-      // You can extend this check to allow glass, water, etc.
-      if (block && block.name !== 'air') {
-        return false;
-      }
-      current = current.plus(delta);
-    }
-    return true;
-  }
+export interface ObserverOptions {
+  radius?: number
 }
 
-module.exports = Observer;
+export class Observer {
+  private bot: Bot
+  private radius: number
+
+  constructor(bot: Bot, options: ObserverOptions = {}) {
+    this.bot = bot
+    this.radius = options.radius ?? 16
+  }
+
+  /**
+   * Returns an object describing each unique block type (other than air)
+   * within `this.radius` of the bot, along with coordinates of the closest
+   * block of that type.
+   *
+   * Example return:
+   * {
+   *   BlockTypes: {
+   *     dirt: { x: 12, y: 64, z: 7 },
+   *     sand: { x: 14, y: 65, z: 9 }
+   *   }
+   * }
+   */
+  public async getVisibleBlockTypes(): Promise<{
+    BlockTypes: {
+      [blockName: string]: { x: number; y: number; z: number }
+    }
+  }> {
+    await this.bot.waitForChunksToLoad()
+
+    // 1. Find all positions within the given radius that match any non-air block.
+    //    We'll allow up to a large count (9999) so we get as many blocks as possible.
+    const positions = this.bot.findBlocks({
+      point: this.bot.entity.position,
+      maxDistance: this.radius,
+      matching: (block: Block | null) => {
+        // We only match blocks that exist and are not air
+        return block !== null && block.name !== 'air'
+      },
+      count: 9999
+    })
+
+    // 2. Map each position to { blockName, distance, pos } and group them by blockName.
+    //    We'll keep only the single closest block for each blockName.
+    interface BlockInfo {
+      blockName: string
+      distance: number
+      pos: Vec3Type
+    }
+
+    const blockInfos: BlockInfo[] = []
+    const botPos = this.bot.entity.position
+
+    for (const pos of positions) {
+      const block = this.bot.blockAt(pos) as Block | null
+      if (!block) continue
+
+      const distance = botPos.distanceTo(pos)
+      blockInfos.push({
+        blockName: block.name,
+        distance,
+        pos
+      })
+    }
+
+    // 3. Group by blockName, pick the closest block for each group.
+    const closestByType: {
+      [key: string]: { distance: number; pos: Vec3Type }
+    } = {}
+
+    for (const info of blockInfos) {
+      const existing = closestByType[info.blockName]
+      if (!existing || info.distance < existing.distance) {
+        closestByType[info.blockName] = { distance: info.distance, pos: info.pos }
+      }
+    }
+
+    // 4. Build the final return structure
+    const result: {
+      BlockTypes: {
+        [blockName: string]: { x: number; y: number; z: number }
+      }
+    } = { BlockTypes: {} }
+
+    for (const blockName of Object.keys(closestByType)) {
+      const { pos } = closestByType[blockName]
+      result.BlockTypes[blockName] = { x: pos.x, y: pos.y, z: pos.z }
+    }
+
+    return result
+  }
+
+  /**
+   * Returns an object containing a list of mobs within `this.radius`,
+   * each with its name and distance from the bot. Not grouped by type.
+   *
+   * Example return:
+   * {
+   *   Mobs: [
+   *     { name: 'Skeleton', distance: 10.2 },
+   *     { name: 'Creeper', distance: 12.7 },
+   *     { name: 'Zombie', distance: 14.1 }
+   *   ]
+   * }
+   */
+  public async getVisibleMobs(): Promise<{
+    Mobs: { name: string; distance: number }[]
+  }> {
+    await this.bot.waitForChunksToLoad()
+    const center = this.bot.entity.position
+    const result = { Mobs: [] as { name: string; distance: number }[] }
+
+    for (const id in this.bot.entities) {
+      const entity = this.bot.entities[id] as Entity
+
+      // Ignore the bot itself and any players (players have a 'username' property).
+      if (entity === this.bot.entity || (entity as any).username) continue
+
+      // Check the distance from the bot.
+      const dist = center.distanceTo(entity.position)
+      if (dist <= this.radius) {
+        // entity.name is often a lowercase string like 'cow', 'zombie', etc.
+        // If entity.name is missing or capitalized, adjust as needed.
+        result.Mobs.push({
+          name: entity.name ?? 'unknown_mob',
+          distance: parseFloat(dist.toFixed(2))
+        })
+      }
+    }
+
+    return result
+  }
+}
 
 ================
 File: .gitignore
@@ -283,46 +350,71 @@ dist
 .pnp.*
 
 ================
-File: index.js
+File: index.ts
 ================
-const mineflayer = require('mineflayer');
-const mineflayerViewer = require('prismarine-viewer').mineflayer;
-const Observer = require('./src/observer');
+// index.ts
+import mineflayer, { Bot } from 'mineflayer'
+import { mineflayer as mineflayerViewer } from 'prismarine-viewer'
+import { Observer } from './src/observer'
+const minecraftData = require('minecraft-data')
+// or for es6: import minecraftData from 'minecraft-data';
 
-const bot = mineflayer.createBot({
+const mcData = minecraftData('1.21.4');
+
+const bot: Bot = mineflayer.createBot({
   host: 'localhost',
   port: 37269,
   username: 'AgentBot',
   version: '1.21.4'
-});
+})
 
-const welcome = () => {
-  bot.chat('hi there!');
-};
+const observer = new Observer(bot, { radius: 16 })
 
+function welcome() {
+  bot.chat('hi there!')
+}
 
 bot.once('spawn', async () => {
   // Launch the prismarine viewer for visualization
-  mineflayerViewer(bot, { port: 3000, firstPerson: false });
-  welcome();
-  await bot.waitForChunksToLoad();
-  
-  bot.on('error', (err) => {
-    bot.chat(err.name, err.message);
-    console.log("\n ERROR ERROR ERROR \n", err, "\n ERROR ERROR ERROR \n");
-  });
+  mineflayerViewer(bot, { port: 3000, firstPerson: false })
+  welcome()
+  await bot.waitForChunksToLoad()
+ //console.log(mcData.blocks)
+  // Create the observer instance before registering the chat event.
 
-  bot.on('chat', (username) => {
-    if (username === bot.username) return;
-    const visibleBlocks = observer.findVisibleBlocks();
-    //const visibleMobs = observer.findVisibleMobs();
-    bot.chat(Object.values(visibleBlocks));
-    //bot.chat(visibleMobs.toString());
-});
 
-  const observer = new Observer(bot, {radius: 160 });
+})
 
-}); // <-- Added this closing bracket to end bot.once('spawn', ...)
+bot.on('error', (err: Error) => {
+  bot.chat(`${err.name} ${err.message}`)
+  console.log('\n ERROR ERROR ERROR \n', err, '\n ERROR ERROR ERROR \n')
+})
+
+// Listen for any chat message.
+bot.on('chat', async (username: string, message: string) => {
+  // Ignore our own messages.
+  if (username === bot.username) return
+
+  // Get visible blocks and mobs.
+  const visibleBlocks = observer.getVisibleBlockTypes()
+  const visibleMobs = await observer.getVisibleMobs()
+
+  // Format block information.
+  // We assume each block has a "name" property.
+  const blocksStr = visibleBlocks
+    .map((block: any) => (block ? block.name : 'unknown'))
+    .join(', ')
+
+  // Format mob information.
+  // If a mob has a "username" property, use it; otherwise, use a default label.
+  const mobsStr = visibleMobs
+    .map((mob: any) => (mob.name ? mob.name : 'mob'))
+    .join(', ')
+
+  // Chat the visible blocks and mobs. Bots can only chat strings.
+  bot.chat(`Visible Blocks: ${blocksStr}`)
+  bot.chat(`Visible Mobs: ${mobsStr}`)
+})
 
 ================
 File: input.txt
@@ -379,9 +471,10 @@ File: package.json
   "name": "agent_simulator",
   "version": "1.0.0",
   "description": "repo for working on minecraft agents",
-  "main": "index.js",
+  "main": "dist/index.js",
   "scripts": {
-    "start": "node index.js",
+    "build": "tsc",
+    "start": "npm run build && node dist/index.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "",
@@ -393,6 +486,10 @@ File: package.json
     "mineflayer-pathfinder": "^2.4.5",
     "prismarine-viewer": "^1.33.0",
     "repomix": "^0.2.28"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.4",
+    "typescript": "^5.7.3"
   }
 }
 
@@ -482,6 +579,23 @@ while simulation_is_running:
 File: README.md
 ================
 Jibbum's Agent Sim
+
+================
+File: tsconfig.json
+================
+{
+    "compilerOptions": {
+      "target": "ES2020",
+      "module": "CommonJS",
+      "strict": true,
+      "esModuleInterop": true,
+      "skipLibCheck": true,
+      "outDir": "dist",
+      "rootDir": "."
+    },
+    "include": ["src/**/*", "index.ts"],
+    "exclude": ["node_modules", "dist"]
+  }
 
 
 

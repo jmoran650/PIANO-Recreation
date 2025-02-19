@@ -1,9 +1,10 @@
 // src/observer.ts
+
 import { Bot } from 'mineflayer'
 import type { Entity } from 'prismarine-entity'
+import type { Block } from 'prismarine-block'
 import Vec3 from 'vec3'
 
-// Create a type alias for an instance of Vec3
 type Vec3Type = ReturnType<typeof Vec3>
 
 export interface ObserverOptions {
@@ -19,73 +20,126 @@ export class Observer {
     this.radius = options.radius ?? 16
   }
 
-  // Returns an array of blocks (objects) that are visible to the bot.
-  public findVisibleBlocks(): any[] {
-    const startTime = Date.now()
-    const blockPositions = this.bot.findBlocks({
+  /**
+   * Returns an object describing each unique block type (other than air)
+   * within `this.radius` of the bot, along with coordinates of the closest
+   * block of that type.
+   *
+   * Example return:
+   * {
+   *   BlockTypes: {
+   *     dirt: { x: 12, y: 64, z: 7 },
+   *     sand: { x: 14, y: 65, z: 9 }
+   *   }
+   * }
+   */
+  public async getVisibleBlockTypes(): Promise<{
+    BlockTypes: {
+      [blockName: string]: { x: number; y: number; z: number }
+    }
+  }> {
+    await this.bot.waitForChunksToLoad()
+
+    // 1. Find all positions within the given radius that match any non-air block.
+    //    We'll allow up to a large count (9999) so we get as many blocks as possible.
+    const positions = this.bot.findBlocks({
       point: this.bot.entity.position,
       maxDistance: this.radius,
-      matching: () => true // Match all blocks
+      matching: (block: Block | null) => {
+        // We only match blocks that exist and are not air
+        return block !== null && block.name !== 'air'
+      },
+      count: 9999
     })
 
-    const visibleBlocks = blockPositions
-      .map((pos: Vec3Type) => this.bot.blockAt(pos))
-      .filter((block: any) => block && this.bot.canSeeBlock(block))
+    // 2. Map each position to { blockName, distance, pos } and group them by blockName.
+    //    We'll keep only the single closest block for each blockName.
+    interface BlockInfo {
+      blockName: string
+      distance: number
+      pos: Vec3Type
+    }
 
-    const endTime = Date.now()
-    console.log(`findVisibleBlocks took ${endTime - startTime} ms`)
-    return visibleBlocks
+    const blockInfos: BlockInfo[] = []
+    const botPos = this.bot.entity.position
+
+    for (const pos of positions) {
+      const block = this.bot.blockAt(pos) as Block | null
+      if (!block) continue
+
+      const distance = botPos.distanceTo(pos)
+      blockInfos.push({
+        blockName: block.name,
+        distance,
+        pos
+      })
+    }
+
+    // 3. Group by blockName, pick the closest block for each group.
+    const closestByType: {
+      [key: string]: { distance: number; pos: Vec3Type }
+    } = {}
+
+    for (const info of blockInfos) {
+      const existing = closestByType[info.blockName]
+      if (!existing || info.distance < existing.distance) {
+        closestByType[info.blockName] = { distance: info.distance, pos: info.pos }
+      }
+    }
+
+    // 4. Build the final return structure
+    const result: {
+      BlockTypes: {
+        [blockName: string]: { x: number; y: number; z: number }
+      }
+    } = { BlockTypes: {} }
+
+    for (const blockName of Object.keys(closestByType)) {
+      const { pos } = closestByType[blockName]
+      result.BlockTypes[blockName] = { x: pos.x, y: pos.y, z: pos.z }
+    }
+
+    return result
   }
 
-  // Returns an array of mobs (non-player entities) visible to the bot.
-  public async findVisibleMobs(): Promise<Entity[]> {
-    const startTime = Date.now()
+  /**
+   * Returns an object containing a list of mobs within `this.radius`,
+   * each with its name and distance from the bot. Not grouped by type.
+   *
+   * Example return:
+   * {
+   *   Mobs: [
+   *     { name: 'Skeleton', distance: 10.2 },
+   *     { name: 'Creeper', distance: 12.7 },
+   *     { name: 'Zombie', distance: 14.1 }
+   *   ]
+   * }
+   */
+  public async getVisibleMobs(): Promise<{
+    Mobs: { name: string; distance: number }[]
+  }> {
     await this.bot.waitForChunksToLoad()
-    const visibleMobs: Entity[] = []
+    const center = this.bot.entity.position
+    const result = { Mobs: [] as { name: string; distance: number }[] }
 
-    console.log("OBSERVER entities from observer: ", this.bot.entities)
-    console.log("OBSERVER Nearest entity", this.bot.nearestEntity())
-
-    // Since Entity does not have eyeHeight, use a fallback:
-    // try (this.bot.entity as any).eyeHeight or compute 80% of its height.
-    const eyeHeight = (this.bot.entity as any).eyeHeight ?? this.bot.entity.height * 0.8
-    const eyePos = this.bot.entity.position.offset(0, eyeHeight, 0)
-    
     for (const id in this.bot.entities) {
       const entity = this.bot.entities[id] as Entity
-      // Skip our own entity and players (players have a 'username' property)
+
+      // Ignore the bot itself and any players (players have a 'username' property).
       if (entity === this.bot.entity || (entity as any).username) continue
 
-      // Use entity's approximate eye height (default to 1.0 if not provided)
-      const mobEyeHeight = (entity as any).height || 1.0
-      const mobEyePos = entity.position.offset(0, mobEyeHeight * 0.8, 0)
-      const distance = eyePos.distanceTo(mobEyePos)
-      if (distance > this.radius) continue
-
-      visibleMobs.push(entity)
-    }
-    const endTime = Date.now()
-    console.log(`findVisibleMobs took ${endTime - startTime} ms`)
-    console.log("visible mobs: ", visibleMobs)
-    return visibleMobs
-  }
-
-  // A simple raycasting function that returns true if the line of sight is clear
-  // between two Vec3 points.
-  public lineOfSightClear(start: Vec3Type, end: Vec3Type): boolean {
-    const distance = start.distanceTo(end)
-    const step = 0.5
-    const steps = Math.ceil(distance / step)
-    const delta = end.minus(start).scaled(1 / steps)
-    let current = start.clone()
-    for (let i = 0; i < steps; i++) {
-      const block = this.bot.blockAt(current)
-      // If a block is found and it's not air, assume it obstructs the view.
-      if (block && block.name !== 'air') {
-        return false
+      // Check the distance from the bot.
+      const dist = center.distanceTo(entity.position)
+      if (dist <= this.radius) {
+        // entity.name is often a lowercase string like 'cow', 'zombie', etc.
+        // If entity.name is missing or capitalized, adjust as needed.
+        result.Mobs.push({
+          name: entity.name ?? 'unknown_mob',
+          distance: parseFloat(dist.toFixed(2))
+        })
       }
-      current = current.plus(delta)
     }
-    return true
+
+    return result
   }
 }
