@@ -1,0 +1,31 @@
+bots should probably have some modules enabled/disabled based on role. For example a hunter might not need to decide whether he wants to farm or not every tick.
+
+cognitive controller? 
+
+draft of cc:
+
+    each tick:
+        fire observation to get surroundings
+        if humans present:
+            use social
+        if mobs present:
+            danger module?
+        query goals/action awareness? (each tick bot should be like hmm what am i doing right now.)
+
+ 
+        what am i doing right now:
+            check short term goals
+
+    should have ability to lock in and stop doing api calls while fulfilling basic tasks i.e. mining or fighting
+        
+    Lets say goal is to craft an iron pickaxe.
+
+        what am i doing right now:
+            check short term goals.
+            check short term memory for evidence of work towards goal.
+            try to measure completion of goal. 
+            try to measure what is necessary to complete goal (memory does not include having built an iron pickaxe) (check inventory). 
+            Say we have no iron pickaxe, only a wood one.
+            Break down into subgoals is a good idea. So goal(get iron pickaxe) = (mine iron ore, make furnace, smelt iron ore, craft iron pickaxe). 
+            Perhaps subgoals can be broken down into subsubgoals. 
+            So goal(get iron pickaxe) = (mine iron ore(find iron ore, go to iron ore, mine iron ore(3)), make furnace(ensure enough stone else mine stone, craft furnace ), smelt iron ore(put ore in furnace, wood in furnace), craft iron pickaxe(get sticks, craft pickaxe)).

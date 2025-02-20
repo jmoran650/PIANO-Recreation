@@ -46,7 +46,15 @@ Additional Info:
 Directory Structure
 ================================================================
 src/
+  actions.ts
+  goals.ts
+  highlevel.txt
+  memory.ts
+  navigation.ts
   observer.ts
+  social.ts
+types/
+  bot-types.ts
 .gitignore
 index.ts
 input.txt
@@ -60,28 +68,258 @@ Files
 ================================================================
 
 ================
+File: src/actions.ts
+================
+//export class Actions{ 
+
+    //TODO: Mine(goalblock) a goal block, intake a desired number, keep mining closest goal block until # reached.
+
+    //TODO: Craft(goalItem) craft a goal item, use items in inventory, chat i dont have the items if they are not present
+
+    //TODO: Place(block) place a furnace or crafting bench, use Craft() if not present in inventory
+    
+    //TODO: Attack(Mob) goto and attack mob until mob dead.
+
+//}
+
+================
+File: src/goals.ts
+================
+/**
+ * goals.ts
+ *
+ * Manages the bot's goals. A "long-term goal" is the primary objective
+ * (e.g., "get iron pickaxe"). It is composed of multiple "short-term goals"
+ * (subtasks) that can be executed sequentially or in parallel.
+ *
+ * This class:
+ * - Maintains one current long-term goal at a time.
+ * - Maintains one current short-term goal from among that long-term goal's subtasks.
+ * - Allows insertion of new long-term goals (the bot might queue them up or switch).
+ * - Breaks down a long-term goal into subtasks using an LLM (stubbed).
+ */
+
+export class Goals {
+    /** List of all pending long-term goals the bot eventually wants to accomplish. */
+    private longTermGoalQueue: string[] = []
+  
+    /** The current long-term goal the bot is working on. */
+    private currentLongTermGoal: string | null = null
+  
+    /** The current short-term goal (subtask) the bot is working on right now. */
+    private currentShortTermGoal: string | null = null
+  
+    /**
+     * Add a new long-term goal to the bot. If the bot doesn’t have a current
+     * long-term goal, we can set it immediately; otherwise, we queue it.
+     */
+    public addLongTermGoal(goal: string): void {
+      // If we have no current long-term goal, set this goal as current
+      if (!this.currentLongTermGoal) {
+        this.currentLongTermGoal = goal
+        // We might also want to break it down into subtasks immediately, etc.
+        // but for now we just store it.
+      } else {
+        // Otherwise, push it into the queue
+        this.longTermGoalQueue.push(goal)
+      }
+    }
+  
+    /**
+     * Returns the current long-term goal (if any).
+     */
+    public getCurrentLongTermGoal(): string | null {
+      return this.currentLongTermGoal
+    }
+  
+    /**
+     * Returns the current short-term goal (if any).
+     */
+    public getCurrentShortTermGoal(): string | null {
+      return this.currentShortTermGoal
+    }
+  
+    /**
+     * Attempt to break down a long-term goal into direct-action subtasks
+     * using an LLM. For example:
+     *   "get iron pickaxe" -> [
+     *     "mine iron ore -> find iron ore -> go to iron ore -> mine iron ore (x3)",
+     *     "make furnace -> gather stone -> craft furnace",
+     *     "smelt iron ore -> put ore in furnace -> use fuel",
+     *     "craft iron pickaxe -> gather sticks -> craft pickaxe"
+     *   ]
+     *
+     * This method is stubbed out here. You would fill in the LLM call to an
+     * external API or local model for the actual breakdown logic.
+     */
+    public async breakDownGoalWithLLM(goal: string): Promise<string[]> {
+      // In a real scenario, you'd call your LLM here, e.g.:
+      // const prompt = `Break down "${goal}" into direct-action tasks. ...`
+      // const response = await callMyLLMAPI(prompt)
+      // return parseResponseIntoSubtasks(response)
+  
+      // For now, we simulate returning a set of subtasks for demonstration:
+      if (goal.toLowerCase().includes("iron pickaxe")) {
+        return [
+          "mine iron ore (find iron ore, travel to iron ore, mine it)",
+          "make furnace (gather stone, craft furnace)",
+          "smelt iron ore (ore + fuel in furnace)",
+          "craft iron pickaxe (sticks + iron ingots)"
+        ]
+      }
+      // If not recognized, just pass back a trivial subtask
+      return ["No known breakdown; proceed manually."]
+    }
+  
+    /**
+     * A small helper to set the current short-term goal. Usually, this is the
+     * next subtask from the breakdown of the current long-term goal.
+     */
+    public setCurrentShortTermGoal(stGoal: string): void {
+      this.currentShortTermGoal = stGoal
+    }
+  
+    /**
+     * Example of how you might progress to the next long-term goal in the queue
+     * once the current one is finished. Or you could do it automatically after
+     * subtasks are done. This is optional logic you can adapt.
+     */
+    public advanceLongTermGoal(): void {
+      if (this.longTermGoalQueue.length === 0) {
+        this.currentLongTermGoal = null
+        this.currentShortTermGoal = null
+        return
+      }
+      // Dequeue the next goal
+      this.currentLongTermGoal = this.longTermGoalQueue.shift() || null
+      this.currentShortTermGoal = null
+    }
+  }
+
+================
+File: src/highlevel.txt
+================
+bots should probably have some modules enabled/disabled based on role. For example a hunter might not need to decide whether he wants to farm or not every tick.
+
+cognitive controller? 
+
+draft of cc:
+
+    each tick:
+        fire observation to get surroundings
+        if humans present:
+            use social
+        if mobs present:
+            danger module?
+        query goals/action awareness? (each tick bot should be like hmm what am i doing right now.)
+
+ 
+        what am i doing right now:
+            check short term goals
+
+    should have ability to lock in and stop doing api calls while fulfilling basic tasks i.e. mining or fighting
+        
+    Lets say goal is to craft an iron pickaxe.
+
+        what am i doing right now:
+            check short term goals.
+            check short term memory for evidence of work towards goal.
+            try to measure completion of goal. 
+            try to measure what is necessary to complete goal (memory does not include having built an iron pickaxe) (check inventory). 
+            Say we have no iron pickaxe, only a wood one.
+            Break down into subgoals is a good idea. So goal(get iron pickaxe) = (mine iron ore, make furnace, smelt iron ore, craft iron pickaxe). 
+            Perhaps subgoals can be broken down into subsubgoals. 
+            So goal(get iron pickaxe) = (mine iron ore(find iron ore, go to iron ore, mine iron ore(3)), make furnace(ensure enough stone else mine stone, craft furnace ), smelt iron ore(put ore in furnace, wood in furnace), craft iron pickaxe(get sticks, craft pickaxe)).
+
+================
+File: src/memory.ts
+================
+// export class Memory(){
+
+// short term memory: 
+    // provide a table with max 7 - 10? things as key value pairs, least recently used.
+
+// private stm2ltm:
+    // decide whether an item being removed from short term memory is worthy of going into long term. 
+
+// long term memory:
+    // store long term info, how does this interact with social awareness? should this be a table as well?
+
+//location memory:
+    // store notable locations, no limit
+
+// }
+
+================
+File: src/navigation.ts
+================
+import { Bot } from 'mineflayer'
+import { pathfinder, Movements, goals } from 'mineflayer-pathfinder'
+
+// Destructure out the specific goal class we want to use
+const { GoalBlock } = goals
+
+/**
+ * A simple Movement class that uses mineflayer-pathfinder to move the bot to
+ * a specified coordinate (x, y, z).
+ */
+export class Navigation {
+  private bot: Bot
+  private movements: Movements
+
+  constructor(bot: Bot) {
+    this.bot = bot
+    
+
+    // Create a new Movements instance for this bot
+    this.movements = new Movements(bot)
+    // Set our Movements configuration in pathfinder
+    this.bot.pathfinder.setMovements(this.movements)
+  }
+
+  /**
+   * move(x, y, z): Uses the pathfinder's GoalBlock to navigate to the specified coordinates
+   * @param x number
+   * @param y number
+   * @param z number
+   */
+  public async move(x: number, y: number, z: number): Promise<void> {
+    // Create a new goal
+    const goal = new GoalBlock(x, y, z)
+    // Instruct the pathfinder to go to this goal
+    await this.bot.pathfinder.goto(goal)
+  }
+
+  //TODO: Safe movement (avoid lava, falling)
+
+  //TODO: evasive movement (if one decides to run away from mobs or other bots, has optional goal in case of trying to get back to village, safety,etc. )
+
+  //TODO: Normal movement: avoid breaking things to reach someone if not necessary.
+}
+
+================
 File: src/observer.ts
 ================
 // src/observer.ts
 
-import { Bot } from 'mineflayer'
-import type { Entity } from 'prismarine-entity'
-import type { Block } from 'prismarine-block'
-import Vec3 from 'vec3'
+import { Bot } from "mineflayer";
+import type { Entity } from "prismarine-entity";
+import type { Block } from "prismarine-block";
+import Vec3 from "vec3";
 
-type Vec3Type = ReturnType<typeof Vec3>
+type Vec3Type = ReturnType<typeof Vec3>;
 
 export interface ObserverOptions {
-  radius?: number
+  radius?: number;
 }
 
 export class Observer {
-  private bot: Bot
-  private radius: number
+  private bot: Bot;
+  private radius: number;
 
   constructor(bot: Bot, options: ObserverOptions = {}) {
-    this.bot = bot
-    this.radius = options.radius ?? 16
+    this.bot = bot;
+    this.radius = options.radius ?? 16;
   }
 
   /**
@@ -99,10 +337,10 @@ export class Observer {
    */
   public async getVisibleBlockTypes(): Promise<{
     BlockTypes: {
-      [blockName: string]: { x: number; y: number; z: number }
-    }
+      [blockName: string]: { x: number; y: number; z: number };
+    };
   }> {
-    await this.bot.waitForChunksToLoad()
+    await this.bot.waitForChunksToLoad();
 
     // 1. Find all positions within the given radius that match any non-air block.
     //    We'll allow up to a large count (9999) so we get as many blocks as possible.
@@ -111,59 +349,62 @@ export class Observer {
       maxDistance: this.radius,
       matching: (block: Block | null) => {
         // We only match blocks that exist and are not air
-        return block !== null && block.name !== 'air'
+        return block !== null && block.name !== "air";
       },
-      count: 9999
-    })
+      count: 9999,
+    });
 
     // 2. Map each position to { blockName, distance, pos } and group them by blockName.
     //    We'll keep only the single closest block for each blockName.
     interface BlockInfo {
-      blockName: string
-      distance: number
-      pos: Vec3Type
+      blockName: string;
+      distance: number;
+      pos: Vec3Type;
     }
 
-    const blockInfos: BlockInfo[] = []
-    const botPos = this.bot.entity.position
+    const blockInfos: BlockInfo[] = [];
+    const botPos = this.bot.entity.position;
 
     for (const pos of positions) {
-      const block = this.bot.blockAt(pos) as Block | null
-      if (!block) continue
+      const block = this.bot.blockAt(pos) as Block | null;
+      if (!block) continue;
 
-      const distance = botPos.distanceTo(pos)
+      const distance = botPos.distanceTo(pos);
       blockInfos.push({
         blockName: block.name,
         distance,
-        pos
-      })
+        pos,
+      });
     }
 
     // 3. Group by blockName, pick the closest block for each group.
     const closestByType: {
-      [key: string]: { distance: number; pos: Vec3Type }
-    } = {}
+      [key: string]: { distance: number; pos: Vec3Type };
+    } = {};
 
     for (const info of blockInfos) {
-      const existing = closestByType[info.blockName]
+      const existing = closestByType[info.blockName];
       if (!existing || info.distance < existing.distance) {
-        closestByType[info.blockName] = { distance: info.distance, pos: info.pos }
+        closestByType[info.blockName] = {
+          distance: info.distance,
+          pos: info.pos,
+        };
       }
     }
 
     // 4. Build the final return structure
     const result: {
       BlockTypes: {
-        [blockName: string]: { x: number; y: number; z: number }
-      }
-    } = { BlockTypes: {} }
+        [blockName: string]: { x: number; y: number; z: number };
+      };
+    } = { BlockTypes: {} };
 
     for (const blockName of Object.keys(closestByType)) {
-      const { pos } = closestByType[blockName]
-      result.BlockTypes[blockName] = { x: pos.x, y: pos.y, z: pos.z }
+      const { pos } = closestByType[blockName];
+      result.BlockTypes[blockName] = { x: pos.x, y: pos.y, z: pos.z };
     }
 
-    return result
+    return result;
   }
 
   /**
@@ -180,33 +421,78 @@ export class Observer {
    * }
    */
   public async getVisibleMobs(): Promise<{
-    Mobs: { name: string; distance: number }[]
+    Mobs: { name: string; distance: number }[];
   }> {
-    await this.bot.waitForChunksToLoad()
-    const center = this.bot.entity.position
-    const result = { Mobs: [] as { name: string; distance: number }[] }
+    await this.bot.waitForChunksToLoad();
+    const center = this.bot.entity.position;
+    const result = { Mobs: [] as { name: string; distance: number }[] };
 
     for (const id in this.bot.entities) {
-      const entity = this.bot.entities[id] as Entity
+      const entity = this.bot.entities[id] as Entity;
 
       // Ignore the bot itself and any players (players have a 'username' property).
-      if (entity === this.bot.entity || (entity as any).username) continue
+      if (entity === this.bot.entity || (entity as any).username) continue;
 
       // Check the distance from the bot.
-      const dist = center.distanceTo(entity.position)
+      const dist = center.distanceTo(entity.position);
       if (dist <= this.radius) {
         // entity.name is often a lowercase string like 'cow', 'zombie', etc.
         // If entity.name is missing or capitalized, adjust as needed.
         result.Mobs.push({
-          name: entity.name ?? 'unknown_mob',
-          distance: parseFloat(dist.toFixed(2))
-        })
+          name: entity.name ?? "unknown_mob",
+          distance: parseFloat(dist.toFixed(2)),
+        });
       }
     }
 
-    return result
+    return result;
   }
+
+  //TODO: biome determination
+
+  //TODO: relative location determination i.e. am I underground or on the surface?
+
+  //TODO: Hearing
+
+  //TODO: observe inventory
+
+  //TODO: Time awareness
 }
+
+================
+File: src/social.ts
+================
+// export class Social() {
+
+    //Feelings to others table: person: feelings table, should include small reference to reasons for feeling that way? CC can reference event in LTM if necessary
+
+    //Model of others feelings towards self table:
+        //person to feelings table. Maybe these two should be the same?
+
+    //Behavior awareness
+        //intake current social context, determine if current behavior is aligned with others
+
+    //Goal awareness
+        //determine whether ones goals are compatible with others
+
+    //truth determiner
+        // should bot tell the truth?
+    
+    //talk
+        //takes in what bot wants to say at a high level and rewrites (tones) it according to the bots personality
+    
+    // listen
+        //intake what others say, determine how bot feels 
+
+//}
+
+================
+File: types/bot-types.ts
+================
+import { Bot } from 'mineflayer'
+export interface PathfinderBot extends Bot {
+    pathfinder: any;
+ }
 
 ================
 File: .gitignore
@@ -353,68 +639,140 @@ dist
 File: index.ts
 ================
 // index.ts
-import mineflayer, { Bot } from 'mineflayer'
-import { mineflayer as mineflayerViewer } from 'prismarine-viewer'
-import { Observer } from './src/observer'
-const minecraftData = require('minecraft-data')
-// or for es6: import minecraftData from 'minecraft-data';
+import mineflayer, { Bot } from "mineflayer";
+import { mineflayer as mineflayerViewer } from "prismarine-viewer";
+import { Observer } from "./src/observer";
+import "mineflayer-pathfinder";
+import { pathfinder, Movements, goals } from "mineflayer-pathfinder";
+import minecraftData from "minecraft-data";
+import { Vec3 } from "vec3";
 
-const mcData = minecraftData('1.21.4');
+// Import our new Movement class
+import { Navigation } from "./src/navigation";
+import { error } from "console";
+// instantiate global movement variable
+let navigation: Navigation | null = null;
+
+const mcData = minecraftData("1.21.4");
 
 const bot: Bot = mineflayer.createBot({
-  host: 'localhost',
+  host: "localhost",
   port: 37269,
-  username: 'AgentBot',
-  version: '1.21.4'
-})
+  auth: "offline",
+  username: "AgentBot",
+  version: "1.21.4",
+});
 
-const observer = new Observer(bot, { radius: 16 })
+
+const observer = new Observer(bot, { radius: 200 });
 
 function welcome() {
-  bot.chat('hi there!')
+  bot.chat("hi there!");
 }
 
-bot.once('spawn', async () => {
-  // Launch the prismarine viewer for visualization
-  mineflayerViewer(bot, { port: 3000, firstPerson: false })
-  welcome()
-  await bot.waitForChunksToLoad()
- //console.log(mcData.blocks)
-  // Create the observer instance before registering the chat event.
+bot.once("spawn", async () => {
 
+  // 1. Launch the prismarine viewer for visualization (optional)
+  //mineflayerViewer(bot, { port: 3000, firstPerson: false })
 
-})
+  // 2. Greet
+  welcome();
 
-bot.on('error', (err: Error) => {
-  bot.chat(`${err.name} ${err.message}`)
-  console.log('\n ERROR ERROR ERROR \n', err, '\n ERROR ERROR ERROR \n')
-})
+  // 3. Wait for chunks to load
+  await bot.waitForChunksToLoad();
 
-// Listen for any chat message.
-bot.on('chat', async (username: string, message: string) => {
-  // Ignore our own messages.
-  if (username === bot.username) return
+  // 4. Load the pathfinder plugin
+  bot.loadPlugin(pathfinder);
+  // Create an instance of our Movement class
+  navigation = new Navigation(bot);
+  // 5. Set default movements (so the bot can navigate).
+  //    You can also do this inside the Movement class if you prefer.
+  const defaultMovements = new Movements(bot);
+  bot.pathfinder.setMovements(defaultMovements);
 
-  // Get visible blocks and mobs.
-  const visibleBlocks = observer.getVisibleBlockTypes()
-  const visibleMobs = await observer.getVisibleMobs()
+  bot.chat("I'm ready to go!");
 
-  // Format block information.
-  // We assume each block has a "name" property.
-  const blocksStr = visibleBlocks
-    .map((block: any) => (block ? block.name : 'unknown'))
-    .join(', ')
+});
 
-  // Format mob information.
-  // If a mob has a "username" property, use it; otherwise, use a default label.
-  const mobsStr = visibleMobs
-    .map((mob: any) => (mob.name ? mob.name : 'mob'))
-    .join(', ')
+// Listen for any chat message
+bot.on("chat", async (username: string, message: string) => {
+  // Ignore our own messages
+  if (username === bot.username) return;
 
-  // Chat the visible blocks and mobs. Bots can only chat strings.
-  bot.chat(`Visible Blocks: ${blocksStr}`)
-  bot.chat(`Visible Mobs: ${mobsStr}`)
-})
+  // Handle the "blocks" command
+  if (message === "blocks") {
+    const visibleBlocksResult = await observer.getVisibleBlockTypes();
+    const blocksStr = Object.entries(visibleBlocksResult.BlockTypes)
+      .map(([blockName, { x, y, z }]) => `${blockName} at (${x}, ${y}, ${z})`)
+      .join(", ");
+    bot.chat(`Visible Blocks: ${blocksStr || "None"}`);
+  }
+  if (message === "home") {
+    bot.chat("/tp -124 62 28");
+  }
+
+  if (message === "tome") {
+    bot.chat("/tp jibbum")
+  }
+
+  // Handle the "mobs" command
+  else if (message === "mobs") {
+    const visibleMobsResult = await observer.getVisibleMobs();
+    const mobsStr = visibleMobsResult.Mobs.map(
+      (mob) => `${mob.name} (${mob.distance} away)`
+    ).join(", ");
+    bot.chat(`Visible Mobs: ${mobsStr || "None"}`);
+  }
+
+  // Handle the "wood" command (existing logic)
+  else if (message === "wood") {
+    const visibleBlocksResult = await observer.getVisibleBlockTypes();
+    const blockTypes = visibleBlocksResult.BlockTypes;
+
+    const woodCandidates = Object.keys(blockTypes).filter(
+      (name) =>
+        name.includes("log") || name.includes("wood") || name.includes("plank")
+    );
+
+    if (woodCandidates.length === 0) {
+      bot.chat("No trees nearby");
+      return;
+    }
+
+    const woodName = woodCandidates[0];
+    const { x, y, z } = blockTypes[woodName];
+
+    bot.chat(
+      `Moving to the nearest wood block: ${woodName} at (${x}, ${y}, ${z})`
+    );
+    await bot.pathfinder.goto(new goals.GoalBlock(x, y, z));
+    bot.chat("Arrived at the wood block!");
+  }
+
+  // Handle the "move" command
+  else if (message === "move") {
+    //const movement = new Movement(bot)
+    // Choose a spot 10 blocks in front of the bot (along the X-axis in this example)
+    const { x, y, z } = bot.entity.position;
+    const targetX = Math.floor(x + 10); // pick a direction or random
+    const targetY = Math.floor(y);
+    const targetZ = Math.floor(z);
+
+    bot.chat(
+      `Moving 10 blocks away to ( ${targetX}, ${targetY}, ${targetZ} )...`
+    );
+    if(!navigation){
+      bot.chat("Navigation is not ready yet!");
+      return;
+    }
+    await navigation.move(targetX, targetY, targetZ);
+    bot.chat("Arrived at new location!");
+  }
+});
+
+bot.on("error", async (error) => {
+  console.log(error);
+});
 
 ================
 File: input.txt
