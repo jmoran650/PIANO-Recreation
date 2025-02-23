@@ -10,6 +10,11 @@ import { plugin as pvp } from 'mineflayer-pvp';
 import { Navigation } from "./src/navigation";
 import { Actions } from "./src/actions";
 
+// in index.ts or wherever you initialize the bot:
+import { SharedAgentState } from "./src/sharedAgentState";
+
+const sharedAgentState = new SharedAgentState();
+
 let navigation: Navigation | null = null;
 let actions: Actions | null = null;
 
