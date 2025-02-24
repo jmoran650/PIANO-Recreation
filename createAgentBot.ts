@@ -65,14 +65,11 @@ export async function createAgentBot(options: BotOptions): Promise<AgentBot> {
   const actions = new Actions(bot, navigation, sharedState);
   const cc = new CognitiveController(bot, sharedState, memory, social, goals, observer, actions);
 
-  // 6. Start the CognitiveController tick loop.
-  setInterval(() => {
-    cc.tick().catch((err) => {
-      console.error("[CC] Error:", err);
-    });
-  }, 5000);
+
 
   bot.chat("Hello, I've been created by createAgentBot!");
+  
+  cc.startConcurrentLoops();
 
   // 7. Return all the components.
   return { bot, sharedState, memory, social, goals, observer, navigation, actions, cc };

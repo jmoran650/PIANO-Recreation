@@ -20,6 +20,10 @@ export class CognitiveController {
   private observer: Observer;
   private actions: Actions;
 
+  // Store interval IDs so we can clear them if needed later
+  private fastLoopIntervalId: NodeJS.Timeout | null = null;
+  private slowLoopIntervalId: NodeJS.Timeout | null = null;
+
   constructor(
     bot: Bot,
     sharedState: SharedAgentState,
@@ -40,20 +44,58 @@ export class CognitiveController {
   }
 
   /**
-   * Main update/tick method. Call this regularly (e.g., every few seconds).
+   * Start concurrent loops: a fast reflex loop and a slower planning loop.
    */
-  public async tick(): Promise<void> {
-    // 1. Update environment info by calling observer
-    await this.observer.getVisibleMobs();
+  public startConcurrentLoops(): void {
+    // Fast loop every 1 second (quick checks, e.g. immediate threats)
+    this.fastLoopIntervalId = setInterval(() => {
+      this.fastReflexTick().catch(err => {
+        console.error("[CC-FastReflex] Error:", err);
+      });
+    }, 1000);
+
+    // Slow loop every 5 seconds (heavy planning, existing logic)
+    this.slowLoopIntervalId = setInterval(() => {
+      this.slowPlanningTick().catch(err => {
+        console.error("[CC-SlowPlan] Error:", err);
+      });
+    }, 5000);
+  }
+
+  /**
+   * An example "fast reflex" loop for immediate or frequent checks.
+   */
+  private async fastReflexTick(): Promise<void> {
+    // 1. Possibly check for hostile mobs or urgent situations
+    //    This is a good place to do quick environment scans or short-latency tasks
+    const visibleMobs = await this.observer.getVisibleMobs();
+    const hostiles = visibleMobs.Mobs.filter(m => this.isHostile(m.name));
+    if (hostiles.length > 0) {
+      this.bot.chat("[Reflex] Hostile mob detected!");
+      // Decide quickly whether to run away, fight, or alert
+      // For example, you might set a short-term "defend" sub-goal or call an action
+    }
+
+    // 2. (Optional) Quickly handle any memory cleanup or ephemeral tasks
+    // ...
+  }
+
+  /**
+   * An example "slow planning" loop (formerly your tick() method).
+   * We just rename it to avoid confusion with the new concurrency approach.
+   */
+  private async slowPlanningTick(): Promise<void> {
+    // 1. Update environment info if not done by fastReflex
+    //    You can skip or keep an additional observer call here
     await this.observer.getVisibleBlockTypes();
 
-    // 2. If any players are around
+    // 2. Check players
     const playersNearby = Object.values(this.bot.players).filter(
       (p) => p.entity && p.entity.type === "player" && p.username !== this.bot.username
     );
     this.sharedState.playersNearby = playersNearby.map((p) => p.username);
 
-    // Possibly do social checks
+    // Social alignment check
     if (playersNearby.length > 0) {
       const isBehaviorAligned = this.social.analyzeBehavior({ alignment: "aligned" });
       if (!isBehaviorAligned) {
@@ -61,27 +103,22 @@ export class CognitiveController {
       }
     }
 
-    // 3. Check for hostiles (optional)
-    // ...
-
-    // 4. Retrieve the current goals from sharedState via the Goals module
+    // 3. Evaluate goals
     const currentLongTermGoal = this.goals.getCurrentLongTermGoal();
     const currentShortTermGoal = this.goals.getCurrentShortTermGoal();
 
-    // 5. If we are "lockedInTask"
+    // Handle locked-in tasks
     if (this.sharedState.lockedInTask) {
-      // Check if it's done
       const done = await this.isCurrentTaskDone(currentShortTermGoal);
       if (done) {
         this.sharedState.lockedInTask = false;
         this.bot.chat("[CC] Finished locked-in task. Unlocking...");
       } else {
-        // Skip further planning
-        return;
+        return; // skip further planning this cycle
       }
     }
 
-    // 6. If we have a long-term goal but no short-term goal, break it down
+    // If we have a long-term goal but no short-term goal, break it down
     if (currentLongTermGoal && !currentShortTermGoal) {
       const subtasks = await this.goals.breakDownGoalWithLLM(currentLongTermGoal);
       if (subtasks.length > 0) {
@@ -90,20 +127,14 @@ export class CognitiveController {
       }
     }
 
-    // 7. If we do have a short-term goal, check memory or do actions
+    // Check if we have a short-term goal, maybe do something
     if (currentShortTermGoal) {
-      const locationInfo = this.memory.getShortTermMemory("location_of_iron_ore");
-      if (locationInfo) {
-        this.bot.chat(`[CC] Found location info for iron ore: ${locationInfo}`);
-      }
-
-      // Decide to lock in
+      // Example check:
       if (currentShortTermGoal.includes("mine iron")) {
         this.sharedState.lockedInTask = true;
         this.bot.chat("[CC] Locking in to subtask: mine iron. Starting action sequence...");
-        // For instance, we might call:
+        // Potentially call an action immediately or rely on the next loop
         // await this.actions.mine("iron_ore", 3);
-        // or some other logic
       }
     }
   }
@@ -113,18 +144,33 @@ export class CognitiveController {
    */
   private async isCurrentTaskDone(shortTermGoal: string | null): Promise<boolean> {
     if (!shortTermGoal) return true;
-
     if (shortTermGoal.includes("mine iron ore")) {
-      // check inventory for iron_ore
       const ironCount = this.bot.inventory.items().filter(i => i.name.includes("iron_ore")).length;
       return ironCount >= 3;
     }
-
     return false;
   }
 
+  /**
+   * Simple method to see if a mob is in the hostile list.
+   */
   private isHostile(mobName: string): boolean {
     const hostiles = ["zombie", "skeleton", "spider", "creeper"];
     return hostiles.includes(mobName.toLowerCase());
+  }
+
+  /**
+   * Optional: method to stop loops if you want to disable concurrency dynamically.
+   */
+  public stopConcurrentLoops(): void {
+    if (this.fastLoopIntervalId) {
+      clearInterval(this.fastLoopIntervalId);
+      this.fastLoopIntervalId = null;
+    }
+    if (this.slowLoopIntervalId) {
+      clearInterval(this.slowLoopIntervalId);
+      this.slowLoopIntervalId = null;
+    }
+    this.bot.chat("[CC] Concurrency loops stopped.");
   }
 }
