@@ -60,7 +60,7 @@ export async function createAgentBot(options: BotOptions): Promise<AgentBot> {
   const memory = new Memory(sharedState);
   const social = new Social(sharedState);
   const goals = new Goals(sharedState);
-  const observer = new Observer(bot, { radius: 200 }, sharedState);
+  const observer = new Observer(bot, { radius: 100 }, sharedState);
   const navigation = new Navigation(bot);
   const actions = new Actions(bot, navigation, sharedState);
   const cc = new CognitiveController(bot, sharedState, memory, social, goals, observer, actions);

@@ -71,7 +71,7 @@ export class CognitiveController {
     const visibleMobs = await this.observer.getVisibleMobs();
     const hostiles = visibleMobs.Mobs.filter(m => this.isHostile(m.name));
     if (hostiles.length > 0) {
-      this.bot.chat("[Reflex] Hostile mob detected!");
+      //this.bot.chat("[Reflex] Hostile mob detected!");
       // Decide quickly whether to run away, fight, or alert
       // For example, you might set a short-term "defend" sub-goal or call an action
     }
