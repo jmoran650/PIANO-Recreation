@@ -63,14 +63,58 @@
       #socialTile {
         background-color: #b52b59; /* Light pink */
       }
-      .tile h2 {
+      /* Fixed sidebar for LLM Metrics and toggle button */
+      #llmSidebar {
+        position: fixed;
+        top: 80px; /* just below the header */
+        right: 20px;
+        width: 250px;
+        background-color: #4a90e2; /* blue background */
+        color: #fff;
+        padding: 20px;
+        border-radius: 10px;
+        box-shadow: 0 8px 16px rgba(0,0,0,0.2);
+        z-index: 1000;
+      }
+      #llmSidebar h2 {
         margin-top: 0;
         font-size: 1.5rem;
-        border-bottom: 2px solid rgba(0, 0, 0, 0.1);
+        border-bottom: 2px solid rgba(255, 255, 255, 0.5);
         padding-bottom: 8px;
         margin-bottom: 15px;
       }
-      /* Subtile styles */
+      .sidebar-section {
+        margin-bottom: 15px;
+      }
+      .sidebar-section h3 {
+        font-size: 1.1rem;
+        margin-bottom: 5px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.5);
+        padding-bottom: 4px;
+      }
+      .sidebar-section pre {
+        background: rgba(255, 255, 255, 0.2);
+        padding: 10px;
+        border-radius: 5px;
+        font-size: 0.9rem;
+        line-height: 1.4;
+        margin: 0;
+      }
+      /* Toggle button styling */
+      #toggleButton {
+        width: 100%;
+        padding: 10px;
+        background-color: #d0021b; /* red initially */
+        color: #fff;
+        border: none;
+        border-radius: 5px;
+        font-size: 1rem;
+        cursor: pointer;
+        margin-top: 10px;
+      }
+      #toggleButton:hover {
+        background-color: #a30015;
+      }
       .subtile {
         margin-bottom: 20px;
       }
@@ -104,6 +148,10 @@
         }
         .tile h2 {
           font-size: 1.3rem;
+        }
+        #llmSidebar {
+          width: 200px;
+          right: 10px;
         }
       }
     </style>
@@ -188,6 +236,27 @@
         </div>
       </div>
     </div>
+    <!-- Fixed LLM Metrics Sidebar -->
+    <div id="llmSidebar">
+      <h2>LLM Metrics</h2>
+      <div class="sidebar-section">
+        <h3>Total Requests</h3>
+        <pre id="totalRequestsData">Loading...</pre>
+      </div>
+      <div class="sidebar-section">
+        <h3>Requests Last 10 Min</h3>
+        <pre id="requestsLast10MinData">Loading...</pre>
+      </div>
+      <div class="sidebar-section">
+        <h3>Total Input Characters</h3>
+        <pre id="totalInputCharsData">Loading...</pre>
+      </div>
+      <div class="sidebar-section">
+        <h3>Total Output Characters</h3>
+        <pre id="totalOutputCharsData">Loading...</pre>
+      </div>
+      <button id="toggleButton">Kill LLM</button>
+    </div>
     <footer>
       <p>&copy; 2025 Minecraft Bot Dashboard. All rights reserved.</p>
     </footer>
@@ -212,6 +281,14 @@
       const feelingsToOthersData = document.getElementById("feelingsToOthersData");
       const othersFeelingsData = document.getElementById("othersFeelingsData");
       const conversationLogData = document.getElementById("conversationLogData");
+
+      // LLM Metrics elements (in the fixed sidebar)
+      const totalRequestsData = document.getElementById("totalRequestsData");
+      const requestsLast10MinData = document.getElementById("requestsLast10MinData");
+      const totalInputCharsData = document.getElementById("totalInputCharsData");
+      const totalOutputCharsData = document.getElementById("totalOutputCharsData");
+
+      const toggleButton = document.getElementById("toggleButton");
 
       /**
        * Helper: Format objects as pretty-printed JSON.
@@ -245,6 +322,14 @@
         feelingsToOthersData.textContent = prettyPrint(state.feelingsToOthers);
         othersFeelingsData.textContent = prettyPrint(state.othersFeelingsTowardsSelf);
         conversationLogData.textContent = prettyPrint(state.conversationLog);
+
+        // LLM Metrics (fixed sidebar)
+        if (state.llmMetrics) {
+          totalRequestsData.textContent = prettyPrint(state.llmMetrics.totalRequests);
+          requestsLast10MinData.textContent = prettyPrint(state.llmMetrics.requestsLast10Min);
+          totalInputCharsData.textContent = prettyPrint(state.llmMetrics.totalInputChars);
+          totalOutputCharsData.textContent = prettyPrint(state.llmMetrics.totalOutputChars);
+        }
       }
 
       // Connect to the server via Socket.IO and update subtile data on receiving sharedState
@@ -254,6 +339,26 @@
       });
       socket.on("sharedState", (data) => {
         updateTiles(data);
+      });
+
+      // Toggle button click handler.
+      toggleButton.addEventListener("click", async () => {
+        try {
+          const response = await fetch("/toggle-llm", { method: "POST" });
+          const text = await response.text();
+          //alert(text);
+          // Update button text and color based on new state.
+          if (text.includes("enabled")) {
+            toggleButton.textContent = "Kill LLM";
+            toggleButton.style.backgroundColor = "#d0021b"; // red when enabled
+          } else {
+            toggleButton.textContent = "Resume LLM";
+            toggleButton.style.backgroundColor = "#4CAF50"; // green when disabled
+          }
+        } catch (err) {
+          console.error("Error toggling LLM requests:", err);
+          alert("Error toggling LLM requests.");
+        }
       });
     </script>
   </body>
