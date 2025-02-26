@@ -49,14 +49,14 @@ export class CognitiveController {
   public startConcurrentLoops(): void {
     // Fast loop every 1 second (quick checks, e.g. immediate threats)
     this.fastLoopIntervalId = setInterval(() => {
-      this.fastReflexTick().catch(err => {
+      this.fastReflexTick().catch((err) => {
         console.error("[CC-FastReflex] Error:", err);
       });
     }, 1000);
 
     // Slow loop every 5 seconds (heavy planning, existing logic)
     this.slowLoopIntervalId = setInterval(() => {
-      this.slowPlanningTick().catch(err => {
+      this.slowPlanningTick().catch((err) => {
         console.error("[CC-SlowPlan] Error:", err);
       });
     }, 5000);
@@ -69,7 +69,7 @@ export class CognitiveController {
     // 1. Possibly check for hostile mobs or urgent situations
     //    This is a good place to do quick environment scans or short-latency tasks
     const visibleMobs = await this.observer.getVisibleMobs();
-    const hostiles = visibleMobs.Mobs.filter(m => this.isHostile(m.name));
+    const hostiles = visibleMobs.Mobs.filter((m) => this.isHostile(m.name));
     if (hostiles.length > 0) {
       //this.bot.chat("[Reflex] Hostile mob detected!");
       // Decide quickly whether to run away, fight, or alert
@@ -91,15 +91,22 @@ export class CognitiveController {
 
     // 2. Check players
     const playersNearby = Object.values(this.bot.players).filter(
-      (p) => p.entity && p.entity.type === "player" && p.username !== this.bot.username
+      (p) =>
+        p.entity &&
+        p.entity.type === "player" &&
+        p.username !== this.bot.username
     );
     this.sharedState.playersNearby = playersNearby.map((p) => p.username);
 
     // Social alignment check
     if (playersNearby.length > 0) {
-      const isBehaviorAligned = this.social.analyzeBehavior({ alignment: "aligned" });
+      const isBehaviorAligned = this.social.analyzeBehavior({
+        alignment: "aligned",
+      });
       if (!isBehaviorAligned) {
-        this.bot.chat("[CC] Not aligned with others, reconsidering approach...");
+        this.bot.chat(
+          "[CC] Not aligned with others, reconsidering approach..."
+        );
       }
     }
 
@@ -120,10 +127,14 @@ export class CognitiveController {
 
     // If we have a long-term goal but no short-term goal, break it down
     if (currentLongTermGoal && !currentShortTermGoal) {
-      const subtasks = await this.goals.breakDownGoalWithLLM(currentLongTermGoal);
+      const subtasks = await this.goals.breakDownGoalWithLLM(
+        currentLongTermGoal
+      );
       if (subtasks.length > 0) {
         this.goals.setCurrentShortTermGoal(subtasks[0]);
-        this.bot.chat(`[CC] Breaking down goal: ${currentLongTermGoal} => ${subtasks[0]}`);
+        this.bot.chat(
+          `[CC] Breaking down goal: ${currentLongTermGoal} => ${subtasks[0]}`
+        );
       }
     }
 
@@ -132,7 +143,9 @@ export class CognitiveController {
       // Example check:
       if (currentShortTermGoal.includes("mine iron")) {
         this.sharedState.lockedInTask = true;
-        this.bot.chat("[CC] Locking in to subtask: mine iron. Starting action sequence...");
+        this.bot.chat(
+          "[CC] Locking in to subtask: mine iron. Starting action sequence..."
+        );
         // Potentially call an action immediately or rely on the next loop
         // await this.actions.mine("iron_ore", 3);
       }
@@ -142,10 +155,14 @@ export class CognitiveController {
   /**
    * Check if the current short-term goal is done
    */
-  private async isCurrentTaskDone(shortTermGoal: string | null): Promise<boolean> {
+  private async isCurrentTaskDone(
+    shortTermGoal: string | null
+  ): Promise<boolean> {
     if (!shortTermGoal) return true;
     if (shortTermGoal.includes("mine iron ore")) {
-      const ironCount = this.bot.inventory.items().filter(i => i.name.includes("iron_ore")).length;
+      const ironCount = this.bot.inventory
+        .items()
+        .filter((i) => i.name.includes("iron_ore")).length;
       return ironCount >= 3;
     }
     return false;

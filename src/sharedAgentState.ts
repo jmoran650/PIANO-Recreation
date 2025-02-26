@@ -43,8 +43,8 @@ export class SharedAgentState {
    * or replicate the entire Memory class's data here if you prefer fully centralized storing.
    */
   private _shortTermMemoryIndex: Map<string, string>; // e.g. name => info
-  private _longTermMemoryIndex: Map<string, string>;  // e.g. name => info
-  private _locationMemoryIndex: Map<string, Vec3>;    // e.g. name => coords
+  private _longTermMemoryIndex: Map<string, string>; // e.g. name => info
+  private _locationMemoryIndex: Map<string, Vec3>; // e.g. name => coords
 
   /**
    * -----------------------------
@@ -65,8 +65,14 @@ export class SharedAgentState {
    * -----------------------------
    * Data for the Social module: feelings towards others, how others feel about us, conversation logs, etc.
    */
-  private _feelingsToOthers: Map<string, { sentiment: number; reasons: string[] }>;
-  private _othersFeelingsTowardsSelf: Map<string, { sentiment: number; reasons: string[] }>;
+  private _feelingsToOthers: Map<
+    string,
+    { sentiment: number; reasons: string[] }
+  >;
+  private _othersFeelingsTowardsSelf: Map<
+    string,
+    { sentiment: number; reasons: string[] }
+  >;
 
   // Optionally store conversation logs or chat messages for higher-level processing
   private _conversationLog: string[] = [];
@@ -102,16 +108,20 @@ export class SharedAgentState {
   public get visibleBlockTypes() {
     return this._visibleBlockTypes;
   }
-  public set visibleBlockTypes(data: {
-    BlockTypes: { [blockName: string]: { x: number; y: number; z: number } };
-  } | null) {
+  public set visibleBlockTypes(
+    data: {
+      BlockTypes: { [blockName: string]: { x: number; y: number; z: number } };
+    } | null
+  ) {
     this._visibleBlockTypes = data;
   }
 
   public get visibleMobs() {
     return this._visibleMobs;
   }
-  public set visibleMobs(data: { Mobs: { name: string; distance: number }[] } | null) {
+  public set visibleMobs(
+    data: { Mobs: { name: string; distance: number }[] } | null
+  ) {
     this._visibleMobs = data;
   }
 

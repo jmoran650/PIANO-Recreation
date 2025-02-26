@@ -11,7 +11,11 @@ export class Social {
   /**
    * Updates or sets the bot's feelings toward another person.
    */
-  public updateFeelingsTowards(person: string, sentiment: number, reasons: string[]): void {
+  public updateFeelingsTowards(
+    person: string,
+    sentiment: number,
+    reasons: string[]
+  ): void {
     this.sharedState.updateFeelingsTowards(person, sentiment, reasons);
   }
 
@@ -23,7 +27,11 @@ export class Social {
     sentiment: number,
     reasons: string[]
   ): void {
-    this.sharedState.updateOthersFeelingsTowardsSelf(person, sentiment, reasons);
+    this.sharedState.updateOthersFeelingsTowardsSelf(
+      person,
+      sentiment,
+      reasons
+    );
   }
 
   /**
@@ -39,7 +47,10 @@ export class Social {
   /**
    * Analyzes the bot's own goals in comparison to others' goals to determine compatibility.
    */
-  public analyzeGoals(ownGoals: string[], othersGoals: Map<string, string[]>): boolean {
+  public analyzeGoals(
+    ownGoals: string[],
+    othersGoals: Map<string, string[]>
+  ): boolean {
     for (const [, goals] of othersGoals.entries()) {
       for (const goal of ownGoals) {
         if (goals.includes(goal)) {

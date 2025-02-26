@@ -71,49 +71,51 @@ export class Actions {
       await this.sleep(500);
     }
   }
-/**
- * Crafts a goal item (if a recipe is available).
- */
-async craft(goalItem: string): Promise<void> {
-  this.sharedState.addPendingAction(`Craft ${goalItem}`);
+  /**
+   * Crafts a goal item (if a recipe is available).
+   */
+  async craft(goalItem: string): Promise<void> {
+    this.sharedState.addPendingAction(`Craft ${goalItem}`);
 
-  const itemData = this.mcData.itemsByName[goalItem];
-  if (!itemData) {
-    this.bot.chat(`No item data found for ${goalItem}.`);
-    return;
-  }
-  const itemId: number = itemData.id;
-
-  const recipes = this.bot.recipesFor(itemId, null, 1, true);
-  if (recipes.length === 0) {
-    this.bot.chat(`No recipe found for ${goalItem}.`);
-    return;
-  }
-  const recipe = recipes[0];
-
-  try {
-    if (recipe.requiresTable) {
-      const tableResult = await this.ensureCraftingTableIfNeeded(recipe);
-      if (typeof tableResult === "string") {
-        // An error message was returned.
-        this.bot.chat(tableResult);
-        return;
-      }
-      // tableResult is a Vec3; get the block at that position.
-      const tableBlock = this.bot.blockAt(tableResult);
-      if (!tableBlock) {
-        this.bot.chat("Error: Crafting table block not found at returned position.");
-        return;
-      }
-      await this.bot.craft(recipe, 1, tableBlock);
-    } else {
-      await this.bot.craft(recipe, 1);
+    const itemData = this.mcData.itemsByName[goalItem];
+    if (!itemData) {
+      this.bot.chat(`No item data found for ${goalItem}.`);
+      return;
     }
-    this.bot.chat(`Crafted ${goalItem}.`);
-  } catch (err) {
-    this.bot.chat(`Couldn't craft ${goalItem}: ${err}`);
+    const itemId: number = itemData.id;
+
+    const recipes = this.bot.recipesFor(itemId, null, 1, true);
+    if (recipes.length === 0) {
+      this.bot.chat(`No recipe found for ${goalItem}.`);
+      return;
+    }
+    const recipe = recipes[0];
+
+    try {
+      if (recipe.requiresTable) {
+        const tableResult = await this.ensureCraftingTableIfNeeded(recipe);
+        if (typeof tableResult === "string") {
+          // An error message was returned.
+          this.bot.chat(tableResult);
+          return;
+        }
+        // tableResult is a Vec3; get the block at that position.
+        const tableBlock = this.bot.blockAt(tableResult);
+        if (!tableBlock) {
+          this.bot.chat(
+            "Error: Crafting table block not found at returned position."
+          );
+          return;
+        }
+        await this.bot.craft(recipe, 1, tableBlock);
+      } else {
+        await this.bot.craft(recipe, 1);
+      }
+      this.bot.chat(`Crafted ${goalItem}.`);
+    } catch (err) {
+      this.bot.chat(`Couldn't craft ${goalItem}: ${err}`);
+    }
   }
-}
 
   /**
    * Places a block (e.g., furnace or crafting bench).
@@ -121,11 +123,15 @@ async craft(goalItem: string): Promise<void> {
   async place(blockType: string): Promise<void> {
     this.sharedState.addPendingAction(`Place ${blockType}`);
 
-    let blockItem = this.bot.inventory.items().find((item) => item.name === blockType);
+    let blockItem = this.bot.inventory
+      .items()
+      .find((item) => item.name === blockType);
     if (!blockItem) {
       this.bot.chat(`${blockType} not in inventory; trying to craft...`);
       await this.craft(blockType);
-      blockItem = this.bot.inventory.items().find((item) => item.name === blockType);
+      blockItem = this.bot.inventory
+        .items()
+        .find((item) => item.name === blockType);
       if (!blockItem) {
         this.bot.chat(`Unable to obtain ${blockType}.`);
         return;
@@ -161,14 +167,19 @@ async craft(goalItem: string): Promise<void> {
   async attack(mobType: string): Promise<void> {
     this.sharedState.addPendingAction(`Attack ${mobType}`);
 
+    // Explicit plugin check: ensure mineflayer-pvp is loaded.
     const pvp = (this.bot as any).pvp;
     if (!pvp) {
-      this.bot.chat("mineflayer-pvp plugin not loaded. Cannot attack.");
-      return;
+      const errorMsg =
+        "Error: mineflayer-pvp plugin not loaded. Attack action disabled.";
+      this.bot.chat(errorMsg);
+      // Throwing an error makes it clear to any caller (or LLM) that this action is unavailable.
+      throw new Error(errorMsg);
     }
 
     const mobs = Object.values(this.bot.entities).filter(
-      (entity: any) => entity.name && entity.name.toLowerCase() === mobType.toLowerCase()
+      (entity: any) =>
+        entity.name && entity.name.toLowerCase() === mobType.toLowerCase()
     );
     if (mobs.length === 0) {
       this.bot.chat(`No ${mobType} found nearby to attack.`);
@@ -198,7 +209,11 @@ async craft(goalItem: string): Promise<void> {
   async placeCraftingTable(): Promise<void> {
     this.sharedState.addPendingAction("Place Crafting Table");
 
-    const table = this.bot.inventory.findInventoryItem(this.mcData.itemsByName.crafting_table.id, null, false);
+    const table = this.bot.inventory.findInventoryItem(
+      this.mcData.itemsByName.crafting_table.id,
+      null,
+      false
+    );
     if (!table) {
       this.bot.chat("I don't have a crafting table!");
       return;
@@ -221,7 +236,10 @@ async craft(goalItem: string): Promise<void> {
       await this.bot.placeBlock(referenceBlock, new Vec3(0, 1, 0));
       this.bot.chat("Crafting table placed!");
     } catch (err) {
-      this.bot.chat("Failed to place crafting table: " + (err instanceof Error ? err.message : err));
+      this.bot.chat(
+        "Failed to place crafting table: " +
+          (err instanceof Error ? err.message : err)
+      );
     }
   }
 
@@ -251,7 +269,10 @@ async craft(goalItem: string): Promise<void> {
       await this.bot.activateBlock(block);
       this.bot.chat("Used the crafting table.");
     } catch (err) {
-      this.bot.chat("Failed to use crafting table: " + (err instanceof Error ? err.message : err));
+      this.bot.chat(
+        "Failed to use crafting table: " +
+          (err instanceof Error ? err.message : err)
+      );
     }
   }
 
@@ -314,18 +335,24 @@ async craft(goalItem: string): Promise<void> {
     if (this.bot.currentWindow) {
       this.bot.closeWindow(this.bot.currentWindow);
     }
-    this.bot.chat(`Smelting process done or in progress. Check furnace or inventory!`);
+    this.bot.chat(
+      `Smelting process done or in progress. Check furnace or inventory!`
+    );
   }
 
   /**
    * Place a furnace from the bot's inventory if not currently found.
    */
   private async placeFurnace(): Promise<void> {
-    let furnaceItem = this.bot.inventory.items().find((item) => item.name === "furnace");
+    let furnaceItem = this.bot.inventory
+      .items()
+      .find((item) => item.name === "furnace");
     if (!furnaceItem) {
       this.bot.chat("No furnace item in inventory; attempting to craft...");
       await this.craft("furnace");
-      furnaceItem = this.bot.inventory.items().find((item) => item.name === "furnace");
+      furnaceItem = this.bot.inventory
+        .items()
+        .find((item) => item.name === "furnace");
       if (!furnaceItem) {
         this.bot.chat("Unable to craft furnace!");
         return;
@@ -378,9 +405,18 @@ async craft(goalItem: string): Promise<void> {
       return false;
     }
 
-    const possibleFuels = ["coal", "charcoal", "oak_log", "spruce_log", "birch_log", "planks"];
+    const possibleFuels = [
+      "coal",
+      "charcoal",
+      "oak_log",
+      "spruce_log",
+      "birch_log",
+      "planks",
+    ];
     for (const fuelName of possibleFuels) {
-      const fuelItem = this.bot.inventory.items().find((it) => it.name.includes(fuelName));
+      const fuelItem = this.bot.inventory
+        .items()
+        .find((it) => it.name.includes(fuelName));
       if (fuelItem) {
         try {
           // Furnace fuel slot is typically index 1 in the furnace window.
@@ -388,7 +424,9 @@ async craft(goalItem: string): Promise<void> {
           this.bot.chat(`Added ${fuelItem.count} of ${fuelItem.name} as fuel.`);
           return true;
         } catch (err) {
-          this.bot.chat(`Failed to move fuel item ${fuelItem.name} into furnace: ${err}`);
+          this.bot.chat(
+            `Failed to move fuel item ${fuelItem.name} into furnace: ${err}`
+          );
           return false;
         }
       }
@@ -408,7 +446,9 @@ async craft(goalItem: string): Promise<void> {
 
     let remaining = count;
 
-    const matchingItems = this.bot.inventory.items().filter((it) => it.name.includes(inputItemName));
+    const matchingItems = this.bot.inventory
+      .items()
+      .filter((it) => it.name.includes(inputItemName));
     for (const item of matchingItems) {
       const moveCount = Math.min(remaining, item.count);
       try {
@@ -417,7 +457,9 @@ async craft(goalItem: string): Promise<void> {
         remaining -= moveCount;
         if (remaining <= 0) break;
       } catch (err) {
-        this.bot.chat(`Error transferring item "${item.name}" to furnace input: ${err}`);
+        this.bot.chat(
+          `Error transferring item "${item.name}" to furnace input: ${err}`
+        );
       }
     }
 
@@ -434,7 +476,9 @@ async craft(goalItem: string): Promise<void> {
    */
   async plantCrop(cropName: string): Promise<void> {
     this.bot.chat(`Attempting to plant ${cropName}...`);
-    const seedItem = this.bot.inventory.items().find((it) => it.name === cropName);
+    const seedItem = this.bot.inventory
+      .items()
+      .find((it) => it.name === cropName);
     if (!seedItem) {
       this.bot.chat(`No seeds (${cropName}) found in inventory.`);
       return;
@@ -494,16 +538,27 @@ async craft(goalItem: string): Promise<void> {
       toolCategory = "pickaxe";
     } else if (blockName.includes("log") || blockName.includes("wood")) {
       toolCategory = "axe";
-    } else if (blockName.includes("dirt") || blockName.includes("sand") || blockName.includes("gravel")) {
+    } else if (
+      blockName.includes("dirt") ||
+      blockName.includes("sand") ||
+      blockName.includes("gravel")
+    ) {
       toolCategory = "shovel";
     } else if (blockName.includes("crop") || blockName.includes("farm")) {
       toolCategory = "hoe";
     }
 
     if (!toolCategory) return;
-    const possibleToolNames = [`${toolCategory}`, `stone_${toolCategory}`, `iron_${toolCategory}`, `diamond_${toolCategory}`];
+    const possibleToolNames = [
+      `${toolCategory}`,
+      `stone_${toolCategory}`,
+      `iron_${toolCategory}`,
+      `diamond_${toolCategory}`,
+    ];
     for (const toolName of possibleToolNames) {
-      const toolItem = this.bot.inventory.items().find((it) => it.name.includes(toolName));
+      const toolItem = this.bot.inventory
+        .items()
+        .find((it) => it.name.includes(toolName));
       if (toolItem) {
         try {
           await this.bot.equip(toolItem, "hand");
@@ -532,7 +587,11 @@ async craft(goalItem: string): Promise<void> {
       const targetSlot = this.bot.inventory.inventoryStart + i;
       const currentItem = this.bot.inventory.slots[targetSlot];
       const sortedItem = sorted[i];
-      if (!currentItem || currentItem.type !== sortedItem.type || currentItem.count !== sortedItem.count) {
+      if (
+        !currentItem ||
+        currentItem.type !== sortedItem.type ||
+        currentItem.count !== sortedItem.count
+      ) {
         const itemSlot = sortedItem.slot;
         try {
           await this.bot.moveSlotItem(itemSlot, targetSlot);
@@ -547,11 +606,15 @@ async craft(goalItem: string): Promise<void> {
   async placeChest(): Promise<void> {
     this.sharedState.addPendingAction("Place Chest");
 
-    let chestItem = this.bot.inventory.items().find((it) => it.name.includes("chest"));
+    let chestItem = this.bot.inventory
+      .items()
+      .find((it) => it.name.includes("chest"));
     if (!chestItem) {
       this.bot.chat("No chest in inventory; trying to craft a chest...");
       await this.craft("chest");
-      chestItem = this.bot.inventory.items().find((it) => it.name.includes("chest"));
+      chestItem = this.bot.inventory
+        .items()
+        .find((it) => it.name.includes("chest"));
       if (!chestItem) {
         this.bot.chat("Unable to obtain a chest.");
         return;
@@ -590,9 +653,9 @@ async craft(goalItem: string): Promise<void> {
     const chest = await this.bot.openChest(chestBlock);
 
     try {
-      const toStore = this.bot.inventory.items().find(
-        (it) => it.name.includes(itemName) && it.count > 0
-      );
+      const toStore = this.bot.inventory
+        .items()
+        .find((it) => it.name.includes(itemName) && it.count > 0);
       if (!toStore) {
         this.bot.chat(`I have no "${itemName}" to store.`);
         chest.close();
@@ -618,7 +681,9 @@ async craft(goalItem: string): Promise<void> {
     const chest = await this.bot.openChest(chestBlock);
 
     try {
-      const matchingItem = chest.containerItems().find((it) => it.name.includes(itemName));
+      const matchingItem = chest
+        .containerItems()
+        .find((it) => it.name.includes(itemName));
       if (!matchingItem) {
         this.bot.chat(`Chest does not contain "${itemName}".`);
         chest.close();
@@ -661,7 +726,7 @@ async craft(goalItem: string): Promise<void> {
     const botBlockX = Math.floor(pos.x);
     const botBlockY = Math.floor(pos.y);
     const botBlockZ = Math.floor(pos.z);
-    
+
     // Start the search at a minimum distance of 2
     for (let d = 2; d <= 3; d++) {
       for (let yOffset = 0; yOffset <= 1; yOffset++) {
@@ -674,8 +739,12 @@ async craft(goalItem: string): Promise<void> {
           const candZ = Math.floor(candidate.z);
           // Skip if candidate is in the block the bot occupies or directly above it.
           if (
-            (candX === botBlockX && candY === botBlockY && candZ === botBlockZ) ||
-            (candX === botBlockX && candY === botBlockY + 1 && candZ === botBlockZ)
+            (candX === botBlockX &&
+              candY === botBlockY &&
+              candZ === botBlockZ) ||
+            (candX === botBlockX &&
+              candY === botBlockY + 1 &&
+              candZ === botBlockZ)
           ) {
             continue;
           }
@@ -688,7 +757,7 @@ async craft(goalItem: string): Promise<void> {
     }
     return null;
   }
-  
+
   private getRingPositions(distance: number): Vec3[] {
     const positions: Vec3[] = [];
     for (let dx = -distance; dx <= distance; dx++) {
@@ -707,7 +776,9 @@ async craft(goalItem: string): Promise<void> {
    * Returns either the coordinates (Vec3) of a nearby crafting table or one that has just been placed,
    * or a string message if no crafting table is available (or could be crafted).
    */
-  private async ensureCraftingTableIfNeeded(recipe: any): Promise<Vec3 | string> {
+  private async ensureCraftingTableIfNeeded(
+    recipe: any
+  ): Promise<Vec3 | string> {
     if (recipe.requiresTable) {
       // Try to find a nearby crafting table.
       const positions = this.bot.findBlocks({
@@ -723,7 +794,9 @@ async craft(goalItem: string): Promise<void> {
         }
       }
       // No nearby table. Check if the bot has a crafting table in inventory.
-      let tableItem = this.bot.inventory.items().find(item => item.name === "crafting_table");
+      let tableItem = this.bot.inventory
+        .items()
+        .find((item) => item.name === "crafting_table");
       if (tableItem) {
         // Place the table from inventory.
         await this.placeCraftingTable();
@@ -742,7 +815,9 @@ async craft(goalItem: string): Promise<void> {
       } else {
         // Bot does not have a crafting table item; attempt to craft one.
         await this.craft("crafting_table");
-        tableItem = this.bot.inventory.items().find(item => item.name === "crafting_table");
+        tableItem = this.bot.inventory
+          .items()
+          .find((item) => item.name === "crafting_table");
         if (tableItem) {
           await this.placeCraftingTable();
           const newPositions = this.bot.findBlocks({

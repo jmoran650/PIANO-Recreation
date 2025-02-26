@@ -1,27 +1,25 @@
-import { Bot } from 'mineflayer'
-import { pathfinder, Movements, goals } from 'mineflayer-pathfinder'
+import { Bot } from "mineflayer";
+import { pathfinder, Movements, goals } from "mineflayer-pathfinder";
 
 // Destructure out the specific goal class we want to use
-const { GoalBlock } = goals
+const { GoalBlock } = goals;
 
 /**
  * A simple Movement class that uses mineflayer-pathfinder to move the bot to
  * a specified coordinate (x, y, z).
  */
 export class Navigation {
-  private bot: Bot
-  private movements: Movements
+  private bot: Bot;
+  private movements: Movements;
 
   constructor(bot: Bot) {
-    this.bot = bot
-    
+    this.bot = bot;
 
     // Create a new Movements instance for this bot
-    this.movements = new Movements(bot)
+    this.movements = new Movements(bot);
     // Set our Movements configuration in pathfinder
-    this.bot.pathfinder.setMovements(this.movements)
+    this.bot.pathfinder.setMovements(this.movements);
   }
-
 
   /**
    * move(x, y, z): Uses the pathfinder's GoalBlock to navigate to the specified coordinates
@@ -50,6 +48,6 @@ export class Navigation {
   //TODO: Safe movement (avoid lava, falling) ?? May not be necessary.
 
   //TODO: evasive movement (if one decides to run away from mobs or other bots, has optional goal in case of trying to get back to village, safety,etc. )
-  
+
   //TODO: Normal movement: avoid breaking things to reach someone if not necessary.
 }
