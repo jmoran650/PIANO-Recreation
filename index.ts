@@ -6,7 +6,8 @@ import minecraftData from "minecraft-data"
 
 import { createAgentBot, AgentBot } from "./createAgentBot"
 
-async function main() {
+// Export main so it can be called from server.ts
+export async function main(): Promise<AgentBot> {
   try {
     const agent: AgentBot = await createAgentBot({
       host: "localhost",
@@ -62,9 +63,7 @@ async function main() {
         bot.chat("Arrived at new location!")
       }
 
-      // ---------------------------------
-      // New Tests per your instructions:
-      // ---------------------------------
+      // New test commands:
       else if (message.startsWith("test ")) {
         const parts = message.split(" ")
         const subcommand = parts[1]
@@ -166,7 +165,6 @@ async function main() {
           }
 
           case "inv": {
-            // Just to show the new "inventory contents" method in action:
             const contents = observer.getInventoryContents()
             if (contents.length === 0) {
               bot.chat("My inventory is empty.")
@@ -188,9 +186,11 @@ async function main() {
     bot.on("error", (err) => {
       console.error("Bot error:", err)
     })
+
+    // Return the entire AgentBot (including sharedState) for external use
+    return agent
   } catch (err) {
     console.error("Failed to create AgentBot:", err)
+    throw err
   }
 }
-
-main()

@@ -1,0 +1,167 @@
+<!-- public/index.html -->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Minecraft Bot Dashboard</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 0;
+        padding: 0;
+        background: #f4f4f4;
+      }
+      header {
+        background: #333;
+        color: #fff;
+        text-align: center;
+        padding: 1em 0;
+      }
+      .container {
+        max-width: 1200px;
+        margin: 20px auto;
+        padding: 0 20px;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        grid-gap: 20px;
+      }
+      .tile {
+        background: #fff;
+        border-radius: 8px;
+        padding: 15px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      }
+      .tile h2 {
+        margin-top: 0;
+        font-size: 1.2em;
+        border-bottom: 2px solid #ddd;
+        padding-bottom: 5px;
+      }
+      .tile pre {
+        white-space: pre-wrap;
+        word-wrap: break-word;
+        font-size: 0.9em;
+        background: #f9f9f9;
+        padding: 10px;
+        border-radius: 4px;
+        max-height: 300px;
+        overflow-y: auto;
+      }
+      footer {
+        text-align: center;
+        margin-top: 40px;
+        padding: 20px 0;
+        color: #777;
+        font-size: 0.9em;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Minecraft Bot Dashboard</h1>
+    </header>
+    <div class="container">
+      <div class="grid">
+        <!-- Environment Tile -->
+        <div class="tile" id="environmentTile">
+          <h2>Environment</h2>
+          <pre id="environmentData">Loading...</pre>
+        </div>
+
+        <!-- Memory Tile -->
+        <div class="tile" id="memoryTile">
+          <h2>Memory</h2>
+          <pre id="memoryData">Loading...</pre>
+        </div>
+
+        <!-- Goals & Actions Tile -->
+        <div class="tile" id="goalsTile">
+          <h2>Goals & Actions</h2>
+          <pre id="goalsData">Loading...</pre>
+        </div>
+
+        <!-- Social Tile -->
+        <div class="tile" id="socialTile">
+          <h2>Social</h2>
+          <pre id="socialData">Loading...</pre>
+        </div>
+      </div>
+    </div>
+    <footer>
+      <p>&copy; 2025 Minecraft Bot Dashboard</p>
+    </footer>
+
+    <!-- Socket.IO client script; served by Socket.IO server -->
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+      const socket = io();
+
+      // Define elements for each tile
+      const environmentEl = document.getElementById("environmentData");
+      const memoryEl = document.getElementById("memoryData");
+      const goalsEl = document.getElementById("goalsData");
+      const socialEl = document.getElementById("socialData");
+
+      /**
+       * Helper: Format object as a pretty string.
+       */
+      function prettyPrint(obj) {
+        return JSON.stringify(obj, null, 2);
+      }
+
+      /**
+       * Update the different tiles based on the shared state.
+       * We group keys into:
+       *  - Environment: visibleBlockTypes, visibleMobs, playersNearby
+       *  - Memory: shortTermMemoryIndex, longTermMemoryIndex, locationMemoryIndex
+       *  - Goals & Actions: longTermGoalQueue, currentLongTermGoal, currentShortTermGoal, pendingActions, lockedInTask
+       *  - Social: feelingsToOthers, othersFeelingsTowardsSelf, conversationLog
+       */
+      function updateTiles(state) {
+        // Environment
+        const environment = {
+          visibleBlockTypes: state.visibleBlockTypes,
+          visibleMobs: state.visibleMobs,
+          playersNearby: state.playersNearby
+        };
+        environmentEl.textContent = prettyPrint(environment);
+
+        // Memory
+        const memory = {
+          shortTermMemoryIndex: state.shortTermMemoryIndex,
+          longTermMemoryIndex: state.longTermMemoryIndex,
+          locationMemoryIndex: state.locationMemoryIndex
+        };
+        memoryEl.textContent = prettyPrint(memory);
+
+        // Goals & Actions
+        const goals = {
+          longTermGoalQueue: state.longTermGoalQueue,
+          currentLongTermGoal: state.currentLongTermGoal,
+          currentShortTermGoal: state.currentShortTermGoal,
+          pendingActions: state.pendingActions,
+          lockedInTask: state.lockedInTask
+        };
+        goalsEl.textContent = prettyPrint(goals);
+
+        // Social
+        const social = {
+          feelingsToOthers: state.feelingsToOthers,
+          othersFeelingsTowardsSelf: state.othersFeelingsTowardsSelf,
+          conversationLog: state.conversationLog
+        };
+        socialEl.textContent = prettyPrint(social);
+      }
+
+      socket.on("connect", () => {
+        console.log("Connected to server via Socket.IO");
+      });
+
+      socket.on("sharedState", (data) => {
+        updateTiles(data);
+      });
+    </script>
+  </body>
+</html>
