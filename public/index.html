@@ -14,19 +14,20 @@
         margin: 0;
         padding: 0;
         font-family: 'Poppins', sans-serif;
-        background: linear-gradient(135deg, #1f1c2c, #928dab);
-        color: #f0f0f0;
+        background: #ffffff;
+        color: #333;
       }
       header {
-        background: rgba(0, 0, 0, 0.6);
+        background: #ea6b10;
         padding: 20px 0;
         text-align: center;
-        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
       }
       header h1 {
         margin: 0;
         font-size: 2.5rem;
         font-weight: 600;
+        color: #fff;
       }
       .container {
         max-width: 1200px;
@@ -38,23 +39,34 @@
         grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
         gap: 20px;
       }
-      /* Tile styles */
+      /* Tile styles - each tile has a unique background color */
       .tile {
-        background: rgba(255, 255, 255, 0.1);
         border-radius: 10px;
         padding: 20px;
-        box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
-        backdrop-filter: blur(5px);
+        box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
         transition: transform 0.2s ease, box-shadow 0.2s ease;
       }
       .tile:hover {
         transform: translateY(-5px);
-        box-shadow: 0 12px 24px rgba(0, 0, 0, 0.3);
+        box-shadow: 0 12px 24px rgba(0, 0, 0, 0.15);
+      }
+      /* Specific tile colors */
+      #environmentTile {
+        background-color: #25747edf; /* Light cyan */
+      }
+      #memoryTile {
+        background-color: #2d7e34; /* Light green */
+      }
+      #goalsTile {
+        background-color: #c6b930; /* Light yellow */
+      }
+      #socialTile {
+        background-color: #b52b59; /* Light pink */
       }
       .tile h2 {
         margin-top: 0;
         font-size: 1.5rem;
-        border-bottom: 2px solid rgba(255, 255, 255, 0.3);
+        border-bottom: 2px solid rgba(0, 0, 0, 0.1);
         padding-bottom: 8px;
         margin-bottom: 15px;
       }
@@ -65,25 +77,26 @@
       .subtile h3 {
         font-size: 1.1rem;
         margin-bottom: 5px;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+        border-bottom: 1px solid rgba(0, 0, 0, 0.1);
         padding-bottom: 4px;
       }
       .subtile pre {
-        background: rgba(0, 0, 0, 0.4);
+        background: #f9f9f9;
         padding: 15px;
         border-radius: 5px;
         font-size: 0.9rem;
         line-height: 1.4;
         max-height: 200px;
         overflow-y: auto;
+        border: 1px solid #ddd;
       }
       footer {
         text-align: center;
         margin-top: 40px;
         padding: 20px 0;
         font-size: 0.9rem;
-        color: rgba(240, 240, 240, 0.7);
-        border-top: 1px solid rgba(240, 240, 240, 0.2);
+        color: #777;
+        border-top: 1px solid #ddd;
       }
       @media (max-width: 600px) {
         header h1 {

@@ -1,5 +1,4 @@
-// src/SharedAgentState.ts
-
+// src/sharedAgentState.ts
 import { Vec3 } from "vec3";
 
 /**
@@ -29,8 +28,12 @@ export class SharedAgentState {
   } | null = null;
 
   // Example for storing info about which players are nearby or in the environment
-  // This might be populated by a future extension of Observer or some "player tracking" system
   private _playersNearby: string[] = [];
+
+  // New properties for inventory, health, and hunger
+  private _inventory: string[] = [];
+  private _botHealth: number = 20;
+  private _botHunger: number = 20;
 
   /**
    * -----------------------------
@@ -38,7 +41,6 @@ export class SharedAgentState {
    * -----------------------------
    * Optionally store references to short-term or long-term memory keys
    * or replicate the entire Memory class's data here if you prefer fully centralized storing.
-   * For now, we store only references/pointers or direct expansions as needed.
    */
   private _shortTermMemoryIndex: Map<string, string>; // e.g. name => info
   private _longTermMemoryIndex: Map<string, string>;  // e.g. name => info
@@ -63,11 +65,6 @@ export class SharedAgentState {
    * -----------------------------
    * Data for the Social module: feelings towards others, how others feel about us, conversation logs, etc.
    */
-  // The Social module in your code uses two Maps:
-  // feelingsToOthers: Map<string, { sentiment: number; reasons: string[] }>
-  // othersFeelingsTowardsSelf: Map<string, { sentiment: number; reasons: string[] }>
-  // We could either store them directly here or replicate them as separate objects.
-
   private _feelingsToOthers: Map<string, { sentiment: number; reasons: string[] }>;
   private _othersFeelingsTowardsSelf: Map<string, { sentiment: number; reasons: string[] }>;
 
@@ -125,12 +122,32 @@ export class SharedAgentState {
     this._playersNearby = playerList;
   }
 
+  // New getters and setters for inventory, health, and hunger
+  public get inventory(): string[] {
+    return this._inventory;
+  }
+  public set inventory(items: string[]) {
+    this._inventory = items;
+  }
+
+  public get botHealth(): number {
+    return this._botHealth;
+  }
+  public set botHealth(health: number) {
+    this._botHealth = health;
+  }
+
+  public get botHunger(): number {
+    return this._botHunger;
+  }
+  public set botHunger(hunger: number) {
+    this._botHunger = hunger;
+  }
+
   /**
    * -----------------------------
    * 8) Memory Index Methods
    * -----------------------------
-   * If you prefer, you can let the Memory class remain separate and only
-   * store references here. Or you can unify everything in SharedAgentState.
    */
   public get shortTermMemoryIndex(): Map<string, string> {
     return this._shortTermMemoryIndex;
@@ -252,18 +269,4 @@ export class SharedAgentState {
   public set lockedInTask(value: boolean) {
     this._lockedInTask = value;
   }
-
-  /**
-   * -----------------------------
-   * 12) (Optional) Concurrency Helpers
-   * -----------------------------
-   * If you anticipate parallel or asynchronous usage, you might add
-   * locking or atomic operations here. For example:
-   */
-  // public async withLock<T>(fn: () => Promise<T>): Promise<T> {
-  //   // Acquire lock, run fn, release lock, etc.
-  //   // Implementation depends on your concurrency approach
-  //   return fn();
-  // }
-
 }
