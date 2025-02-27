@@ -1,9 +1,16 @@
 // index.ts
-import { Bot } from "mineflayer"
-import { mineflayer as mineflayerViewer } from "prismarine-viewer"
-import { goals as pfGoals } from "mineflayer-pathfinder" // Renamed import for clarity.
-import minecraftData from "minecraft-data"
-
+import dotenv from 'dotenv';
+dotenv.config();
+// import { Bot } from "mineflayer"
+// import { mineflayer as mineflayerViewer } from "prismarine-viewer"
+// import { goals as pfGoals } from "mineflayer-pathfinder" // Renamed import for clarity.
+// import minecraftData from "minecraft-data"
+if(process.env.OPENAI_API_KEY){
+  console.log("api key found")
+  
+} else {
+  console.log("api key NOT FOUND")
+}
 import { createAgentBot, AgentBot } from "./createAgentBot"
 
 // Export main so it can be called from server.ts

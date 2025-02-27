@@ -6,7 +6,8 @@ import { Server as SocketIOServer } from "socket.io";
 
 import { main } from "./index";
 import { SharedAgentState } from "./src/sharedAgentState";
-import { getLLMMetrics, toggleLLMEnabled } from "./utils/llmWrapper"; // Import toggleLLMEnabled and metrics
+import { getLLMMetrics, toggleLLMEnabled } from "./utils/llmWrapper"; // existing imports
+import { planGoal } from "./src/goalPlanner"; // Import the goal planner
 
 /**
  * Helper: Convert various Maps in SharedAgentState to plain objects.
@@ -27,7 +28,7 @@ function serializeSharedState(sharedState: SharedAgentState) {
     feelingsToOthers: mapToObjSentiment(sharedState.feelingsToOthers),
     othersFeelingsTowardsSelf: mapToObjSentiment(sharedState.othersFeelingsTowardsSelf),
     conversationLog: sharedState.conversationLog,
-    llmMetrics: getLLMMetrics(), // Add LLM metrics here
+    llmMetrics: getLLMMetrics(), // Include LLM metrics
   };
 }
 
@@ -60,7 +61,7 @@ function mapToObjSentiment(map: Map<string, { sentiment: number; reasons: string
  *   - Launch the bot
  *   - Launch an Express server
  *   - Serve the frontend
- *   - Use Socket.IO to push real-time updates of sharedState (including LLM metrics)
+ *   - Use Socket.IO to push real-time updates (including goal planning progress)
  */
 async function startServer() {
   // 1) Start the bot, get its full agent object
@@ -84,17 +85,18 @@ async function startServer() {
     res.send("pong");
   });
 
-  // 6) New endpoint to toggle LLM requests
+  // 6) New endpoint to toggle LLM requests (existing functionality)
   app.post("/toggle-llm", (req: Request, res: Response) => {
     const newState = toggleLLMEnabled();
     const message = newState ? "LLM requests enabled." : "LLM requests disabled.";
     res.send(message);
   });
 
-  // 7) On Socket.IO connections, send updates every 1s
+  // 7) Handle Socket.IO connections.
   io.on("connection", (socket) => {
     console.log("Browser connected via Socket.IO");
 
+    // Existing shared state updates.
     const intervalId = setInterval(() => {
       const stateObj = serializeSharedState(agent.sharedState);
       socket.emit("sharedState", stateObj);
@@ -103,6 +105,19 @@ async function startServer() {
     socket.on("disconnect", () => {
       clearInterval(intervalId);
       console.log("Browser disconnected");
+    });
+
+    // NEW: Listen for goal planning requests.
+    socket.on("startGoalPlan", async (goal: string) => {
+      console.log("Starting goal planning for:", goal);
+      try {
+        const finalPlan = await planGoal(goal, (progress) => {
+          socket.emit("goalPlanProgress", progress);
+        });
+        socket.emit("goalPlanComplete", finalPlan);
+      } catch (err: any) {
+        socket.emit("goalPlanError", err.message);
+      }
     });
   });
 

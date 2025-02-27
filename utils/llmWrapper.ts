@@ -1,4 +1,6 @@
-// llmWrapper.ts
+// utils/llmWrapper.ts
+
+import OpenAI from "openai";
 
 interface LLMPendingRequest {
   prompt: string;
@@ -26,43 +28,37 @@ let totalOutputChars = 0;
 // Global flag to enable/disable LLM requests.
 let llmEnabled = true;
 
-/**
- * setLLMEnabled
- *
- * A function to enable or disable LLM requests.
- *
- * @param enabled boolean - if false, further callLLM requests will be rejected.
- */
-export function setLLMEnabled(enabled: boolean): void {
-  llmEnabled = enabled;
-}
+// Set up the OpenAI client using the API key from process.env.
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
 
 /**
- * toggleLLMEnabled
- *
- * Toggles the LLM enabled flag and returns the new state.
- */
-export function toggleLLMEnabled(): boolean {
-  llmEnabled = !llmEnabled;
-  return llmEnabled;
-}
-
-/**
- * actualLLMCall
- *
- * This function should contain the real API call to your LLM provider.
- * For demonstration purposes, it simulates an API call with a delay.
- *
- * @param prompt The prompt string to send to the LLM.
- * @returns A promise resolving to a response string.
+ * actualLLMCall:
+ * Uses the OpenAI API to generate a completion for the given prompt.
  */
 async function actualLLMCall(prompt: string): Promise<string> {
-  // TODO: Replace this dummy implementation with your actual API call (e.g., using fetch or axios).
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      resolve(`Simulated response for prompt: "${prompt}"`);
-    }, 500); // Simulate a 500ms API call latency
+  const completion = await openai.chat.completions.create({
+    model: "gpt-4o-mini", // you may change to any supported model as needed.
+    messages: [{ role: "user", content: prompt }],
+    max_tokens: 150, // Adjust as needed.
   });
+  if (
+    completion.choices &&
+    completion.choices.length > 0 &&
+    completion.choices[0].message &&
+    completion.choices[0].message.content
+  ) {
+    const output = completion.choices[0].message.content;
+    if (output.length > MAX_LENGTH) {
+      throw new Error(
+        `LLM response length (${output.length}) exceeds maximum allowed (${MAX_LENGTH}).`
+      );
+    }
+    totalOutputChars += output.length;
+    return output;
+  }
+  throw new Error("No valid response from OpenAI API.");
 }
 
 /**
@@ -75,18 +71,7 @@ setInterval(async () => {
     if (request) {
       try {
         const response = await actualLLMCall(request.prompt);
-        // Check output length and throw a non-blocking error if over limit.
-        if (response.length > MAX_LENGTH) {
-          request.reject(
-            new Error(
-              `LLM response length (${response.length}) exceeds maximum allowed (${MAX_LENGTH}).`
-            )
-          );
-        } else {
-          // Update the running total for output characters.
-          totalOutputChars += response.length;
-          request.resolve(response);
-        }
+        request.resolve(response);
       } catch (err) {
         request.reject(err);
       }
@@ -95,8 +80,7 @@ setInterval(async () => {
 }, RATE_LIMIT_INTERVAL);
 
 /**
- * callLLM
- *
+ * callLLM:
  * A global function to wrap LLM API calls. It enqueues the request and returns
  * a promise that resolves once the API call is processed.
  *
@@ -127,8 +111,7 @@ export async function callLLM(prompt: string): Promise<string> {
 }
 
 /**
- * getLLMMetrics
- *
+ * getLLMMetrics:
  * Returns an object containing LLM metrics:
  * - totalRequests: The total number of LLM requests made.
  * - requestsLast10Min: The number of requests made in the last 10 minutes.
@@ -152,4 +135,23 @@ export function getLLMMetrics(): {
     totalInputChars,
     totalOutputChars,
   };
+}
+
+/**
+ * setLLMEnabled:
+ * A function to enable or disable LLM requests.
+ *
+ * @param enabled boolean - if false, further callLLM requests will be rejected.
+ */
+export function setLLMEnabled(enabled: boolean): void {
+  llmEnabled = enabled;
+}
+
+/**
+ * toggleLLMEnabled:
+ * Toggles the LLM enabled flag and returns the new state.
+ */
+export function toggleLLMEnabled(): boolean {
+  llmEnabled = !llmEnabled;
+  return llmEnabled;
 }
