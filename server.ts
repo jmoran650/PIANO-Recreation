@@ -1,4 +1,3 @@
-// server.ts
 import express, { Request, Response } from "express";
 import http from "http";
 import path from "path";
@@ -6,13 +5,39 @@ import { Server as SocketIOServer } from "socket.io";
 
 import { main } from "./index";
 import { SharedAgentState } from "./src/sharedAgentState";
-import { getLLMMetrics, toggleLLMEnabled } from "./utils/llmWrapper"; // existing imports
-import { planGoal } from "./src/goalPlanner"; // Import the goal planner
+import { getLLMMetrics, toggleLLMEnabled } from "./utils/llmWrapper";
+import { buildGoalTree, StepNode } from "./src/goalPlanner";
 
-/**
- * Helper: Convert various Maps in SharedAgentState to plain objects.
- */
-function serializeSharedState(sharedState: SharedAgentState) {
+// Helper functions to serialize Map objects for shared state
+function mapToObj(map: Map<string, string>): Record<string, string> {
+  const obj: Record<string, string> = {};
+  for (const [key, value] of map.entries()) {
+    obj[key] = value;
+  }
+  return obj;
+}
+
+function mapToObjVec3(
+  map: Map<string, { x: number; y: number; z: number }>
+): Record<string, { x: number; y: number; z: number }> {
+  const obj: Record<string, { x: number; y: number; z: number }> = {};
+  for (const [key, value] of map.entries()) {
+    obj[key] = { x: value.x, y: value.y, z: value.z };
+  }
+  return obj;
+}
+
+function mapToObjSentiment(
+  map: Map<string, { sentiment: number; reasons: string[] }>
+): Record<string, { sentiment: number; reasons: string[] }> {
+  const obj: Record<string, { sentiment: number; reasons: string[] }> = {};
+  for (const [key, value] of map.entries()) {
+    obj[key] = { sentiment: value.sentiment, reasons: value.reasons };
+  }
+  return obj;
+}
+
+function serializeSharedState(sharedState: any): any {
   return {
     visibleBlockTypes: sharedState.visibleBlockTypes,
     visibleMobs: sharedState.visibleMobs,
@@ -28,75 +53,37 @@ function serializeSharedState(sharedState: SharedAgentState) {
     feelingsToOthers: mapToObjSentiment(sharedState.feelingsToOthers),
     othersFeelingsTowardsSelf: mapToObjSentiment(sharedState.othersFeelingsTowardsSelf),
     conversationLog: sharedState.conversationLog,
-    llmMetrics: getLLMMetrics(), // Include LLM metrics
+    llmMetrics: getLLMMetrics(),
   };
 }
 
-function mapToObj(map: Map<string, string>) {
-  const obj: Record<string, string> = {};
-  for (const [k, v] of map.entries()) {
-    obj[k] = v;
-  }
-  return obj;
-}
-
-function mapToObjVec3(map: Map<string, { x: number; y: number; z: number }>) {
-  const obj: Record<string, { x: number; y: number; z: number }> = {};
-  for (const [k, v] of map.entries()) {
-    obj[k] = { x: v.x, y: v.y, z: v.z };
-  }
-  return obj;
-}
-
-function mapToObjSentiment(map: Map<string, { sentiment: number; reasons: string[] }>) {
-  const obj: Record<string, { sentiment: number; reasons: string[] }> = {};
-  for (const [k, v] of map.entries()) {
-    obj[k] = { sentiment: v.sentiment, reasons: v.reasons };
-  }
-  return obj;
-}
-
-/**
- * Start everything:
- *   - Launch the bot
- *   - Launch an Express server
- *   - Serve the frontend
- *   - Use Socket.IO to push real-time updates (including goal planning progress)
- */
 async function startServer() {
-  // 1) Start the bot, get its full agent object
-  const agent = await main(); // from index.ts
+  const agent = await main();
 
-  // 2) Create an Express + HTTP + Socket.IO combo
   const app = express();
   const server = http.createServer(app);
   const io = new SocketIOServer(server);
 
-  // 3) Serve the static frontend from the "public" folder located one level up
   app.use(express.static(path.join(__dirname, "../public")));
 
-  // 4) Explicit route for "/"
   app.get("/", (req: Request, res: Response) => {
     res.sendFile(path.join(__dirname, "../public/index.html"));
   });
 
-  // 5) Simple test endpoint with explicit types for req and res
   app.get("/ping", (req: Request, res: Response) => {
     res.send("pong");
   });
 
-  // 6) New endpoint to toggle LLM requests (existing functionality)
   app.post("/toggle-llm", (req: Request, res: Response) => {
     const newState = toggleLLMEnabled();
     const message = newState ? "LLM requests enabled." : "LLM requests disabled.";
     res.send(message);
   });
 
-  // 7) Handle Socket.IO connections.
   io.on("connection", (socket) => {
     console.log("Browser connected via Socket.IO");
 
-    // Existing shared state updates.
+    // Send the shared state to the browser every second
     const intervalId = setInterval(() => {
       const stateObj = serializeSharedState(agent.sharedState);
       socket.emit("sharedState", stateObj);
@@ -107,28 +94,29 @@ async function startServer() {
       console.log("Browser disconnected");
     });
 
-    // NEW: Listen for goal planning requests.
+    // Listen for hierarchical goal planning requests.
     socket.on("startGoalPlan", async (goal: string) => {
       console.log("Starting goal planning for:", goal);
       try {
-        const finalPlan = await planGoal(goal, (progress) => {
-          socket.emit("goalPlanProgress", progress);
+        // Build the goal tree while sending incremental updates.
+        const tree: StepNode = await buildGoalTree(goal, (updatedTree: StepNode) => {
+          // Each partial update
+          socket.emit("goalPlanProgress", updatedTree);
         });
-        socket.emit("goalPlanComplete", finalPlan);
+        // Once done, emit the final tree
+        socket.emit("goalPlanComplete", tree);
       } catch (err: any) {
         socket.emit("goalPlanError", err.message);
       }
     });
   });
 
-  // 8) Start listening
   const PORT = 3000;
   server.listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}`);
   });
 }
 
-// Actually start the server
 startServer().catch((err) => {
   console.error("Error starting server:", err);
 });

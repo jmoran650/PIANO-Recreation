@@ -1,37 +1,26 @@
-// src/goalPlanner.ts
-
+//src/goalPlanner.ts
 import { callLLM } from "../utils/llmWrapper";
 import { goalBreakdownPrompt, getGoalToFuncCallPrompt } from "../prompts/prompts";
 
-export interface PlanStep {
+/**
+ * StepNode interface for the hierarchical tree.
+ */
+export interface StepNode {
+  id: number;
   step: string;
-  funcCall: string | null; // null if unsolvable by our current system
-  completionCriteria: string | null; // new field for completion criteria
+  funcCall: string | null;
+  completionCriteria: string | null;
+  substeps: StepNode[];
 }
 
-// Instead of reading a file, we directly use the imported prompt.
-const longTermGoalPrompt = goalBreakdownPrompt;
+// Unique id generator
+let idCounter = 0;
+function nextId(): number {
+  return ++idCounter;
+}
 
 /**
- * goal_to_func_call:
- * Given a step, ask the LLM whether the step can be completed in its totality using one of the following methods:
- *   • mine(goalBlock: string, desiredCount: number)
- *   • craft(goalItem: string)
- *   • place(blockType: string)
- *   • attack(mobType: string)
- *   • placeCraftingTable()
- *   • useCraftingTable()
- *   • smelt(inputItemName: string, quantity: number)
- *   • plantCrop(cropName: string)
- *   • harvestCrop(cropName: string)
- *   • equipBestToolForBlock(blockName: string)
- *   • sortInventory()
- *   • placeChest()
- *   • storeItemInChest(itemName: string, count: number)
- *   • retrieveItemFromChest(itemName: string, count: number)
- *
- * The LLM is instructed to return the function call (e.g., "mine(iron_ore, 3)") if applicable,
- * or the word "null" if not.
+ * Potentially returns a function call if the step can be handled by exactly one method.
  */
 export async function goal_to_func_call(step: string): Promise<string | null> {
   const prompt = getGoalToFuncCallPrompt(step);
@@ -43,11 +32,10 @@ export async function goal_to_func_call(step: string): Promise<string | null> {
 }
 
 /**
- * goal_breakdown:
- * Uses the instructions from the goal breakdown prompt and the given goal to produce a comma-separated list of steps.
+ * Break down a goal into a list of steps separated by commas.
  */
-export async function goal_breakdown(goal: string): Promise<string[]> {
-  const prompt = `${longTermGoalPrompt}
+async function goal_breakdown(goal: string): Promise<string[]> {
+  const prompt = `${goalBreakdownPrompt}
 Break down the following goal into a series of actionable steps separated by commas:
 "${goal}"`;
   const response = await callLLM(prompt);
@@ -59,81 +47,90 @@ Break down the following goal into a series of actionable steps separated by com
 }
 
 /**
- * generateCompletionCriteria:
- * Given a step, generate completion criteria that takes into account multiple ways to satisfy the step.
- * For example, for "get wood(4)" criteria might be:
- * "The step is complete if the player has 4 wood in their inventory OR has mined 4 wood blocks."
+ * Generate a single-sentence completion criterion for a given step.
  */
-export async function generateCompletionCriteria(step: string): Promise<string> {
+async function generateCompletionCriteria(step: string): Promise<string> {
   const prompt = `Given the step: "${step}", generate completion criteria that takes into account multiple ways to satisfy the step. For example, if the step is "get wood(4)", possible criteria could be: "The step is complete if the player has 4 wood in their inventory OR has mined 4 wood blocks." Provide a concise sentence.`;
   const criteria = await callLLM(prompt);
   return criteria.trim();
 }
 
 /**
- * planGoalWithCriteria:
- * Uses an iterative queue to break down a natural language goal into steps.
- * The onProgress callback is called after processing each step.
+ * Recursively build a hierarchical goal tree. If a step is atomic (one function call),
+ * it won't have sub-steps; otherwise we break it down.
  *
- * Modification: The very first iteration (original goal) is always broken down into sub-steps.
- * After that, each step is processed using goal_to_func_call before possibly breaking it down further.
- * For each atomic step, completion criteria are generated.
+ * The onProgress callback is invoked each time we have an updated (partial) tree.
  */
-export async function planGoal(
+export async function buildGoalTree(
   goal: string,
-  onProgress: (progress: { queue: string[]; finalPlan: PlanStep[] }) => void
-): Promise<PlanStep[]> {
-  let queue: string[] = [goal];
-  let finalPlan: PlanStep[] = [];
-  let initialBreakdownDone = false;
+  onProgress?: (tree: StepNode) => void
+): Promise<StepNode> {
+  // Try a single function call
+  const funcCall = await goal_to_func_call(goal);
+  if (funcCall) {
+    const criteria = await generateCompletionCriteria(goal);
+    const node: StepNode = {
+      id: nextId(),
+      step: goal,
+      funcCall,
+      completionCriteria: criteria,
+      substeps: []
+    };
+    if (onProgress) {
+      // Clone so React sees a fresh reference
+      onProgress(JSON.parse(JSON.stringify(node)));
+      // Yield to the event loop so partial updates flush
+      await new Promise((r) => setTimeout(r, 0));
+    }
+    return node;
+  }
 
-  while (queue.length > 0) {
-    const currentStep = queue.shift()!;
+  // Otherwise, break the step down
+  const subSteps = await goal_breakdown(goal);
 
-    if (!initialBreakdownDone) {
-      // Break down the original goal first.
-      const subSteps = await goal_breakdown(currentStep);
-      if (subSteps.length === 1 && subSteps[0] === currentStep) {
-        const criteria = await generateCompletionCriteria(currentStep);
-        finalPlan.push({
-          step: currentStep,
-          funcCall: null,
-          completionCriteria: criteria,
-        });
-        onProgress({ queue: [...queue], finalPlan: [...finalPlan] });
-      } else {
-        queue.push(...subSteps);
-        initialBreakdownDone = true;
-        onProgress({ queue: [...queue], finalPlan: [...finalPlan] });
-      }
-    } else {
-      // Process subsequent steps.
-      const funcCall = await goal_to_func_call(currentStep);
-      if (funcCall) {
-        const criteria = await generateCompletionCriteria(currentStep);
-        finalPlan.push({
-          step: currentStep,
-          funcCall,
-          completionCriteria: criteria,
-        });
-        onProgress({ queue: [...queue], finalPlan: [...finalPlan] });
-      } else {
-        const subSteps = await goal_breakdown(currentStep);
-        if (subSteps.length === 1 && subSteps[0] === currentStep) {
-          const criteria = await generateCompletionCriteria(currentStep);
-          finalPlan.push({
-            step: currentStep,
-            funcCall: null,
-            completionCriteria: criteria,
-          });
-          onProgress({ queue: [...queue], finalPlan: [...finalPlan] });
-        } else {
-          queue.push(...subSteps);
-          onProgress({ queue: [...queue], finalPlan: [...finalPlan] });
-        }
-      }
+  // If we get back the exact same step, treat it as atomic
+  if (subSteps.length === 1 && subSteps[0] === goal) {
+    const criteria = await generateCompletionCriteria(goal);
+    const node: StepNode = {
+      id: nextId(),
+      step: goal,
+      funcCall: null,
+      completionCriteria: criteria,
+      substeps: []
+    };
+    if (onProgress) {
+      onProgress(JSON.parse(JSON.stringify(node)));
+      await new Promise((r) => setTimeout(r, 0));
+    }
+    return node;
+  }
+
+  // We have multiple sub-steps
+  const criteria = await generateCompletionCriteria(goal);
+  const children: StepNode[] = [];
+  const parentNode: StepNode = {
+    id: nextId(),
+    step: goal,
+    funcCall: null,
+    completionCriteria: criteria,
+    substeps: children
+  };
+  // Immediately emit the new parent
+  if (onProgress) {
+    onProgress(JSON.parse(JSON.stringify(parentNode)));
+    await new Promise((r) => setTimeout(r, 0));
+  }
+
+  // Build each child sub-tree
+  for (const s of subSteps) {
+    const child = await buildGoalTree(s, onProgress);
+    children.push(child);
+    // Emit the updated parent after adding each child
+    if (onProgress) {
+      onProgress(JSON.parse(JSON.stringify(parentNode)));
+      await new Promise((r) => setTimeout(r, 0));
     }
   }
 
-  return finalPlan;
+  return parentNode;
 }

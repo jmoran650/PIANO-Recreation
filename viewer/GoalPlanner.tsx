@@ -1,42 +1,140 @@
-import React, { useState, useEffect } from "react";
+//viewer/GoalPlanner.tsx
+import React, { useState, useEffect, useRef } from "react";
 import io from "socket.io-client";
+import * as d3 from "d3";
+import { HierarchyPointLink, HierarchyPointNode } from "d3-hierarchy";
 
-// Create the socket connection; adjust URL if needed.
-const socket = io();
-
-interface PlanStep {
+// Our hierarchical tree node interface.
+export interface StepNode {
+  id: number;
   step: string;
   funcCall: string | null;
-  completionCriteria: string | null; // New field for completion criteria
+  completionCriteria: string | null;
+  substeps: StepNode[];
+}
+
+// Create a Socket.IO connection.
+const socket = io();
+
+/**
+ * A simple deep clone function for our tree nodes.
+ * (Using JSON methods for brevity; adjust if your data gets more complex.)
+ */
+function deepCloneTree(node: StepNode): StepNode {
+  return JSON.parse(JSON.stringify(node));
+}
+
+/**
+ * Recursively searches for a node within the tree whose step matches the target.
+ */
+function findNodeByStep(node: StepNode, targetStep: string): StepNode | null {
+  console.log(
+    `findNodeByStep: Checking node ${node.id} ("${node.step}") against target "${targetStep}"`
+  );
+  if (node.step === targetStep) return node;
+  for (const child of node.substeps) {
+    const found = findNodeByStep(child, targetStep);
+    if (found) return found;
+  }
+  return null;
+}
+
+/**
+ * Recursively updates a node in the tree with an incoming node (by matching step).
+ * Returns a new tree object.
+ */
+function updateNodeInTree(tree: StepNode, incoming: StepNode): StepNode {
+  if (tree.step === incoming.step) {
+    return mergeTreesImmutable(tree, incoming);
+  } else {
+    return {
+      ...tree,
+      substeps: tree.substeps.map(child => updateNodeInTree(child, incoming))
+    };
+  }
+}
+
+/**
+ * An immutable merge function for our goal tree.
+ * It returns a new tree object that represents the merge of `existing` and `incoming`.
+ */
+function mergeTreesImmutable(
+  existing: StepNode | null,
+  incoming: StepNode
+): StepNode {
+  console.log("mergeTreesImmutable: Starting merge");
+  console.log("Existing tree:", existing);
+  console.log("Incoming tree:", incoming);
+
+  if (!existing) {
+    console.log("mergeTreesImmutable: No existing tree, returning deep clone of incoming");
+    return deepCloneTree(incoming);
+  }
+  const newTree = deepCloneTree(existing);
+  if (newTree.id === incoming.id) {
+    console.log(`mergeTreesImmutable: Matching IDs for node ${newTree.id}`);
+    newTree.step = incoming.step;
+    newTree.funcCall = incoming.funcCall;
+    newTree.completionCriteria = incoming.completionCriteria;
+    incoming.substeps.forEach(incomingChild => {
+      const idx = newTree.substeps.findIndex(child => child.id === incomingChild.id);
+      if (idx !== -1) {
+        console.log(`mergeTreesImmutable: Found child with matching id ${incomingChild.id}, merging...`);
+        newTree.substeps[idx] = mergeTreesImmutable(newTree.substeps[idx], incomingChild);
+      } else {
+        console.log(`mergeTreesImmutable: No child with id ${incomingChild.id} found. Adding incoming child.`);
+        newTree.substeps.push(deepCloneTree(incomingChild));
+      }
+    });
+    console.log("mergeTreesImmutable: Merge complete for node", newTree.id, "Result:", newTree);
+    return newTree;
+  } else {
+    console.log(`mergeTreesImmutable: Root IDs do not match. Existing root id: ${newTree.id}, Incoming root id: ${incoming.id}`);
+    const match = findNodeByStep(newTree, incoming.step);
+    if (match) {
+      console.log(`mergeTreesImmutable: Found matching node by step for incoming node ${incoming.id}, updating tree.`);
+      return updateNodeInTree(newTree, incoming);
+    } else {
+      console.log(`mergeTreesImmutable: No matching node found for incoming node ${incoming.id}. Attaching as new child.`);
+      newTree.substeps.push(deepCloneTree(incoming));
+      return newTree;
+    }
+  }
 }
 
 const GoalPlanner: React.FC = () => {
-  const [goal, setGoal] = useState<string>("");
-  const [queue, setQueue] = useState<string[]>([]);
-  const [finalPlan, setFinalPlan] = useState<PlanStep[]>([]);
-  const [llmMetrics, setLLMMetrics] = useState<any>({});
-  const [originalGoal, setOriginalGoal] = useState<string>("");
+  const [userGoal, setUserGoal] = useState<string>("");
+  const [goalTree, setGoalTree] = useState<StepNode | null>(null);
+  const [llmMetrics, setLlmMetrics] = useState<any>({});
+  const svgRef = useRef<SVGSVGElement | null>(null);
 
+  // Socket event listeners
   useEffect(() => {
-    socket.on("goalPlanProgress", (progress: { queue: string[]; finalPlan: PlanStep[] }) => {
-      setQueue(progress.queue);
-      setFinalPlan(progress.finalPlan);
+    socket.on("goalPlanProgress", (updatedTree: StepNode) => {
+      console.log("Socket event 'goalPlanProgress' received:", updatedTree);
+      setGoalTree(prevTree => {
+        const merged = mergeTreesImmutable(prevTree, updatedTree);
+        console.log("After merging goalPlanProgress, goalTree is:", merged);
+        return merged;
+      });
     });
-
-    socket.on("goalPlanComplete", (finalPlan: PlanStep[]) => {
+    socket.on("goalPlanComplete", (finalTree: StepNode) => {
       alert("Goal planning complete!");
-      setFinalPlan(finalPlan);
-      setQueue([]);
+      console.log("Socket event 'goalPlanComplete' received:", finalTree);
+      setGoalTree(prevTree => {
+        const merged = mergeTreesImmutable(prevTree, finalTree);
+        console.log("After merging goalPlanComplete, goalTree is:", merged);
+        return merged;
+      });
     });
-
-    socket.on("goalPlanError", (errorMessage: string) => {
-      alert("Error during goal planning: " + errorMessage);
+    socket.on("goalPlanError", (errorMsg: string) => {
+      alert("Error during goal planning: " + errorMsg);
+      console.error("Socket event 'goalPlanError':", errorMsg);
     });
-
     socket.on("sharedState", (state: any) => {
-      setLLMMetrics(state.llmMetrics);
+      console.log("Socket event 'sharedState' received:", state);
+      setLlmMetrics(state.llmMetrics);
     });
-
     return () => {
       socket.off("goalPlanProgress");
       socket.off("goalPlanComplete");
@@ -45,165 +143,112 @@ const GoalPlanner: React.FC = () => {
     };
   }, []);
 
-  const handleStartPlanning = () => {
-    if (!goal.trim()) {
-      alert("Please enter a goal.");
+  const startPlanning = () => {
+    if (!userGoal.trim()) {
+      alert("Please enter a valid goal.");
       return;
     }
-    setOriginalGoal(goal);
-    setQueue([]);
-    setFinalPlan([]);
-    socket.emit("startGoalPlan", goal);
+    console.log("Starting planning with userGoal:", userGoal);
+    setGoalTree(null);
+    socket.emit("startGoalPlan", userGoal);
   };
 
-  const renderGoalTree = () => {
-    return (
-      <ul className="tree-root">
-        <li className="fade-in">
-          Goal: <strong>{originalGoal}</strong>
-          <ul>
-            <li className="fade-in">
-              Finalized Steps:
-              <ul>
-                {finalPlan.length === 0 ? (
-                  <li className="fade-in">None yet</li>
-                ) : (
-                  finalPlan.map((stepObj, index) => (
-                    <li key={index} className="fade-in">
-                      <div>
-                        {stepObj.step}
-                        {stepObj.funcCall ? ` → ${stepObj.funcCall}` : ""}
-                      </div>
-                      <div style={{ fontSize: "0.8em", color: "#555" }}>
-                        Completion: {stepObj.completionCriteria || "None"}
-                      </div>
-                    </li>
-                  ))
-                )}
-              </ul>
-            </li>
-            <li className="fade-in">
-              Pending Steps:
-              <ul>
-                {queue.length === 0 ? (
-                  <li className="fade-in">None</li>
-                ) : (
-                  queue.map((pending, index) => (
-                    <li key={index} className="fade-in">
-                      {pending}
-                    </li>
-                  ))
-                )}
-              </ul>
-            </li>
-          </ul>
-        </li>
-      </ul>
-    );
-  };
+  // D3 rendering code
+  useEffect(() => {
+    if (!goalTree) {
+      console.log("D3 rendering: No goalTree to render");
+      return;
+    }
+    console.log("D3 rendering: Rendering goalTree:", goalTree);
+
+    // Set up dimensions.
+    const width = 1000;
+    const height = 800;
+    const margin = { top: 50, right: 50, bottom: 50, left: 50 };
+
+    // Clear any previous rendering.
+    const svg = d3.select(svgRef.current);
+    svg.selectAll("*").remove();
+
+    // Create a D3 hierarchy.
+    const root = d3.hierarchy(goalTree, (d: StepNode) => d.substeps);
+    console.log("D3 rendering: Total nodes found:", root.descendants().length);
+    root.descendants().forEach((node, i) => {
+      console.log(`Node ${i}: id ${node.data.id}, step "${node.data.step}", x: ${node.x}, y: ${node.y}`);
+    });
+
+    // Compute layout.
+    const treeLayout = d3
+      .tree<StepNode>()
+      .size([height - margin.top - margin.bottom, width - margin.left - margin.right]);
+    treeLayout(root);
+
+    // Create a group for the tree.
+    const g = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
+
+    // Generate links.
+    const linkGenerator = d3
+      .linkHorizontal<HierarchyPointLink<StepNode>, HierarchyPointNode<StepNode>>()
+      .x(d => d.y)
+      .y(d => d.x);
+
+    g.selectAll("path.link")
+      .data(root.links())
+      .enter()
+      .append("path")
+      .attr("class", "link")
+      .attr("d", d => linkGenerator(d as d3.HierarchyPointLink<StepNode>) || "")
+      .attr("fill", "none")
+      .attr("stroke", "#ccc")
+      .attr("stroke-width", 2);
+
+    // Render nodes.
+    const nodeGroup = g.selectAll("g.node")
+      .data(root.descendants())
+      .enter()
+      .append("g")
+      .attr("class", "node")
+      .attr("transform", d => `translate(${d.y},${d.x})`);
+
+    nodeGroup.append("circle")
+      .attr("r", 20)
+      .attr("fill", "#4CAF50")
+      .attr("stroke", "#2E7D32")
+      .attr("stroke-width", 2);
+
+    nodeGroup.append("text")
+      .attr("dy", 4)
+      .attr("x", d => (d.children ? -25 : 25))
+      .style("text-anchor", d => (d.children ? "end" : "start"))
+      .text(d => d.data.funcCall ? `${d.data.step} → ${d.data.funcCall}` : d.data.step)
+      .style("font-size", "12px")
+      .style("fill", "#fff");
+  }, [goalTree]);
 
   return (
-    <div className="container">
-      <h1>Goal Planner</h1>
-      <input
-        id="goalInput"
-        type="text"
-        placeholder="Enter your goal here"
-        value={goal}
-        onChange={(e) => setGoal(e.target.value)}
-      />
-      <button id="startButton" onClick={handleStartPlanning}>
-        Start Planning
-      </button>
-      <div id="progress">
-        <h2>Progress</h2>
-        <div id="queueDisplay">
-          <h3>Queue:</h3>
-          <pre id="queueContent">{JSON.stringify(queue, null, 2)}</pre>
-        </div>
-        <div id="planDisplay">
-          <h3>Final Plan:</h3>
-          <pre id="planContent">{JSON.stringify(finalPlan, null, 2)}</pre>
-        </div>
-        <div id="goalTreeDisplay">
-          <h3>Goal Breakdown Tree</h3>
-          <div id="goalTree">{renderGoalTree()}</div>
-        </div>
-        <div id="llmMetricsDisplay">
-          <h3>LLM Metrics</h3>
-          <pre id="llmMetricsContent">{JSON.stringify(llmMetrics, null, 2)}</pre>
-        </div>
-      </div>
-      <style>{`
-        .container {
-          margin: 0;
-          padding: 20px;
-          font-family: 'Poppins', sans-serif;
-          background: #e0f7fa;
-          color: #004d40;
-          min-height: 100vh;
-        }
-        h1 {
-          text-align: center;
-          color: #00796b;
-        }
-        #goalInput {
-          width: 100%;
-          padding: 10px;
-          font-size: 1rem;
-          margin-bottom: 10px;
-          border: 1px solid #00796b;
-          border-radius: 5px;
-        }
-        #startButton {
-          padding: 10px 20px;
-          font-size: 1rem;
-          background-color: #00796b;
-          color: #fff;
-          border: none;
-          border-radius: 5px;
-          cursor: pointer;
-          margin-bottom: 20px;
-        }
-        #startButton:hover {
-          background-color: #00695c;
-        }
-        #progress {
-          margin-top: 20px;
-          background: #fff;
-          padding: 20px;
-          border-radius: 10px;
-          box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-        }
-        pre {
-          background: #e0f2f1;
-          padding: 10px;
-          border-radius: 5px;
-          overflow-x: auto;
-        }
-        #goalTreeDisplay,
-        #llmMetricsDisplay {
-          margin-top: 20px;
-        }
-        #goalTree ul {
-          list-style-type: none;
-          padding-left: 20px;
-          border-left: 2px solid #00796b;
-        }
-        #goalTree li {
-          margin: 5px 0;
-          position: relative;
-        }
-        .fade-in {
-          opacity: 0;
-          animation: fadeIn 1s forwards;
-        }
-        @keyframes fadeIn {
-          to {
-            opacity: 1;
-          }
-        }
-      `}</style>
+    <div style={{ fontFamily: "Poppins, sans-serif", padding: 20 }}>
+      <h1>Goal Planner (D3 Tree)</h1>
+      <section style={{ marginBottom: 20, textAlign: "center" }}>
+        <label htmlFor="goal-input">Enter Your Goal:</label>
+        <input
+          id="goal-input"
+          type="text"
+          value={userGoal}
+          onChange={e => setUserGoal(e.target.value)}
+          placeholder="e.g., get tnt"
+          style={{ marginLeft: 10, marginRight: 10, padding: 6 }}
+        />
+        <button onClick={startPlanning} style={{ padding: "6px 12px" }}>
+          Start Planning
+        </button>
+      </section>
+      <svg ref={svgRef} width={1000} height={800} style={{ border: "1px solid #ccc", background: "#f9f9f9" }} />
+      <section style={{ marginTop: 20 }}>
+        <h2>LLM Metrics</h2>
+        <pre style={{ background: "#f9f9f9", padding: 10, borderRadius: 4, overflowX: "auto" }}>
+          {JSON.stringify(llmMetrics, null, 2)}
+        </pre>
+      </section>
     </div>
   );
 };
