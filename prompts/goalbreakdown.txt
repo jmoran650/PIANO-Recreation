@@ -2,7 +2,7 @@ Break down a task in Minecraft by one level and separate the steps with commas.
 
 # Steps
 
-1. Identify the task that needs to be broken down.
+1. Identify the task that needs to be broken down. Only generate steps and criteria that are applicable to Minecraft gameplay. Do not introduce extraneous concerns like ‘gather warm clothing’ that do not exist in Minecraft.
 2. Determine the key actions or components required to complete the task. Always specify quantities of items in parentheses. Do not mention crafting tables or furnaces. When a step involves crafting, just say craft *item*(*amount*). When a step involves smelting in a furnace just say smelt *initial item* to get *desired item*(*amount*).
 3. Break these actions down into steps.
 4. Ensure each step is concise and follows the logical order of completion.
