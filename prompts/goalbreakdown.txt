@@ -10,7 +10,7 @@ Break down a task in Minecraft by one level and separate the steps with commas.
 
 # Output Format
 
-A single sentence with steps separated by commas, such as: "Step 1, Step 2, Step 3."
+A single sentence with steps separated by commas, such as: "Step 1, Step 2, Step 3." Only use commas to separate steps.
 
 # Examples
 
@@ -31,3 +31,4 @@ A single sentence with steps separated by commas, such as: "Step 1, Step 2, Step
 
 **Input:** Get an iron sword
 **Output:** Gather wood(1), craft wooden planks(4), gather iron ore(2), smelt iron ore to get iron ingots(2), craft sticks(1), craft iron sword(1).
+

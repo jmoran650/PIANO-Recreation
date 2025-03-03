@@ -95,14 +95,22 @@ async function startServer() {
     });
 
     // Listen for hierarchical goal planning requests.
-    socket.on("startGoalPlan", async (goal: string) => {
-      console.log("Starting goal planning for:", goal);
+    // We now accept an object: { goal, mode } from the front end.
+    socket.on("startGoalPlan", async (data: { goal: string; mode?: "bfs" | "dfs" }) => {
       try {
-        // Build the goal tree while sending incremental updates.
-        const tree: StepNode = await buildGoalTree(goal, (updatedTree: StepNode) => {
-          // Each partial update
-          socket.emit("goalPlanProgress", updatedTree);
-        });
+        const goal = data.goal;
+        const mode = data.mode || "bfs"; // default BFS if not provided
+        console.log(`Starting goal planning for: "${goal}" (mode: ${mode})`);
+
+        // Build the goal tree (flat array) while sending incremental updates
+        const tree: StepNode[] = await buildGoalTree(
+          goal,
+          mode,
+          (updatedTree: StepNode[]) => {
+            // Each partial update -> send to frontend
+            socket.emit("goalPlanProgress", updatedTree);
+          }
+        );
         // Once done, emit the final tree
         socket.emit("goalPlanComplete", tree);
       } catch (err: any) {

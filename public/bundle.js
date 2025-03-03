@@ -86249,120 +86249,56 @@ const jsx_runtime_1 = __webpack_require__(/*! react/jsx-runtime */ "./node_modul
 const react_1 = __webpack_require__(/*! react */ "./node_modules/react/index.js");
 const socket_io_client_1 = __importDefault(__webpack_require__(/*! socket.io-client */ "./node_modules/socket.io-client/build/cjs/index.js"));
 const d3 = __importStar(__webpack_require__(/*! d3 */ "./node_modules/d3/src/index.js"));
-// Create a Socket.IO connection.
-const socket = (0, socket_io_client_1.default)();
-/**
- * A simple deep clone function for our tree nodes.
- * (Using JSON methods for brevity; adjust if your data gets more complex.)
- */
-function deepCloneTree(node) {
-    return JSON.parse(JSON.stringify(node));
-}
-/**
- * Recursively searches for a node within the tree whose step matches the target.
- */
-function findNodeByStep(node, targetStep) {
-    console.log(`findNodeByStep: Checking node ${node.id} ("${node.step}") against target "${targetStep}"`);
-    if (node.step === targetStep)
-        return node;
-    for (const child of node.substeps) {
-        const found = findNodeByStep(child, targetStep);
-        if (found)
-            return found;
-    }
-    return null;
-}
-/**
- * Recursively updates a node in the tree with an incoming node (by matching step).
- * Returns a new tree object.
- */
-function updateNodeInTree(tree, incoming) {
-    if (tree.step === incoming.step) {
-        return mergeTreesImmutable(tree, incoming);
-    }
-    else {
-        return {
-            ...tree,
-            substeps: tree.substeps.map(child => updateNodeInTree(child, incoming))
-        };
-    }
-}
-/**
- * An immutable merge function for our goal tree.
- * It returns a new tree object that represents the merge of `existing` and `incoming`.
- */
-function mergeTreesImmutable(existing, incoming) {
-    console.log("mergeTreesImmutable: Starting merge");
-    console.log("Existing tree:", existing);
-    console.log("Incoming tree:", incoming);
-    if (!existing) {
-        console.log("mergeTreesImmutable: No existing tree, returning deep clone of incoming");
-        return deepCloneTree(incoming);
-    }
-    const newTree = deepCloneTree(existing);
-    if (newTree.id === incoming.id) {
-        console.log(`mergeTreesImmutable: Matching IDs for node ${newTree.id}`);
-        newTree.step = incoming.step;
-        newTree.funcCall = incoming.funcCall;
-        newTree.completionCriteria = incoming.completionCriteria;
-        incoming.substeps.forEach(incomingChild => {
-            const idx = newTree.substeps.findIndex(child => child.id === incomingChild.id);
-            if (idx !== -1) {
-                console.log(`mergeTreesImmutable: Found child with matching id ${incomingChild.id}, merging...`);
-                newTree.substeps[idx] = mergeTreesImmutable(newTree.substeps[idx], incomingChild);
+function buildHierarchy(flatNodes) {
+    if (!flatNodes || flatNodes.length === 0)
+        return null;
+    const nodeMap = {};
+    flatNodes.forEach((n) => {
+        nodeMap[n.id] = { ...n, substeps: [] };
+    });
+    let root = null;
+    flatNodes.forEach((n) => {
+        if (n.parentId) {
+            const parent = nodeMap[n.parentId];
+            if (parent) {
+                parent.substeps.push(nodeMap[n.id]);
             }
-            else {
-                console.log(`mergeTreesImmutable: No child with id ${incomingChild.id} found. Adding incoming child.`);
-                newTree.substeps.push(deepCloneTree(incomingChild));
-            }
-        });
-        console.log("mergeTreesImmutable: Merge complete for node", newTree.id, "Result:", newTree);
-        return newTree;
-    }
-    else {
-        console.log(`mergeTreesImmutable: Root IDs do not match. Existing root id: ${newTree.id}, Incoming root id: ${incoming.id}`);
-        const match = findNodeByStep(newTree, incoming.step);
-        if (match) {
-            console.log(`mergeTreesImmutable: Found matching node by step for incoming node ${incoming.id}, updating tree.`);
-            return updateNodeInTree(newTree, incoming);
         }
         else {
-            console.log(`mergeTreesImmutable: No matching node found for incoming node ${incoming.id}. Attaching as new child.`);
-            newTree.substeps.push(deepCloneTree(incoming));
-            return newTree;
+            root = nodeMap[n.id];
         }
-    }
+    });
+    return root;
 }
+const socket = (0, socket_io_client_1.default)();
 const GoalPlanner = () => {
     const [userGoal, setUserGoal] = (0, react_1.useState)("");
     const [goalTree, setGoalTree] = (0, react_1.useState)(null);
     const [llmMetrics, setLlmMetrics] = (0, react_1.useState)({});
+    // NEW: Keep track of BFS or DFS mode (default BFS).
+    const [mode, setMode] = (0, react_1.useState)("bfs");
     const svgRef = (0, react_1.useRef)(null);
-    // Socket event listeners
+    const containerRef = (0, react_1.useRef)(null);
+    const containerWidth = 3200;
+    const containerHeight = 2400;
+    const svgWidth = 8000;
+    const svgHeight = 6000;
     (0, react_1.useEffect)(() => {
-        socket.on("goalPlanProgress", (updatedTree) => {
-            console.log("Socket event 'goalPlanProgress' received:", updatedTree);
-            setGoalTree(prevTree => {
-                const merged = mergeTreesImmutable(prevTree, updatedTree);
-                console.log("After merging goalPlanProgress, goalTree is:", merged);
-                return merged;
-            });
+        socket.on("goalPlanProgress", (updatedFlatNodes) => {
+            console.log("Received goalPlanProgress update:", updatedFlatNodes);
+            const hierarchical = buildHierarchy(updatedFlatNodes);
+            setGoalTree(hierarchical);
         });
-        socket.on("goalPlanComplete", (finalTree) => {
-            alert("Goal planning complete!");
-            console.log("Socket event 'goalPlanComplete' received:", finalTree);
-            setGoalTree(prevTree => {
-                const merged = mergeTreesImmutable(prevTree, finalTree);
-                console.log("After merging goalPlanComplete, goalTree is:", merged);
-                return merged;
-            });
+        socket.on("goalPlanComplete", (finalFlatNodes) => {
+            console.log("Received goalPlanComplete update:", finalFlatNodes);
+            const hierarchical = buildHierarchy(finalFlatNodes);
+            setGoalTree(hierarchical);
         });
         socket.on("goalPlanError", (errorMsg) => {
             alert("Error during goal planning: " + errorMsg);
             console.error("Socket event 'goalPlanError':", errorMsg);
         });
         socket.on("sharedState", (state) => {
-            console.log("Socket event 'sharedState' received:", state);
             setLlmMetrics(state.llmMetrics);
         });
         return () => {
@@ -86372,77 +86308,158 @@ const GoalPlanner = () => {
             socket.off("sharedState");
         };
     }, []);
+    // Function to start planning. We now emit both goal and mode to the server.
     const startPlanning = () => {
         if (!userGoal.trim()) {
-            alert("Please enter a valid goal.");
+            alert("Please enter a goal first.");
             return;
         }
-        console.log("Starting planning with userGoal:", userGoal);
         setGoalTree(null);
-        socket.emit("startGoalPlan", userGoal);
+        socket.emit("startGoalPlan", { goal: userGoal, mode });
     };
-    // D3 rendering code
+    // Toggle BFS/DFS. This button can switch the mode state.
+    const toggleMode = () => {
+        setMode((prevMode) => (prevMode === "bfs" ? "dfs" : "bfs"));
+    };
     (0, react_1.useEffect)(() => {
-        if (!goalTree) {
-            console.log("D3 rendering: No goalTree to render");
+        if (!goalTree || !svgRef.current) {
+            d3.select(svgRef.current).selectAll("*").remove();
             return;
         }
-        console.log("D3 rendering: Rendering goalTree:", goalTree);
-        // Set up dimensions.
-        const width = 1000;
-        const height = 800;
-        const margin = { top: 50, right: 50, bottom: 50, left: 50 };
-        // Clear any previous rendering.
         const svg = d3.select(svgRef.current);
         svg.selectAll("*").remove();
-        // Create a D3 hierarchy.
+        // Build a D3 hierarchy from the tree data.
         const root = d3.hierarchy(goalTree, (d) => d.substeps);
-        console.log("D3 rendering: Total nodes found:", root.descendants().length);
-        root.descendants().forEach((node, i) => {
-            console.log(`Node ${i}: id ${node.data.id}, step "${node.data.step}", x: ${node.x}, y: ${node.y}`);
-        });
-        // Compute layout.
+        // Define a maximum characters per line for wrapping.
+        const maxChars = 20;
+        // Create a tree layout with fixed node size and dynamic separation.
         const treeLayout = d3
             .tree()
-            .size([height - margin.top - margin.bottom, width - margin.left - margin.right]);
+            .nodeSize([100, 50])
+            .separation((a, b) => {
+            // These values roughly match what we use for rendering text:
+            const charWidth = 7;
+            const padding = 8;
+            const extraMargin = 10;
+            // Estimate node width based on the maximum characters per line
+            const estimateNodeWidth = (label) => {
+                const effectiveChars = Math.min(label.length, maxChars);
+                return effectiveChars * charWidth + padding * 2;
+            };
+            const labelA = a.data.funcCall
+                ? `${a.data.step} => ${a.data.funcCall}`
+                : a.data.step;
+            const labelB = b.data.funcCall
+                ? `${b.data.step} => ${b.data.funcCall}`
+                : b.data.step;
+            const widthA = estimateNodeWidth(labelA);
+            const widthB = estimateNodeWidth(labelB);
+            return (widthA / 2 + widthB / 2 + extraMargin) / 100;
+        });
         treeLayout(root);
-        // Create a group for the tree.
-        const g = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
-        // Generate links.
+        // Center the group within the SVG.
+        const g = svg
+            .append("g")
+            .attr("transform", `translate(${svgWidth / 2}, 50)`);
         const linkGenerator = d3
-            .linkHorizontal()
-            .x(d => d.y)
-            .y(d => d.x);
+            .linkVertical()
+            .x((d) => d.x)
+            .y((d) => d.y);
+        const links = root.links();
         g.selectAll("path.link")
-            .data(root.links())
+            .data(links)
             .enter()
             .append("path")
             .attr("class", "link")
-            .attr("d", d => linkGenerator(d) || "")
+            .attr("d", (d) => linkGenerator(d) ?? "")
             .attr("fill", "none")
             .attr("stroke", "#ccc")
             .attr("stroke-width", 2);
-        // Render nodes.
-        const nodeGroup = g.selectAll("g.node")
+        // Helper function to wrap text based on max characters.
+        const wrapText = (text, maxChars) => {
+            const words = text.split(" ");
+            const lines = [];
+            let currentLine = "";
+            words.forEach((word) => {
+                if ((currentLine + word).length > maxChars) {
+                    lines.push(currentLine.trim());
+                    currentLine = word + " ";
+                }
+                else {
+                    currentLine += word + " ";
+                }
+            });
+            if (currentLine.trim() !== "") {
+                lines.push(currentLine.trim());
+            }
+            return lines;
+        };
+        const nodeGroup = g
+            .selectAll("g.node")
             .data(root.descendants())
             .enter()
             .append("g")
             .attr("class", "node")
-            .attr("transform", d => `translate(${d.y},${d.x})`);
-        nodeGroup.append("circle")
-            .attr("r", 20)
-            .attr("fill", "#4CAF50")
-            .attr("stroke", "#2E7D32")
-            .attr("stroke-width", 2);
-        nodeGroup.append("text")
-            .attr("dy", 4)
-            .attr("x", d => (d.children ? -25 : 25))
-            .style("text-anchor", d => (d.children ? "end" : "start"))
-            .text(d => d.data.funcCall ? `${d.data.step} → ${d.data.funcCall}` : d.data.step)
-            .style("font-size", "12px")
-            .style("fill", "#fff");
+            .attr("transform", (d) => `translate(${d.x},${d.y})`);
+        nodeGroup.each(function (d) {
+            const group = d3.select(this);
+            const labelText = d.data.funcCall
+                ? `${d.data.step} => ${d.data.funcCall}`
+                : d.data.step;
+            const wrappedLines = wrapText(labelText, maxChars);
+            // Create the multi-line text element.
+            const textElement = group
+                .append("text")
+                .attr("text-anchor", "middle")
+                .attr("dominant-baseline", "middle")
+                .style("font-size", "12px")
+                .style("fill", "#fff");
+            wrappedLines.forEach((line, i) => {
+                textElement
+                    .append("tspan")
+                    .text(line)
+                    .attr("x", 0)
+                    .attr("dy", i === 0 ? "0em" : "1.2em");
+            });
+            // Get bounding box after text is rendered.
+            const bbox = textElement.node().getBBox();
+            const paddingRect = 8;
+            const rectWidth = bbox.width + paddingRect * 2;
+            const rectHeight = bbox.height + paddingRect * 2;
+            group
+                .insert("rect", "text")
+                .attr("x", -rectWidth / 2)
+                .attr("y", -rectHeight / 2)
+                .attr("width", rectWidth)
+                .attr("height", rectHeight)
+                .attr("rx", 6)
+                .attr("ry", 6)
+                .attr("fill", "#4CAF50")
+                .attr("stroke", "#2E7D32")
+                .attr("stroke-width", 2);
+        });
     }, [goalTree]);
-    return ((0, jsx_runtime_1.jsxs)("div", { style: { fontFamily: "Poppins, sans-serif", padding: 20 }, children: [(0, jsx_runtime_1.jsx)("h1", { children: "Goal Planner (D3 Tree)" }), (0, jsx_runtime_1.jsxs)("section", { style: { marginBottom: 20, textAlign: "center" }, children: [(0, jsx_runtime_1.jsx)("label", { htmlFor: "goal-input", children: "Enter Your Goal:" }), (0, jsx_runtime_1.jsx)("input", { id: "goal-input", type: "text", value: userGoal, onChange: e => setUserGoal(e.target.value), placeholder: "e.g., get tnt", style: { marginLeft: 10, marginRight: 10, padding: 6 } }), (0, jsx_runtime_1.jsx)("button", { onClick: startPlanning, style: { padding: "6px 12px" }, children: "Start Planning" })] }), (0, jsx_runtime_1.jsx)("svg", { ref: svgRef, width: 1000, height: 800, style: { border: "1px solid #ccc", background: "#f9f9f9" } }), (0, jsx_runtime_1.jsxs)("section", { style: { marginTop: 20 }, children: [(0, jsx_runtime_1.jsx)("h2", { children: "LLM Metrics" }), (0, jsx_runtime_1.jsx)("pre", { style: { background: "#f9f9f9", padding: 10, borderRadius: 4, overflowX: "auto" }, children: JSON.stringify(llmMetrics, null, 2) })] })] }));
+    (0, react_1.useEffect)(() => {
+        if (!goalTree)
+            return;
+        if (containerRef.current) {
+            containerRef.current.scrollTop = 0;
+            const leftOffset = (svgWidth - containerWidth) / 2;
+            containerRef.current.scrollLeft = leftOffset > 0 ? leftOffset : 0;
+        }
+    }, [goalTree]);
+    return ((0, jsx_runtime_1.jsxs)("div", { style: { fontFamily: "Poppins, sans-serif", padding: 20 }, children: [(0, jsx_runtime_1.jsx)("h1", { children: "Goal Planner (D3 Tree)" }), (0, jsx_runtime_1.jsxs)("section", { style: { marginBottom: 20, textAlign: "center" }, children: [(0, jsx_runtime_1.jsx)("label", { htmlFor: "goal-input", children: "Enter Your Goal:" }), (0, jsx_runtime_1.jsx)("input", { id: "goal-input", type: "text", value: userGoal, onChange: (e) => setUserGoal(e.target.value), placeholder: "e.g., build a house", style: { marginLeft: 10, marginRight: 10, padding: 6 } }), (0, jsx_runtime_1.jsx)("button", { onClick: startPlanning, style: { padding: "6px 12px" }, children: "Start Planning" })] }), (0, jsx_runtime_1.jsxs)("section", { style: { marginBottom: 20, textAlign: "center" }, children: [(0, jsx_runtime_1.jsxs)("p", { children: ["Current Mode: ", (0, jsx_runtime_1.jsx)("strong", { children: mode.toUpperCase() })] }), (0, jsx_runtime_1.jsxs)("button", { onClick: toggleMode, children: ["Switch to ", mode === "bfs" ? "DFS" : "BFS"] })] }), (0, jsx_runtime_1.jsx)("div", { ref: containerRef, style: {
+                    width: `${containerWidth}px`,
+                    height: `${containerHeight}px`,
+                    overflow: "auto",
+                    border: "1px solid #ccc",
+                    margin: "0 auto",
+                }, children: (0, jsx_runtime_1.jsx)("svg", { ref: svgRef, width: svgWidth, height: svgHeight, style: { background: "#f9f9f9" } }) }), (0, jsx_runtime_1.jsxs)("section", { style: { marginTop: 20 }, children: [(0, jsx_runtime_1.jsx)("h2", { children: "LLM Metrics" }), (0, jsx_runtime_1.jsx)("pre", { style: {
+                            background: "#f9f9f9",
+                            padding: 10,
+                            borderRadius: 4,
+                            overflowX: "auto",
+                        }, children: JSON.stringify(llmMetrics, null, 2) })] })] }));
 };
 exports["default"] = GoalPlanner;
 
