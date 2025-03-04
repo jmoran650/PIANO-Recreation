@@ -43,14 +43,31 @@ Never mention tools. The bot will always determine what tools and equipment it n
 **Output:** Loot bones (4) from skeletons.
 `;
 
-export function breakdownContextPrompt(step: string, context: string): string {
-  return `as you are deciding what steps to include in your breakdown of ${step}, keep in mind that your character has already done the following things: ${context}. Avoid redundant work. Assume you have all materials acquired in previous steps. Also assume the bot already has all necessary equipment.`;
+/**
+ * Generates the context prompt for the breakdown. 
+ * Now includes "projected inventory" listing.
+ */
+export function breakdownContextPrompt(
+  step: string,
+  context: string,
+  inventory: Record<string, number>
+): string {
+  // Convert the inventory to a human-readable string
+  const inventoryEntries = Object.entries(inventory)
+    .map(([item, qty]) => `${item}(${qty})`)
+    .join(", ");
+  const invString = inventoryEntries.length
+    ? `At this time, your inventory includes: ${inventoryEntries}.`
+    : ``;
+
+  return `as you are deciding what steps to include in your breakdown of ${step}, keep in mind that your character has already done the following things: ${context}. Avoid redundant work. Assume you have all materials acquired in previous steps. Also assume your character already has all necessary equipment. ${invString}`;
 }
 
 export function getGoalToFuncCallPrompt(step: string): string {
   return `Given the step: "${step}", determine if this step can be completed in its ENTIRETY by a bot using JUST ONE of the following methods:
 
-  • mine(goalBlock: string, count: number): Finds, goes to, and extracts the specified number of blocks of the given type from the environment. Getting and/or using the correct equipment to mine is taken care of by this function. Important: All wood is treated as generic, with wood type not being considered. Therefore mine(wood,4) collects 4 wood blocks without consideration of wood type.
+  • mine(goalBlock: string, count: number): Finds, goes to, and extracts the specified number of blocks of the given type from the environment. Getting and/or using the correct equipment to mine is taken care of by this function. 
+  Important: All wood is treated as generic, with wood type not being considered. Therefore mine(wood,4) collects 4 wood blocks without consideration of wood type.
   • craft(goalItem: string): Crafts the specified item using available resources. If a crafting table is needed it will be acquired and/or used to craft the item/s.
   • place(blockType: string): Places a block of the specified type into the game environment.
   • attack(mobType: string): Finds and attacks the nearest specified mob until it is defeated.

@@ -20,10 +20,11 @@ export const minecraftItems: Record<string, string> = {
     "String": "Dropped by spiders.",
     "Ender Pearl": "Dropped by endermen.",
     "Blaze Rod": "Dropped by blazes in Nether fortresses.",
+    "Eye of Ender": "Crafted from one ender pearl and one blaze powder.",
     "Ghast Tear": "Dropped by ghasts in the Nether.",
     "Slimeball": "Dropped by slimes, looted from chests, or traded with wandering traders.",
     "Magma Cream": "Dropped by magma cubes or crafted from blaze powder and slimeballs.",
-    "Blaze Powder": "Crafted from blaze rods.",
+    "Blaze Powder": "Crafted from blaze rods. One blaze rod converts to two blaze powder.",
     "Spider Eye": "Dropped by spiders, cave spiders, witches, or found in chests.",
     "Fermented Spider Eye": "Crafted from spider eye, brown mushroom, and sugar.",
     "Sugar": "Crafted from sugar cane.",
@@ -69,6 +70,6 @@ export const minecraftItems: Record<string, string> = {
 
   export const minecraftBlocks: Record<string, string> = {
     "TNT":"Crafted from 4 sand and 5 gunpowder.",
-    
+
 
   }

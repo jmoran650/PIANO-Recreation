@@ -86249,6 +86249,9 @@ const jsx_runtime_1 = __webpack_require__(/*! react/jsx-runtime */ "./node_modul
 const react_1 = __webpack_require__(/*! react */ "./node_modules/react/index.js");
 const socket_io_client_1 = __importDefault(__webpack_require__(/*! socket.io-client */ "./node_modules/socket.io-client/build/cjs/index.js"));
 const d3 = __importStar(__webpack_require__(/*! d3 */ "./node_modules/d3/src/index.js"));
+/**
+ * Utility to build a hierarchical structure from the flat StepNode array
+ */
 function buildHierarchy(flatNodes) {
     if (!flatNodes || flatNodes.length === 0)
         return null;
@@ -86275,8 +86278,10 @@ const GoalPlanner = () => {
     const [userGoal, setUserGoal] = (0, react_1.useState)("");
     const [goalTree, setGoalTree] = (0, react_1.useState)(null);
     const [llmMetrics, setLlmMetrics] = (0, react_1.useState)({});
-    // NEW: Keep track of BFS or DFS mode (default BFS).
+    // NEW: BFS/DFS mode toggle
     const [mode, setMode] = (0, react_1.useState)("bfs");
+    // For the popup:
+    const [selectedNode, setSelectedNode] = (0, react_1.useState)(null);
     const svgRef = (0, react_1.useRef)(null);
     const containerRef = (0, react_1.useRef)(null);
     const containerWidth = 3200;
@@ -86308,7 +86313,6 @@ const GoalPlanner = () => {
             socket.off("sharedState");
         };
     }, []);
-    // Function to start planning. We now emit both goal and mode to the server.
     const startPlanning = () => {
         if (!userGoal.trim()) {
             alert("Please enter a goal first.");
@@ -86317,7 +86321,6 @@ const GoalPlanner = () => {
         setGoalTree(null);
         socket.emit("startGoalPlan", { goal: userGoal, mode });
     };
-    // Toggle BFS/DFS. This button can switch the mode state.
     const toggleMode = () => {
         setMode((prevMode) => (prevMode === "bfs" ? "dfs" : "bfs"));
     };
@@ -86328,36 +86331,14 @@ const GoalPlanner = () => {
         }
         const svg = d3.select(svgRef.current);
         svg.selectAll("*").remove();
-        // Build a D3 hierarchy from the tree data.
+        // Build a D3 hierarchy
         const root = d3.hierarchy(goalTree, (d) => d.substeps);
-        // Define a maximum characters per line for wrapping.
-        const maxChars = 20;
-        // Create a tree layout with fixed node size and dynamic separation.
+        // We let the standard tree layout do its job
         const treeLayout = d3
             .tree()
             .nodeSize([100, 50])
-            .separation((a, b) => {
-            // These values roughly match what we use for rendering text:
-            const charWidth = 7;
-            const padding = 8;
-            const extraMargin = 10;
-            // Estimate node width based on the maximum characters per line
-            const estimateNodeWidth = (label) => {
-                const effectiveChars = Math.min(label.length, maxChars);
-                return effectiveChars * charWidth + padding * 2;
-            };
-            const labelA = a.data.funcCall
-                ? `${a.data.step} => ${a.data.funcCall}`
-                : a.data.step;
-            const labelB = b.data.funcCall
-                ? `${b.data.step} => ${b.data.funcCall}`
-                : b.data.step;
-            const widthA = estimateNodeWidth(labelA);
-            const widthB = estimateNodeWidth(labelB);
-            return (widthA / 2 + widthB / 2 + extraMargin) / 100;
-        });
+            .separation(() => 1.6);
         treeLayout(root);
-        // Center the group within the SVG.
         const g = svg
             .append("g")
             .attr("transform", `translate(${svgWidth / 2}, 50)`);
@@ -86375,53 +86356,30 @@ const GoalPlanner = () => {
             .attr("fill", "none")
             .attr("stroke", "#ccc")
             .attr("stroke-width", 2);
-        // Helper function to wrap text based on max characters.
-        const wrapText = (text, maxChars) => {
-            const words = text.split(" ");
-            const lines = [];
-            let currentLine = "";
-            words.forEach((word) => {
-                if ((currentLine + word).length > maxChars) {
-                    lines.push(currentLine.trim());
-                    currentLine = word + " ";
-                }
-                else {
-                    currentLine += word + " ";
-                }
-            });
-            if (currentLine.trim() !== "") {
-                lines.push(currentLine.trim());
-            }
-            return lines;
-        };
         const nodeGroup = g
             .selectAll("g.node")
             .data(root.descendants())
             .enter()
             .append("g")
             .attr("class", "node")
-            .attr("transform", (d) => `translate(${d.x},${d.y})`);
+            .attr("transform", (d) => `translate(${d.x},${d.y})`)
+            // On click, we capture that node's data
+            .on("click", (_, d) => {
+            setSelectedNode(d.data); // store StepNode in state
+        });
+        // Simple text + background rectangle approach
         nodeGroup.each(function (d) {
             const group = d3.select(this);
             const labelText = d.data.funcCall
                 ? `${d.data.step} => ${d.data.funcCall}`
                 : d.data.step;
-            const wrappedLines = wrapText(labelText, maxChars);
-            // Create the multi-line text element.
             const textElement = group
                 .append("text")
                 .attr("text-anchor", "middle")
                 .attr("dominant-baseline", "middle")
                 .style("font-size", "12px")
-                .style("fill", "#fff");
-            wrappedLines.forEach((line, i) => {
-                textElement
-                    .append("tspan")
-                    .text(line)
-                    .attr("x", 0)
-                    .attr("dy", i === 0 ? "0em" : "1.2em");
-            });
-            // Get bounding box after text is rendered.
+                .style("fill", "#fff")
+                .text(labelText);
             const bbox = textElement.node().getBBox();
             const paddingRect = 8;
             const rectWidth = bbox.width + paddingRect * 2;
@@ -86448,6 +86406,10 @@ const GoalPlanner = () => {
             containerRef.current.scrollLeft = leftOffset > 0 ? leftOffset : 0;
         }
     }, [goalTree]);
+    // Render the selected node's debug prompt in a simple modal
+    const closeModal = () => {
+        setSelectedNode(null);
+    };
     return ((0, jsx_runtime_1.jsxs)("div", { style: { fontFamily: "Poppins, sans-serif", padding: 20 }, children: [(0, jsx_runtime_1.jsx)("h1", { children: "Goal Planner (D3 Tree)" }), (0, jsx_runtime_1.jsxs)("section", { style: { marginBottom: 20, textAlign: "center" }, children: [(0, jsx_runtime_1.jsx)("label", { htmlFor: "goal-input", children: "Enter Your Goal:" }), (0, jsx_runtime_1.jsx)("input", { id: "goal-input", type: "text", value: userGoal, onChange: (e) => setUserGoal(e.target.value), placeholder: "e.g., build a house", style: { marginLeft: 10, marginRight: 10, padding: 6 } }), (0, jsx_runtime_1.jsx)("button", { onClick: startPlanning, style: { padding: "6px 12px" }, children: "Start Planning" })] }), (0, jsx_runtime_1.jsxs)("section", { style: { marginBottom: 20, textAlign: "center" }, children: [(0, jsx_runtime_1.jsxs)("p", { children: ["Current Mode: ", (0, jsx_runtime_1.jsx)("strong", { children: mode.toUpperCase() })] }), (0, jsx_runtime_1.jsxs)("button", { onClick: toggleMode, children: ["Switch to ", mode === "bfs" ? "DFS" : "BFS"] })] }), (0, jsx_runtime_1.jsx)("div", { ref: containerRef, style: {
                     width: `${containerWidth}px`,
                     height: `${containerHeight}px`,
@@ -86459,7 +86421,30 @@ const GoalPlanner = () => {
                             padding: 10,
                             borderRadius: 4,
                             overflowX: "auto",
-                        }, children: JSON.stringify(llmMetrics, null, 2) })] })] }));
+                        }, children: JSON.stringify(llmMetrics, null, 2) })] }), selectedNode && ((0, jsx_runtime_1.jsx)("div", { style: {
+                    position: "fixed",
+                    top: 0,
+                    left: 0,
+                    width: "100vw",
+                    height: "100vh",
+                    backgroundColor: "rgba(0,0,0,0.4)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    zIndex: 9999,
+                }, onClick: closeModal, children: (0, jsx_runtime_1.jsxs)("div", { style: {
+                        background: "#fff",
+                        padding: 20,
+                        borderRadius: 8,
+                        maxWidth: "90%",
+                        maxHeight: "80%",
+                        overflow: "auto",
+                        cursor: "auto",
+                    }, onClick: (e) => e.stopPropagation(), children: [(0, jsx_runtime_1.jsx)("h3", { children: "LLM Prompt for Node" }), (0, jsx_runtime_1.jsx)("pre", { style: {
+                                backgroundColor: "#eee",
+                                padding: 10,
+                                borderRadius: 4,
+                            }, children: selectedNode.debugPrompt ?? "(No debug prompt stored for this node.)" }), (0, jsx_runtime_1.jsx)("button", { onClick: closeModal, children: "Close" })] }) }))] }));
 };
 exports["default"] = GoalPlanner;
 
