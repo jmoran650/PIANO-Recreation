@@ -161,47 +161,60 @@ export class Actions {
     }
   }
 
-  /**
-   * Attacks a specified type of mob using the mineflayer-pvp plugin.
-   */
-  async attack(mobType: string): Promise<void> {
-    this.sharedState.addPendingAction(`Attack ${mobType}`);
+/**
+ * Attacks a specified type of mob using the mineflayer-pvp plugin.
+ */
+async attack(mobType: string): Promise<void> {
+  this.sharedState.addPendingAction(`Attack ${mobType}`);
 
-    // Explicit plugin check: ensure mineflayer-pvp is loaded.
-    const pvp = (this.bot as any).pvp;
-    if (!pvp) {
-      const errorMsg =
-        "Error: mineflayer-pvp plugin not loaded. Attack action disabled.";
-      this.bot.chat(errorMsg);
-      // Throwing an error makes it clear to any caller (or LLM) that this action is unavailable.
-      throw new Error(errorMsg);
-    }
-
-    const mobs = Object.values(this.bot.entities).filter(
-      (entity: any) =>
-        entity.name && entity.name.toLowerCase() === mobType.toLowerCase()
-    );
-    if (mobs.length === 0) {
-      this.bot.chat(`No ${mobType} found nearby to attack.`);
-      return;
-    }
-
-    const target = mobs[0];
-    this.bot.chat(`Attacking the nearest ${mobType}...`);
-    try {
-      if (typeof pvp.attack === "function") {
-        pvp.attack(target);
-        this.bot.once("stoppedAttacking", () => {
-          this.bot.chat("Target has been killed!");
-        });
-      } else {
-        this.bot.chat("pvp.attack is not a function. Plugin mismatch?");
-      }
-    } catch (err: unknown) {
-      let errMsg: string = err instanceof Error ? err.message : String(err);
-      this.bot.chat(`Error while attacking ${mobType}: ${errMsg}`);
-    }
+  // Explicit plugin check: ensure mineflayer-pvp is loaded.
+  const pvp = (this.bot as any).pvp;
+  if (!pvp) {
+    const errorMsg =
+      "Error: mineflayer-pvp plugin not loaded. Attack action disabled.";
+    this.bot.chat(errorMsg);
+    throw new Error(errorMsg);
   }
+
+  const mobs = Object.values(this.bot.entities).filter(
+    (entity: any) =>
+      entity.name && entity.name.toLowerCase() === mobType.toLowerCase()
+  );
+  if (mobs.length === 0) {
+    this.bot.chat(`No ${mobType} found nearby to attack.`);
+    return;
+  }
+
+  // Select the nearest mob of that type based on distance.
+  const target = mobs.reduce((nearest: any, mob: any) => {
+    return this.bot.entity.position.distanceTo(mob.position) <
+      this.bot.entity.position.distanceTo(nearest.position)
+      ? mob
+      : nearest;
+  }, mobs[0]);
+
+  this.bot.chat(`Attacking the nearest ${mobType}...`);
+  try {
+    if (typeof pvp.attack === "function") {
+      pvp.attack(target);
+      this.bot.once("stoppedAttacking", () => {
+        // Check if the target is still present (alive) in the entities list.
+        if (this.bot.entities[target.id]) {
+          this.bot.chat(`Target still alive, attacking again!`);
+          // Recursively call attack to finish off the target.
+          this.attack(mobType);
+        } else {
+          this.bot.chat("Target has been killed!");
+        }
+      });
+    } else {
+      this.bot.chat("pvp.attack is not a function. Plugin mismatch?");
+    }
+  } catch (err: unknown) {
+    const errMsg: string = err instanceof Error ? err.message : String(err);
+    this.bot.chat(`Error while attacking ${mobType}: ${errMsg}`);
+  }
+}
 
   /**
    * Places a crafting table at a safe nearby position.
