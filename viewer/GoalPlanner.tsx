@@ -119,10 +119,10 @@ const GoalPlanner: React.FC = () => {
     // Build a D3 hierarchy
     const root = d3.hierarchy(goalTree, (d) => d.substeps);
 
-    // We let the standard tree layout do its job
+    // Increase spacing between nodes by updating the nodeSize
     const treeLayout = d3
       .tree<TreeNode>()
-      .nodeSize([100, 50])
+      .nodeSize([200, 100])
       .separation(() => 1.6);
 
     treeLayout(root);

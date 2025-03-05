@@ -46,9 +46,9 @@ export const minecraftItems: Record<string, string> = {
     "Nautilus Shell": "Obtained from drowned mobs, fishing, or trading with wandering traders.",
     "Honeycomb": "Obtained from beehives or bee nests using shears.",
     "Honey Bottle": "Obtained by using empty glass bottles on beehives or bee nests.",
-    "Phantom Membrane": "Dropped by phantoms.",
-    "Rabbit Hide": "Dropped by rabbits.",
-    "Rabbit's Foot": "Rare drop from rabbits.",
+    "Phantom Membrane": "Dropped by phantoms when killed.",
+    "Rabbit Hide": "Dropped by rabbits when killed.",
+    "Rabbit's Foot": "Rare drop from rabbits when killed.",
     "Scute": "Dropped by baby turtles when they mature into adults.",
     "Arrow": "Crafted from 1 flint, 1 stick, and 1 feather. Conversion: 1 set → 4 arrows.",
     "Rotten Flesh": "Dropped by zombies and zombie variants.",
@@ -65,11 +65,10 @@ export const minecraftItems: Record<string, string> = {
     "Raw Porkchop": "Dropped by pigs when killed.",
     "Raw Chicken": "Dropped by chickens when killed.",
     "Raw Mutton": "Dropped by sheep when killed.",
-    
+    "End Crystal": "Crafted from "
   };
 
   export const minecraftBlocks: Record<string, string> = {
-    "TNT":"Crafted from 4 sand and 5 gunpowder.",
-
-
+    "TNT":"TNT blocks are crafted from 4 sand and 5 gunpowder.",
+    "Glass":"Glass is made by smelting sand blocks. Glass can not be mined."
   }
