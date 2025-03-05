@@ -1,4 +1,3 @@
-// src/observer.ts
 import { Bot } from "mineflayer";
 import type { Entity } from "prismarine-entity";
 import type { Block } from "prismarine-block";
@@ -188,6 +187,7 @@ export class Observer {
 
     return { head, chest, legs, feet, offhand };
   }
+
   /**
    * ----------------------------
    * 3) Recipe Examination
@@ -338,5 +338,42 @@ export class Observer {
       }
     }
     return true;
+  }
+
+  /**
+   * -------------------------------------
+   * 6) Detailed Block View (New Method!)
+   * -------------------------------------
+   * Returns a list of every block (including air) within the specified radius.
+   */
+  public async getAllBlocksInRadius(
+    radius: number = 10
+  ): Promise<{ name: string; x: number; y: number; z: number }[]> {
+    await this.bot.waitForChunksToLoad();
+
+    const center = this.bot.entity.position;
+    // We pick a large count to ensure we collect all blocks in a 10-block radius.
+    const blockPositions = this.bot.findBlocks({
+      point: center,
+      matching: (b) => b && b.name !== "air", // includes air and everything else
+      maxDistance: radius,
+      count: 9999,
+    });
+
+    const results: { name: string; x: number; y: number; z: number }[] = [];
+
+    for (const pos of blockPositions) {
+      const block = this.bot.blockAt(pos);
+      // block can be null if chunk is not loaded, but we waited above
+      const blockName = block ? block.name : "unknown";
+      results.push({
+        name: blockName,
+        x: pos.x,
+        y: pos.y,
+        z: pos.z,
+      });
+    }
+
+    return results;
   }
 }

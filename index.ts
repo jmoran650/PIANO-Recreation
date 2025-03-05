@@ -161,6 +161,15 @@ export async function main(): Promise<AgentBot> {
             break
           }
 
+          case "allblocks": {
+            // New test: get every block (including air) within a 10 block radius.
+            const blocks = await observer.getAllBlocksInRadius(10);
+            const blockList = blocks.map(b => `${b.name}(${b.x},${b.y},${b.z})`).join(", ");
+            bot.chat(`Detailed Blocks (10 radius): ${blockList}`);
+            console.log(blockList);
+            break
+          }
+
           case "safetable": {
             await actions.placeCraftingTable()
             break
@@ -177,6 +186,21 @@ export async function main(): Promise<AgentBot> {
               bot.chat("My inventory is empty.")
             } else {
               bot.chat("My inventory (slot by slot): " + contents.join(", "))
+            }
+            break
+          }
+
+
+          case "pullup": {
+            // New test: make the bot come to jibbum's location using move.
+            const targetPlayer = bot.players["jibbum"];
+            if (!targetPlayer || !targetPlayer.entity) {
+              bot.chat("I cannot find jibbum.");
+            } else {
+              const { x, y, z } = targetPlayer.entity.position;
+              bot.chat(`Moving to jibbum at (${x.toFixed(1)}, ${y.toFixed(1)}, ${z.toFixed(1)})...`);
+              await navigation.move(x, y, z);
+              bot.chat("Arrived at jibbum's location!");
             }
             break
           }

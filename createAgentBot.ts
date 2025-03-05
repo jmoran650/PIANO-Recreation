@@ -55,6 +55,8 @@ export async function createAgentBot(options: BotOptions): Promise<AgentBot> {
   const defaultMovements = new Movements(bot);
   defaultMovements.maxDropDown = 100;
   defaultMovements.blocksToAvoid = (defaultMovements.liquids);
+  defaultMovements.canOpenDoors = true;
+  defaultMovements.liquidCost = 5;
   bot.pathfinder.setMovements(defaultMovements);
 
   // 5. Set up shared state and modules.
