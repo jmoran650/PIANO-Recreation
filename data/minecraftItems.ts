@@ -65,7 +65,7 @@ export const minecraftItems: Record<string, string> = {
     "Raw Porkchop": "Dropped by pigs when killed.",
     "Raw Chicken": "Dropped by chickens when killed.",
     "Raw Mutton": "Dropped by sheep when killed.",
-    "End Crystal": "Crafted from "
+    "End Crystal": "Found in the ender dragon boss fight island. Must be destroyed with arrows before the ender dragon can be damaged."
   };
 
   export const minecraftBlocks: Record<string, string> = {

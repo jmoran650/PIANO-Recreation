@@ -41,7 +41,6 @@ async function actualLLMCall(prompt: string): Promise<string> {
   const completion = await openai.chat.completions.create({
     model: "gpt-4o-mini", // you may change to any supported model as needed.
     messages: [{ role: "user", content: prompt }],
-    max_tokens: 150, // Adjust as needed.
   });
   if (
     completion.choices &&

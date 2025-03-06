@@ -95,7 +95,7 @@ async function startServer() {
     });
 
     // Listen for hierarchical goal planning requests.
-    // We now accept an object: { goal, mode } from the front end.
+    // We now pass the agent.sharedState as the 4th argument so it can be included in the context.
     socket.on("startGoalPlan", async (data: { goal: string; mode?: "bfs" | "dfs" }) => {
       try {
         const goal = data.goal;
@@ -109,7 +109,8 @@ async function startServer() {
           (updatedTree: StepNode[]) => {
             // Each partial update -> send to frontend
             socket.emit("goalPlanProgress", updatedTree);
-          }
+          },
+          agent.sharedState // <=== Pass SharedAgentState here
         );
         // Once done, emit the final tree
         socket.emit("goalPlanComplete", tree);
