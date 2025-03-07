@@ -35,7 +35,8 @@ const openai = new OpenAI({
 
 /**
  * actualLLMCall:
- * Uses the OpenAI API to generate a completion for the given prompt.
+ * Uses the OpenAI API to generate a completion for the given prompt, returning plain text.
+ * This is still used by callLLM() and leaves the formatting entirely up to the model's response.
  */
 async function actualLLMCall(prompt: string): Promise<string> {
   const completion = await openai.chat.completions.create({
@@ -61,8 +62,60 @@ async function actualLLMCall(prompt: string): Promise<string> {
 }
 
 /**
- * Process the LLM queue at a fixed interval.
- * This function dequeues one request per RATE_LIMIT_INTERVAL and calls the LLM API.
+ * actualLLMCallJsonSchema:
+ * Uses the OpenAI API to generate a completion for the given system+user instructions,
+ * but *attempts* to force the model to adhere to a JSON Schema. 
+ * 
+ * In practice, the official OpenAI Node library does NOT yet have a native `response_format` 
+ * or `json_schema` parameter. If you are using a custom or experimental version, or a 
+ * plugin-based approach, you'll need to ensure that the model's output is valid JSON 
+ * in the .message.content field. 
+ */
+async function actualLLMCallJsonSchema(
+  systemMsg: string,
+  userMsg: string,
+  jsonSchema: any
+): Promise<{ parsed: any }> {
+  const completion = await openai.chat.completions.create({
+    model: "gpt-4o-mini",
+    messages: [
+      { role: "system", content: systemMsg },
+      { role: "user", content: userMsg },
+    ],
+    // This is a placeholder. In official OpenAI usage, you'd typically instruct
+    // the model to output valid JSON in the 'system' or 'user' message. 
+    // The "response_format" key here is not standard in the openai library.
+    response_format: {
+      type: "json_schema",
+      json_schema: jsonSchema,
+    },
+  });
+
+  if (!completion.choices || !completion.choices[0].message) {
+    throw new Error("No valid structured response from OpenAI API.");
+  }
+
+  const rawContent = completion.choices[0].message.content;
+  if (!rawContent) {
+    throw new Error("Model returned empty response.");
+  }
+
+  // FIX: Parse the string into JSON so that result.parsed will be an object.
+  let parsedObj: any;
+  try {
+    parsedObj = JSON.parse(rawContent);
+  } catch (err) {
+    throw new Error(
+      `Failed to parse the LLM JSON response. Raw output:\n${rawContent}\n\nError: ${err}`
+    );
+  }
+
+  // Return an object with a 'parsed' key.
+  return { parsed: parsedObj };
+}
+
+/**
+ * Queue-based approach for plain text calls.
  */
 setInterval(async () => {
   if (llmQueue.length > 0) {
@@ -80,18 +133,13 @@ setInterval(async () => {
 
 /**
  * callLLM:
- * A global function to wrap LLM API calls. It enqueues the request and returns
- * a promise that resolves once the API call is processed.
- *
- * @param prompt The prompt string for the LLM.
- * @returns A promise resolving to the LLM response.
+ * A global function to wrap LLM API calls for *plain text* usage.
+ * Enqueues the request and returns a promise once the API call is processed.
  */
 export async function callLLM(prompt: string): Promise<string> {
-  // Check if LLM requests are disabled.
   if (!llmEnabled) {
     return Promise.reject(new Error("LLM requests are disabled."));
   }
-  // Check prompt length first.
   if (prompt.length > MAX_LENGTH) {
     return Promise.reject(
       new Error(
@@ -99,7 +147,7 @@ export async function callLLM(prompt: string): Promise<string> {
       )
     );
   }
-  // Record metrics.
+
   totalLLMRequests++;
   llmRequestTimestamps.push(Date.now());
   totalInputChars += prompt.length;
@@ -110,12 +158,56 @@ export async function callLLM(prompt: string): Promise<string> {
 }
 
 /**
+ * callLLMJsonSchema:
+ * For tasks where we *require* valid JSON adhering to a known schema.
+ * This bypasses the queue-based approach so we can do a single call with response_format,
+ * or more commonly (in official usage) uses a chain-of-thought prompt that 
+ * instructs the model to produce valid JSON.
+ *
+ * If the model refuses or fails to produce valid JSON, we throw an error.
+ *
+ * Returns:
+ *   { parsed: T | null } on success
+ *   (Potentially add 'refusal' property if you want to handle refusal states.)
+ */
+export async function callLLMJsonSchema<T>(
+  systemMsg: string,
+  userMsg: string,
+  jsonSchema: any
+): Promise<{ parsed: T | null }> {
+  if (!llmEnabled) {
+    return Promise.reject(new Error("LLM requests are disabled."));
+  }
+
+  const combined = systemMsg + "\n" + userMsg;
+  if (combined.length > MAX_LENGTH) {
+    return Promise.reject(
+      new Error(
+        `Prompt length (${combined.length}) exceeds maximum allowed length of ${MAX_LENGTH}.`
+      )
+    );
+  }
+
+  totalLLMRequests++;
+  llmRequestTimestamps.push(Date.now());
+  totalInputChars += combined.length;
+
+  try {
+    const { parsed } = await actualLLMCallJsonSchema(systemMsg, userMsg, jsonSchema);
+    if (parsed) {
+      const outStr = JSON.stringify(parsed);
+      totalOutputChars += outStr.length;
+    }
+    return { parsed: parsed as T };
+  } catch (err) {
+    // If the model's output can't be parsed or is invalid, we throw.
+    throw err;
+  }
+}
+
+/**
  * getLLMMetrics:
- * Returns an object containing LLM metrics:
- * - totalRequests: The total number of LLM requests made.
- * - requestsLast10Min: The number of requests made in the last 10 minutes.
- * - totalInputChars: The running total of input characters.
- * - totalOutputChars: The running total of output characters.
+ * Returns an object containing LLM usage metrics.
  */
 export function getLLMMetrics(): {
   totalRequests: number;
@@ -124,9 +216,7 @@ export function getLLMMetrics(): {
   totalOutputChars: number;
 } {
   const now = Date.now();
-  // 10 minutes = 600000 ms
   const tenMinutesAgo = now - 600000;
-  // Filter out timestamps older than 10 minutes.
   const recentTimestamps = llmRequestTimestamps.filter((ts) => ts >= tenMinutesAgo);
   return {
     totalRequests: totalLLMRequests,
@@ -137,19 +227,13 @@ export function getLLMMetrics(): {
 }
 
 /**
- * setLLMEnabled:
- * A function to enable or disable LLM requests.
- *
- * @param enabled boolean - if false, further callLLM requests will be rejected.
+ * setLLMEnabled and toggleLLMEnabled:
+ * Quick ways to enable/disable the LLM calls at runtime.
  */
 export function setLLMEnabled(enabled: boolean): void {
   llmEnabled = enabled;
 }
 
-/**
- * toggleLLMEnabled:
- * Toggles the LLM enabled flag and returns the new state.
- */
 export function toggleLLMEnabled(): boolean {
   llmEnabled = !llmEnabled;
   return llmEnabled;

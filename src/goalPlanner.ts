@@ -2,7 +2,7 @@
  * src/goalPlanner.ts
  *******************/
 import { v4 as uuidv4 } from "uuid";
-import { callLLM } from "../utils/llmWrapper";
+import { callLLM, callLLMJsonSchema } from "../utils/llmWrapper";
 import {
   goalBreakdownPrompt,
   getGoalToFuncCallPrompt,
@@ -14,16 +14,9 @@ import { minecraftItems, minecraftBlocks } from "../data/minecraftItems";
 import { SharedAgentState } from "./sharedAgentState";
 
 /**
- * Helper function to escape special characters in a string so that it can be used in a regular expression.
- */
-function escapeRegExp(str: string): string {
-  return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-/**
  * A StepNode in the new shape the frontend expects.
  * - level: how deep the node is (root is level 0)
- * - stepNumber: a sequential number indicating the order the steps are processed
+ * - stepNumber: a sequential number indicating the order steps are processed
  * - projectedInventory: track items acquired so far in the plan
  */
 export interface StepNode {
@@ -35,16 +28,23 @@ export interface StepNode {
   level: number;
   stepNumber: number;
   projectedInventory: Record<string, number>;
-  debugPrompt?: string;  // For debugging the prompt used to generate this node
+  debugPrompt?: string; // For debugging the prompt used to generate this node
 }
 
 /**
- * Break down a goal (or sub-goal) into a list of actionable steps in JSON format.
- * Now includes additional context of previously completed tasks, a projected inventory,
- * and optionally some environment data from sharedAgentState.
+ * The model's breakdown result is guaranteed to match this schema:
+ */
+interface BreakdownResponse {
+  steps: string[];
+}
+
+/**
+ * Break down a goal (or sub-goal) into a list of actionable steps,
+ * now using structured outputs with JSON Schema to ensure we always get:
  *
- * This updated function appends an extra section at the end of the prompt—"Acquisition Information"—
- * which lists any items or blocks mentioned in the original step along with their acquisition descriptions.
+ *  {
+ *    "steps": ["string", "string", ...]
+ *  }
  */
 async function goal_breakdown(
   step: string,
@@ -52,94 +52,103 @@ async function goal_breakdown(
   inventory: Record<string, number>,
   sharedState?: SharedAgentState
 ): Promise<{ steps: string[]; debugPrompt: string }> {
-  // Build the environment context (plus "previous steps" context) prompt:
+  // Build the environment context for the system or user messages:
   const contextString = breakdownContextPrompt(step, context, inventory, sharedState);
 
   // Build the Acquisition Information section by scanning the original step.
   let acquisitionInfo = "";
   for (const [item, desc] of Object.entries(minecraftItems)) {
-    const escapedItem = escapeRegExp(item);
-    const pattern = new RegExp(`\\b${escapedItem}(s)?\\s*(\$begin:math:text$\\\\d+\\$end:math:text$)?\\b`, "i");
-    if (pattern.test(step)) {
+    if (step.toLowerCase().includes(item.toLowerCase())) {
       acquisitionInfo += `${item}: ${desc}\n`;
     }
   }
   for (const [block, desc] of Object.entries(minecraftBlocks)) {
-    const escapedBlock = escapeRegExp(block);
-    const pattern = new RegExp(`\\b${escapedBlock}(s)?\\s*(\$begin:math:text$\\\\d+\\$end:math:text$)?\\b`, "i");
-    if (pattern.test(step)) {
+    if (step.toLowerCase().includes(block.toLowerCase())) {
       acquisitionInfo += `${block}: ${desc}\n`;
     }
   }
-
   let acquisitionSection = "";
   if (acquisitionInfo) {
     acquisitionSection = `\nAcquisition Information:\n${acquisitionInfo}`;
   }
 
-  const prompt = `${goalBreakdownPrompt}
-${contextString} 
-Here is the step for you to breakdown:
-"${step}"
-${acquisitionSection}`;
+  // Prepare system and user messages.
+  const systemMsg = goalBreakdownPrompt;
+  const userMsg = `${contextString}\nHere is the step for you to breakdown:\n"${step}"\n${acquisitionSection}`;
 
-  const response = await callLLM(prompt);
+  // Define the expected JSON Schema.
+  const breakdownSchema = {
+    "name": "minecraft_steps",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "steps": {
+          "type": "array",
+          "description": "A list of steps to be followed in Minecraft.",
+          "items": {
+            "type": "string",
+            "description": "A single step (of one or more) in the Minecraft process."
+          }
+        }
+      },
+      "required": [
+        "steps"
+      ],
+      "additionalProperties": false
+    },
+    "strict": true
+  };
 
-  // Use a regex to extract JSON content from the response (handles markdown formatting)
-  const jsonRegex = /```(?:json)?\s*([\s\S]*?)\s*```/i;
-  const match = response.match(jsonRegex);
-  let jsonStr: string;
-  if (match && match[1]) {
-    jsonStr = match[1];
-  } else {
-    jsonStr = response;
-  }
-
-  let parsedResponse: { steps: string[] };
+  // Use a try/catch block around the structured LLM call.
+  let result;
   try {
-    parsedResponse = JSON.parse(jsonStr);
+    result = await callLLMJsonSchema<BreakdownResponse>(
+      systemMsg,
+      userMsg,
+      breakdownSchema
+    );
+    console.log(result)
   } catch (error: any) {
-    console.error("Error parsing JSON response: ", error, "Response: ", response);
-    throw new Error("Failed to parse JSON response from LLM");
+    console.error("LLM call error for step:", step, error.message, result);
+    if (error.raw) {
+      console.error("LLM raw output for step", step, error.raw, result);
+    }
+    throw error;
   }
-  return { steps: parsedResponse.steps, debugPrompt: prompt };
+
+  // If there's no valid parsed data (the model didn't produce valid JSON).
+  if (!result.parsed) {
+    console.error("No structured data returned for step:", step, "Raw output:", result);
+    throw new Error(`No structured data returned for step "${step}".`);
+  }
+
+  return { steps: result.parsed.steps, debugPrompt: `${systemMsg}\n\nUSER:\n${userMsg}` };
 }
 
 /**
- * Helper that calls the function-call LLM prompt, returning both the prompt used
- * and the LLM's output.
+ * checkFunctionCallDetailed:
+ * This is a small function that tries to see if the entire step
+ * can be described as a single function call. We keep it in *plain text* mode for now,
+ * not JSON schema, since the function calls can vary widely and are mostly small strings.
  */
 async function checkFunctionCallDetailed(
   step: string
 ): Promise<{ promptUsed: string; response: string }> {
   const promptUsed = getGoalToFuncCallPrompt(step);
-  const response = await callLLM(promptUsed);
+  const response = await callLLM(promptUsed); // uses plain text
   return { promptUsed, response: response.trim() };
 }
 
 /**
  * Parse function calls like:
- *   mine(wood, 4)
- *   lootFromMob(skeleton, bones, 3)
- *   craft(iron_pickaxe)
- *   craft(iron_pickaxe, 1)
- *   smelt(iron_ore, iron_ingot, 2)
- *   harvestCrop(wheat, 3)
- *
+ *   mine(wood, 4), craft(iron_pickaxe), smelt(iron_ore, iron_ingot, 2), etc.
  * and update the projectedInventory accordingly.
  */
 function updateInventoryFromFuncCall(
   funcCall: string,
   currentInventory: Record<string, number>
 ): Record<string, number> {
-  // Extract the function call substring.
-  const match = funcCall.match(
-    /(mine\([^)]*\)|lootfrommob\([^)]*\)|craft\([^)]*\)|smelt\([^)]*\)|harvestcrop\([^)]*\))/i
-  );
-  if (match) {
-    funcCall = match[0];
-  }
-  const lower = funcCall.toLowerCase();
+  let call = funcCall.toLowerCase();
 
   // Helper to parse inside parentheses
   function parseInside(callString: string) {
@@ -150,28 +159,23 @@ function updateInventoryFromFuncCall(
     return inside.split(",").map((p) => p.trim());
   }
 
-  // Start with a copy of the current inventory.
   const newInv: Record<string, number> = { ...currentInventory };
 
-  if (lower.includes("mine(")) {
+  if (call.startsWith("mine(")) {
     const parts = parseInside(funcCall);
     if (parts.length === 2) {
       const itemName = parts[0];
       const count = parseInt(parts[1], 10) || 0;
-      if (count > 0) {
-        newInv[itemName] = (newInv[itemName] || 0) + count;
-      }
+      newInv[itemName] = (newInv[itemName] || 0) + count;
     }
-  } else if (lower.includes("lootfrommob(")) {
+  } else if (call.startsWith("lootfrommob(")) {
     const parts = parseInside(funcCall);
     if (parts.length === 3) {
       const mobLootItem = parts[1];
       const count = parseInt(parts[2], 10) || 0;
-      if (count > 0) {
-        newInv[mobLootItem] = (newInv[mobLootItem] || 0) + count;
-      }
+      newInv[mobLootItem] = (newInv[mobLootItem] || 0) + count;
     }
-  } else if (lower.includes("craft(")) {
+  } else if (call.startsWith("craft(")) {
     const parts = parseInside(funcCall);
     if (parts.length >= 1) {
       const itemName = parts[0];
@@ -181,43 +185,35 @@ function updateInventoryFromFuncCall(
       }
       newInv[itemName] = (newInv[itemName] || 0) + quantity;
     }
-  } else if (lower.includes("smelt(")) {
+  } else if (call.startsWith("smelt(")) {
     const parts = parseInside(funcCall);
     if (parts.length === 3) {
       const inputItem = parts[0];
       const outputItem = parts[1];
       const quantity = parseInt(parts[2], 10) || 0;
-      if (quantity > 0) {
-        const haveInput = newInv[inputItem] || 0;
-        const actualRemoved = Math.min(haveInput, quantity);
-        newInv[inputItem] = haveInput - actualRemoved;
-        newInv[outputItem] = (newInv[outputItem] || 0) + actualRemoved;
-      }
+      const haveInput = newInv[inputItem] || 0;
+      const actualRemoved = Math.min(haveInput, quantity);
+      newInv[inputItem] = haveInput - actualRemoved;
+      newInv[outputItem] = (newInv[outputItem] || 0) + actualRemoved;
     }
-  } else if (lower.includes("harvestcrop(")) {
+  } else if (call.startsWith("harvestcrop(")) {
     const parts = parseInside(funcCall);
     if (parts.length === 2) {
       const cropName = parts[0];
       const count = parseInt(parts[1], 10) || 0;
-      if (count > 0) {
-        newInv[cropName] = (newInv[cropName] || 0) + count;
-      }
+      newInv[cropName] = (newInv[cropName] || 0) + count;
     }
   }
+
   return newInv;
 }
 
 /**
- * Build a goal tree, returning a *flat array* of StepNode.
- * By default, it does breadth-first expansion, but you can pass `mode = "dfs"`
- * to break down each branch fully before moving on.
+ * buildGoalTree:
+ * Iteratively breaks down a single high-level goal into sub-steps,
+ * returning a flat array of StepNode objects that form a tree structure (parentId references).
  *
- * A progress callback is invoked whenever a new set of nodes is appended.
- *
- * Each node carries its projectedInventory that is updated when a function call is detected.
- * Also, every node now includes a debugPrompt that contains the prompt used to generate this node.
- *
- * The optional `sharedState` parameter will pass environment data into the breakdown prompt.
+ * We use BFS or DFS expansions, with optional progressCallback for partial results.
  */
 export async function buildGoalTree(
   original: string,
@@ -234,36 +230,28 @@ export async function buildGoalTree(
     completionCriteria: null,
     level: 0,
     stepNumber: 0,
-    projectedInventory: {}, // start with empty inventory
-    debugPrompt: undefined, // root has no prior prompt
+    projectedInventory: {},
+    debugPrompt: undefined,
   };
 
-  // This will store all nodes, starting with the root.
   let treeNodes: StepNode[] = [root];
-
-  // Use an array as a queue (for BFS) or stack (for DFS).
   let frontier: StepNode[] = [root];
-
-  // Global step counter (starting at 1 because root is stepNumber=0).
   let stepCounter = 1;
 
   while (frontier.length > 0) {
-    let currentNode: StepNode;
-    if (mode === "bfs") {
-      currentNode = frontier.shift()!;
-    } else {
-      currentNode = frontier.pop()!;
-    }
+    const currentNode = mode === "bfs" ? frontier.shift()! : frontier.pop()!;
 
-    // If this is not the root node, check if we can represent it directly as a single function call.
+    // Try to interpret the entire step as a single function call (plain text approach).
     if (currentNode.parentId !== null && currentNode.funcCall === null) {
       const { promptUsed, response } = await checkFunctionCallDetailed(currentNode.step);
       if (!response.toLowerCase().includes("null")) {
-        // Update the current node's inventory based on the function call.
-        const updatedInv = updateInventoryFromFuncCall(response, currentNode.projectedInventory);
+        // It's a recognized function call.
+        const updatedInv = updateInventoryFromFuncCall(
+          response,
+          currentNode.projectedInventory
+        );
         currentNode.projectedInventory = updatedInv;
 
-        // Create a child node that holds the function call.
         const childNode: StepNode = {
           id: uuidv4(),
           parentId: currentNode.id,
@@ -277,14 +265,13 @@ export async function buildGoalTree(
         };
         treeNodes.push(childNode);
         progressCallback?.(treeNodes);
-
-        // No further breakdown needed for this branch (we stop).
-        continue;
+        continue; // No further breakdown needed
       }
     }
 
-    // Build a structured context from previously processed sibling/ancestor nodes.
-    const filteredNodes = treeNodes.filter(
+    // Build a structured context from previously processed nodes at the same or deeper level
+    // so we can avoid re-gathering resources that were already accounted for:
+    const relevantNodes = treeNodes.filter(
       (n) =>
         n.stepNumber < currentNode.stepNumber &&
         n.level >= currentNode.level &&
@@ -292,36 +279,36 @@ export async function buildGoalTree(
     );
 
     const contextGroups: Record<string, string[]> = {};
-    filteredNodes.forEach((n) => {
-      if (n.parentId) {
-        if (!contextGroups[n.parentId]) {
-          contextGroups[n.parentId] = [];
-        }
-        contextGroups[n.parentId].push(n.step);
+    for (const n of relevantNodes) {
+      if (!n.parentId) continue;
+      if (!contextGroups[n.parentId]) {
+        contextGroups[n.parentId] = [];
       }
-    });
+      contextGroups[n.parentId].push(n.step);
+    }
 
-    // Present as a small object summarizing each parent step and its sub-steps:
+    // Summarize each parent's step with sub-steps
     const contextObj: Record<string, string[]> = {};
     for (const parentId in contextGroups) {
-      const parentNode = treeNodes.find((node) => node.id === parentId);
-      if (!parentNode) continue;
-      contextObj[parentNode.step] = contextGroups[parentId];
+      const pNode = treeNodes.find((x) => x.id === parentId);
+      if (!pNode) continue;
+      contextObj[pNode.step] = contextGroups[parentId];
     }
     const structuredContext = JSON.stringify(contextObj, null, 2);
 
-    // Break down the current step further:
+    // Break down further with structured JSON output
     const { steps: substeps, debugPrompt } = await goal_breakdown(
       currentNode.step,
       structuredContext,
       currentNode.projectedInventory,
-      sharedState // pass optional sharedState
+      sharedState
     );
     if (substeps.length === 0) {
+      // Nothing to expand, skip
       continue;
     }
 
-    // Generate child nodes from these substeps
+    // Create child nodes
     const newNodes: StepNode[] = substeps.map((s) => ({
       id: uuidv4(),
       parentId: currentNode.id,
@@ -331,14 +318,14 @@ export async function buildGoalTree(
       level: currentNode.level + 1,
       stepNumber: stepCounter++,
       projectedInventory: { ...currentNode.projectedInventory },
-      debugPrompt, // Attach the debug prompt used for this breakdown
+      debugPrompt,
     }));
 
     treeNodes.push(...newNodes);
-
     if (mode === "bfs") {
       frontier.push(...newNodes);
     } else {
+      // DFS: push them in reverse so we expand in correct substep order
       for (let i = newNodes.length - 1; i >= 0; i--) {
         frontier.push(newNodes[i]);
       }

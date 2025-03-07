@@ -57,6 +57,7 @@ export async function createAgentBot(options: BotOptions): Promise<AgentBot> {
   defaultMovements.blocksToAvoid = (defaultMovements.liquids);
   defaultMovements.canOpenDoors = true;
   defaultMovements.liquidCost = 50;
+  defaultMovements.allowFreeMotion = true;
   bot.pathfinder.setMovements(defaultMovements);
 
   // 5. Set up shared state and modules.

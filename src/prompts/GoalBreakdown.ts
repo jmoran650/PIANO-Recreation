@@ -13,8 +13,9 @@ export const goalBreakdownPrompt: string = `Break down a task in Minecraft for m
 
 # Output Format
 
-Output the steps as a JSON object with a single key "steps" whose value is an array of step strings. For example:
-
+Output the steps as a JSON object with a single key "steps" whose value is an array of step strings. 
+Output only a JSON object matching the following schema, with no extra text or keys.
+For example:
 {
   "steps": ["Step 1", "Step 2", "Step 3"]
 }
@@ -97,7 +98,7 @@ export function breakdownContextPrompt(
 For example, if a previous step acquired a needed resource, and the current step involves crafting using that resource, do not write a step for acquiring the resource. You already have it.
 Assume you have all materials acquired in previous steps. Also assume your character already has all necessary equipment.
 
-${invString}
+This is your current inventory: ${invString}.
 
 Additional environment context:
 ${environmentDetails}
@@ -106,29 +107,79 @@ ${environmentDetails}
 
 export function getGoalToFuncCallPrompt(
   step: string
+  //inventory: Record<string, number>
 ): string {
+  //const inventoryList = formatInventory(inventory);
   return `
 Given a step, determine if this step can be completed in its ENTIRETY by a bot using JUST ONE of the following methods:
 
-  • mine(goalBlock: string, count: number)
-  • craft(goalItem: string, amount: number)
-  • place(blockType: string)
-  • attack(mobType: string)
-  • lootFromMob(mobType: string, mobLootItem: string, count:number)
-  • smelt(inputItemName: string, outputItemName: string, quantity: number)
-  • plantCrop(cropName: string)
-  • harvestCrop(cropName: string, count:number OR "all")
-  • sortInventory()
-  • placeChest()
-  • storeItemInChest(itemName: string, count: number)
-  • retrieveItemFromChest(itemName: string, count: number)
-  • find_biome(biome: string, goto: Boolean)
-  • find_block(block: string, goto: Boolean)
-  • activate_end_portal()
-  • activate_nether_portal()
-  • use_portal()
-  • follow_eye()
+  • mine(goalBlock: string, count: number): Finds, goes to, and extracts the specified number of blocks of the given type from the environment. Getting and/or using the correct equipment to mine is taken care of by this function. 
+  Important: All wood is treated as generic, with wood type not being considered. Therefore mine(wood,4) collects 4 wood blocks without consideration of wood type.
+  • craft(goalItem: string, amount: number): Crafts the specified item using available resources. The bot takes care of acquiring necessary materials for crafting. You do not need to worry about it. If a step says "Craft x from y", call craft(x).
+  • place(blockType: string): Places a block of the specified type into the game environment.
+  • attack(mobType: string): Finds and attacks the nearest specified mob until it is defeated.
+  • lootFromMob(mobType: string, mobLootItem: string, count:number): Finds and kills mobType, collecting loot from the defeated mob, until count of mobLootItem has been acquired.
+  • smelt(inputItemName: string, outputItemName: string, quantity: number): Smelts the specified quantity of the input item to get quantity of output item. Fuel is taken care of.
+  • plantCrop(cropName: string): Plants the specified crop in suitable farmland. Acquiring seeds and tilling dirt with the appropriate tool is taken care of.
+  • harvestCrop(cropName: string, count:number OR "all"): Harvests and collects fully grown crops of the specified type. If count is set to "all", harvests all, otherwise harvests count crops.
+  • sortInventory(): Organizes and sorts the items currently held in inventory.
+  • placeChest(): Acquires and/or places a chest into the game environment. Appropriate location will be determined by the function.
+  • storeItemInChest(itemName: string, count: number): Stores a specified quantity of the given item into an available chest. The appropriate chest will be determined by the function.
+  • retrieveItemFromChest(itemName: string, count: number): Goes to and/or retrieves count of itemName from a chest. Which chest the item is in will be determined by the function.
+  • find_biome(biome: string, goto: Boolean): Locates the specified biome in the environment. If goto is True the bot will also go to that biome.
+  • find_block(block: string, goto: Boolean): Locates a specific block type in the environment. If goto is True the bot will also go to the specified block. Pathfinding is taken care of.
+  • activate_end_portal(): Activates an end portal.
+  • activate_nether_portal(): Activates a nether portal.
+  • shoot_with_arrow(target: string): Shoots an arrow at target until it is dead or destroyed. Can be used to target mobs or other entities.
+  • use_portal(): enters a portal. Covers both end portals and nether portals.
+  • follow_eye(): Follows an eye of ender to the stronghold.
+  
+  EXAMPLES: 
+  **Input**: "Gather 4 wood"  
+**Output**: mine(wood,4)
 
-If the step can be completed COMPLETELY using one of these methods, simply SAY ONLY the corresponding function call in the format methodName(arg1, arg2, ...). Otherwise, SAY ONLY "null".
+**Input**: "Craft a pickaxe"  
+**Output**: craft(pickaxe,1)
+
+**Input**: "Place a stone block"  
+**Output**: place(stone)
+
+**Input**: "Attack a zombie"  
+**Output**: attack(zombie)
+
+**Input**: "Enter the nether"
+**Output**: null
+
+**Input**: "Loot 3 rotten_flesh from a zombie"  
+**Output**: lootFromMob(zombie,rotten_flesh,3)
+
+**Input**: "Smelt 5 iron_ore into 5 iron_ingot"  
+**Output**: smelt(iron_ore,iron_ingot,5)
+
+**Input**: "Plant wheat"  
+**Output**: plantCrop(wheat)
+
+**Input**: "Harvest all carrots"  
+**Output**: harvestCrop(carrots,"all")
+
+**Input**: Decorate the house
+**Output**: null
+
+**Input**: Look around
+**Output**: null
+
+**Input**: "Sort inventory"  
+**Output**: sortInventory()
+
+**Input**: "Place a chest"  
+**Output**: placeChest()
+
+**Input**: "Store 20 arrows"  
+**Output**: storeItemInChest(arrows,20)
+
+**Input**: "Retrieve 15 coal"  
+**Output**: retrieveItemFromChest(coal,15)
+
+If the step can be completed COMPLETELY using one of these methods, simply SAY ONLY the corresponding function call in the format methodName(argument1, argument2, ...). Otherwise, SAY ONLY "null".
 This is the step: ${step}`;
 }
