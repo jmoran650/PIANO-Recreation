@@ -63,7 +63,7 @@ export class Actions {
       try {
         await this.bot.dig(block);
         count++;
-        this.bot.chat(`Mined ${count} of ${desiredCount} ${goalBlock} blocks.`);
+        //this.bot.chat(`Mined ${count} of ${desiredCount} ${goalBlock} blocks.`);
       } catch (err) {
         this.bot.chat(`Error mining block: ${err}`);
       }
@@ -83,6 +83,7 @@ export class Actions {
       return;
     }
     const itemId: number = itemData.id;
+    this.bot.chat(`The item.id returned for name ${goalItem}  is: ${itemId}`)
 
     const recipes = this.bot.recipesFor(itemId, null, 1, true);
     if (recipes.length === 0) {

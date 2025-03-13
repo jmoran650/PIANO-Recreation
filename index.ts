@@ -23,7 +23,7 @@ export async function main(): Promise<AgentBot> {
       version: "1.21.4"
     })
 
-    const { bot, observer, navigation, actions } = agent
+    const { bot, observer, navigation, actions, functionCaller } = agent
 
     bot.on("chat", async (username: string, message: string) => {
       if (username === bot.username) return
@@ -70,7 +70,7 @@ export async function main(): Promise<AgentBot> {
         bot.chat("Arrived at new location!")
       }
 
-      // New test commands:
+      // Test commands switch-case:
       else if (message.startsWith("test ")) {
         const parts = message.split(" ")
         const subcommand = parts[1]
@@ -190,7 +190,6 @@ export async function main(): Promise<AgentBot> {
             break
           }
 
-
           case "pullup": {
             // New test: make the bot come to jibbum's location using move.
             const targetPlayer = bot.players["jibbum"];
@@ -205,13 +204,45 @@ export async function main(): Promise<AgentBot> {
             break
           }
 
+          // NEW: Handle a goal command for acquiring a pickaxe.
+          case "goal:": {
+            // Usage: "test goal: pickaxe"
+            const goalItem = parts.slice(2).join(" ");
+            if (!goalItem) {
+              bot.chat("Usage: test goal: <goal description>");
+              return;
+            }
+            bot.chat(`Understood. Let me see how to achieve the goal: "${goalItem}" using the LLM...`);
+
+            // Build a user prompt that includes the bot's current SharedAgentState:
+            const userPrompt = `
+You are a Minecraft AI agent. Your goal is: "Obtain ${goalItem}."
+
+Here is your current SharedAgentState:
+${functionCaller.getSharedStateAsText()}
+
+Please determine the next step to achieve the goal, making function calls if necessary.
+`;
+
+            // Now call the LLM with our function-enabled chat.
+            const finalResponse = await functionCaller.callOpenAIWithTools([
+              { role: "user", content: userPrompt }
+            ]);
+
+            // Relay the final response in chat.
+            bot.chat(`AI says: ${finalResponse}`);
+            break;
+          }
+
           default:
             bot.chat(
               "Unknown test command. Valid subcommands include: " +
-                "recipe, craftable, possible, mine, craft, place, attack, safetable, usetable, inv"
+                "recipe, craftable, possible, mine, craft, place, attack, safetable, usetable, inv, pullup, goal:"
             )
         }
       }
+
+      // Other chat command handling can be added here.
     })
 
     bot.on("error", (err) => {

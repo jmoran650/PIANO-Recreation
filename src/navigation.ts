@@ -31,7 +31,7 @@ export class Navigation {
     const goal = new GoalBlock(x, y, z);
     try {
       await this.bot.pathfinder.goto(goal);
-      this.bot.chat("Arrived at my goal!");
+      //this.bot.chat("Arrived at my goal!");
     } catch (err) {
       // Use proper narrowing to get an error message.
       let errMsg: string;
