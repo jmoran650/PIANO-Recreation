@@ -1,0 +1,41 @@
+diff --git a/node_modules/mineflayer/lib/plugins/entities.js b/node_modules/mineflayer/lib/plugins/entities.js
+index abcdef1..1234567 100644
+--- a/node_modules/mineflayer/lib/plugins/entities.js
++++ b/node_modules/mineflayer/lib/plugins/entities.js
+@@ -796,6 +796,9 @@ module.exports = inject
+ 
+     const originalVehicle = passenger.vehicle
+     if (originalVehicle !== null) {
++      if (!originalVehicle.passengers) {
++        originalVehicle.passengers = []
++      }
+       const index = originalVehicle.passengers.indexOf(passenger)
+       originalVehicle.passengers = originalVehicle.passengers.splice(index, 1)
+     }
+@@ -803,7 +806,10 @@ module.exports = inject
+     passenger.vehicle = vehicle
+ 
+     if (vehicle !== null) {
++      if (!vehicle.passengers) {
++        vehicle.passengers = []
++      }
+       vehicle.passengers.push(passenger)
+     }
+ 
+@@ -816,6 +822,7 @@ module.exports = inject
+   bot._client.on('set_passengers', ({ entityId, passengers }) => {
+     const passengerEntities = passengers.map((passengerId) => fetchEntity(passengerId))
+     const vehicle = entityId === -1 ? null : bot.entities[entityId]
++    if (vehicle && !vehicle.passengers) vehicle.passengers = []
+ 
+     for (const passengerEntity of passengerEntities) {
+       const originalVehicle = passengerEntity.vehicle
+@@ -823,6 +830,9 @@ module.exports = inject
+         const index = originalVehicle.passengers.indexOf(passengerEntity)
+         originalVehicle.passengers = originalVehicle.passengers.splice(index, 1)
+       }
++      if (vehicle && !vehicle.passengers.includes(passengerEntity)) {
++        vehicle.passengers.push(passengerEntity)
++      }
+       passengerEntity.vehicle = vehicle
+     }

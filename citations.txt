@@ -1,0 +1,1 @@
+Mineflayer patches except for entities.js patch are taken from the mindcraft repo: https://github.com/kolbytn/mindcraft

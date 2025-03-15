@@ -59,6 +59,7 @@ function serializeSharedState(sharedState: any): any {
 
 async function startServer() {
   const agent = await main();
+  
 
   const app = express();
   const server = http.createServer(app);

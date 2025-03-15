@@ -36,14 +36,16 @@ export interface AgentBot {
 }
 
 export async function createAgentBot(options: BotOptions): Promise<AgentBot> {
+
+  console.log("attempting to create and connect bot! \n");
   // 1. Create the bot.
   const bot: Bot = mineflayer.createBot({
     host: options.host,
     port: options.port,
     username: options.username,
     version: options.version,
+    viewDistance: "far",
   });
-
   // 2. Wait for spawn.
   await new Promise<void>((resolve, reject) => {
     bot.once("spawn", () => resolve());
@@ -67,7 +69,7 @@ export async function createAgentBot(options: BotOptions): Promise<AgentBot> {
   const memory = new Memory(sharedState);
   const social = new Social(sharedState);
   const goals = new Goals(sharedState);
-  const observer = new Observer(bot, { radius: 100 }, sharedState);
+  const observer = new Observer(bot, { radius: 2000 }, sharedState);
   const navigation = new Navigation(bot);
   const actions = new Actions(bot, navigation, sharedState);
   const cc = new CognitiveController(

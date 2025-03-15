@@ -14,8 +14,9 @@
     "src/**/*",
     "index.ts",
     "createAgentBot.ts",
-    "server.ts",
-    "treeviewer/goal-planner-app/src/goalPlanner.ts"
+    "goalPlanAppServer.ts",
+    "treeviewer/goal-planner-app/src/goalPlanner.ts",
+    "types/**/*"
   ],
   "exclude": ["node_modules", "dist", "**/*.test.ts"]
 }

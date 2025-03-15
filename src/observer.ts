@@ -23,7 +23,7 @@ export class Observer {
     sharedState: SharedAgentState
   ) {
     this.bot = bot;
-    this.radius = options.radius ?? 16;
+    this.radius = options.radius ?? 200;
     this.sharedState = sharedState;
     // We need minecraft-data to look up items and recipes.
     this.mcData = minecraftData("1.21.4");
@@ -57,8 +57,13 @@ export class Observer {
 
     const positions = this.bot.findBlocks({
       point: this.bot.entity.position,
-      maxDistance: this.radius,
-      matching: (block: Block | null) => block !== null && block.name !== "air",
+      maxDistance: 2000,
+      matching: (block: Block | null) => {
+        if (!block) return false;
+        // Explicit check: if block's type is 265 (sugar cane), include it even if its name is "air"
+        if (block.type === 265) return true;
+        return block.name !== "air";
+      },
       count: 9999,
     });
 
