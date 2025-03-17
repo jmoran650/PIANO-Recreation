@@ -1,3 +1,4 @@
+// goalPlanAppServer.ts
 import express, { Request, Response } from "express";
 import http from "http";
 import path from "path";
@@ -54,6 +55,12 @@ function serializeSharedState(sharedState: any): any {
     othersFeelingsTowardsSelf: mapToObjSentiment(sharedState.othersFeelingsTowardsSelf),
     conversationLog: sharedState.conversationLog,
     llmMetrics: getLLMMetrics(),
+    // New fields:
+    inventory: sharedState.inventory,
+    botHealth: sharedState.botHealth,
+    botHunger: sharedState.botHunger,
+    craftingTablePositions: sharedState.craftingTablePositions,
+    equippedItems: sharedState.equippedItems,
   };
 }
 

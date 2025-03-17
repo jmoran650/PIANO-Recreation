@@ -1,7 +1,7 @@
-// viewer/Dashboard.tsx
 import React, { useEffect, useState } from "react";
 import io from "socket.io-client";
 import { Link } from "react-router-dom";
+import ChatLog from "./chatLog";
 
 interface SharedState {
   visibleBlockTypes?: any;
@@ -17,8 +17,14 @@ interface SharedState {
   lockedInTask?: any;
   feelingsToOthers?: any;
   othersFeelingsTowardsSelf?: any;
-  conversationLog?: any;
+  conversationLog?: string[];
   llmMetrics?: any;
+  // New fields:
+  inventory?: any;
+  botHealth?: number;
+  botHunger?: number;
+  craftingTablePositions?: any;
+  equippedItems?: any;
 }
 
 const socket = io();
@@ -57,6 +63,12 @@ const Dashboard: React.FC = () => {
           <Link to="/goal-planner">Goal Planner</Link>
         </nav>
       </header>
+      
+      {/* Floating Chat Log Sidebar on the left */}
+      <div id="chatLogSidebar">
+        <ChatLog conversationLog={sharedState.conversationLog} />
+      </div>
+      
       <div className="container">
         <div className="grid">
           {/* Environment Tile */}
@@ -164,17 +176,38 @@ const Dashboard: React.FC = () => {
                   "Loading..."}
               </pre>
             </div>
+          </div>
+          {/* Bot Status Tile */}
+          <div className="tile" id="statusTile">
+            <h2>Bot Status</h2>
             <div className="subtile">
-              <h3>Conversation Log</h3>
+              <h3>Inventory Contents</h3>
               <pre>
-                {JSON.stringify(sharedState.conversationLog, null, 2) ||
-                  "Loading..."}
+                {JSON.stringify(sharedState.inventory, null, 2) || "Loading..."}
+              </pre>
+            </div>
+            <div className="subtile">
+              <h3>Health &amp; Hunger</h3>
+              <pre>
+                Health: {sharedState.botHealth} | Hunger: {sharedState.botHunger}
+              </pre>
+            </div>
+            <div className="subtile">
+              <h3>Equipped Items</h3>
+              <pre>
+                {JSON.stringify(sharedState.equippedItems, null, 2) || "Loading..."}
+              </pre>
+            </div>
+            <div className="subtile">
+              <h3>Crafting Table Positions</h3>
+              <pre>
+                {JSON.stringify(sharedState.craftingTablePositions, null, 2) || "Loading..."}
               </pre>
             </div>
           </div>
         </div>
       </div>
-      {/* Fixed LLM Metrics Sidebar */}
+      {/* Fixed LLM Metrics Sidebar on the right */}
       <div id="llmSidebar">
         <h2>LLM Metrics</h2>
         <div className="sidebar-section">
@@ -294,6 +327,20 @@ const Dashboard: React.FC = () => {
           border-radius: 5px;
           overflow-x: auto;
         }
+        /* Floating Chat Log Sidebar on the left */
+        #chatLogSidebar {
+          position: fixed;
+          top: 80px;
+          left: 20px;
+          width: 250px;
+          background-color: #3949ab;
+          color: #fff;
+          padding: 20px;
+          border-radius: 10px;
+          box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+          z-index: 1000;
+        }
+        /* Fixed LLM Metrics Sidebar on the right */
         #llmSidebar {
           position: fixed;
           top: 80px;

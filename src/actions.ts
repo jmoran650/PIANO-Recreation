@@ -1,10 +1,10 @@
-// src/actions.ts
 import { Bot } from "mineflayer";
 import { Navigation } from "./navigation";
 import { Vec3 } from "vec3";
 import minecraftData from "minecraft-data";
 import { Block } from "prismarine-block";
 import { SharedAgentState } from "./sharedAgentState";
+import { Observer } from "./observer";
 
 declare module "mineflayer" {
   interface BotEvents {
@@ -17,12 +17,19 @@ export class Actions {
   private navigation: Navigation;
   private mcData: any;
   private sharedState: SharedAgentState;
+  private observer: Observer;
 
-  constructor(bot: Bot, navigation: Navigation, sharedState: SharedAgentState) {
+  constructor(
+    bot: Bot,
+    navigation: Navigation,
+    sharedState: SharedAgentState,
+    observer: Observer
+  ) {
     this.bot = bot;
     this.navigation = navigation;
     this.mcData = minecraftData("1.21.4");
     this.sharedState = sharedState;
+    this.observer = observer;
   }
 
   /**
@@ -39,11 +46,11 @@ export class Actions {
 
     let count = 0;
     while (count < desiredCount) {
+      // Find blocks that match the desired type within a 50 block radius.
       const blockPositions = this.bot.findBlocks({
         point: this.bot.entity.position,
         matching: (block) => block && block.name === goalBlock,
         maxDistance: 50,
-        count: 1,
       });
 
       if (blockPositions.length === 0) {
@@ -51,70 +58,270 @@ export class Actions {
         break;
       }
 
-      const blockPos = blockPositions[0];
-      const block = this.bot.blockAt(blockPos);
+      // Determine the closest block position by distance.
+      const botPos = this.bot.entity.position;
+      let closestBlockPos = blockPositions[0];
+      let closestDistance = botPos.distanceTo(closestBlockPos);
+
+      for (let i = 1; i < blockPositions.length; i++) {
+        const currentDistance = botPos.distanceTo(blockPositions[i]);
+        if (currentDistance < closestDistance) {
+          closestDistance = currentDistance;
+          closestBlockPos = blockPositions[i];
+        }
+      }
+
+      const block = this.bot.blockAt(closestBlockPos);
       if (!block) continue;
 
-      // Equip the best tool for this block.
+      // Equip the best tool for mining this block.
       await this.equipBestToolForBlock(goalBlock);
 
-      await this.navigation.move(blockPos.x, blockPos.y, blockPos.z);
+      // Move to the closest block's position.
+      await this.navigation.move(
+        closestBlockPos.x,
+        closestBlockPos.y,
+        closestBlockPos.z
+      );
 
       try {
         await this.bot.dig(block);
         count++;
-        //this.bot.chat(`Mined ${count} of ${desiredCount} ${goalBlock} blocks.`);
+        this.bot.chat(
+          `Mined ${count} of ${desiredCount} ${goalBlock} blocks.`
+        );
       } catch (err) {
         this.bot.chat(`Error mining block: ${err}`);
       }
 
-      await this.sleep(500);
+      // Brief pause between mining actions.
+      await this.sleep(100);
     }
+    this.bot.chat(`finished mining after mining ${count} blocks`);
   }
+
   /**
-   * Crafts a goal item (if a recipe is available).
+   * -----------------------
+   * UPDATED craft Method
+   * -----------------------
+   *
+   * Now uses a 30-block threshold for deciding to place a new crafting table.
+   * If the bot doesn't have a crafting table in inventory, it attempts to craft one (as last resort).
    */
-  async craft(goalItem: string): Promise<void> {
+  public async craft(goalItem: string): Promise<void> {
     this.sharedState.addPendingAction(`Craft ${goalItem}`);
 
+    // 1) Look up item data
     const itemData = this.mcData.itemsByName[goalItem];
     if (!itemData) {
-      this.bot.chat(`No item data found for ${goalItem}.`);
+      this.bot.chat(`No item data found for "${goalItem}".`);
       return;
     }
-    const itemId: number = itemData.id;
-    this.bot.chat(`The item.id returned for name ${goalItem}  is: ${itemId}`)
+    const itemId = itemData.id;
+    this.bot.chat(`The item.id for "${goalItem}" is: ${itemId}`);
 
-    const recipes = this.bot.recipesFor(itemId, null, 1, true);
-    if (recipes.length === 0) {
-      this.bot.chat(`No recipe found for ${goalItem}.`);
-      return;
-    }
-    const recipe = recipes[0];
-
-    try {
-      if (recipe.requiresTable) {
-        const tableResult = await this.ensureCraftingTableIfNeeded(recipe);
-        if (typeof tableResult === "string") {
-          // An error message was returned.
-          this.bot.chat(tableResult);
-          return;
-        }
-        // tableResult is a Vec3; get the block at that position.
-        const tableBlock = this.bot.blockAt(tableResult);
-        if (!tableBlock) {
-          this.bot.chat(
-            "Error: Crafting table block not found at returned position."
-          );
-          return;
-        }
-        await this.bot.craft(recipe, 1, tableBlock);
-      } else {
-        await this.bot.craft(recipe, 1);
+    // 2) If this is NOT the crafting table, we need to find or place one
+    //    (If it IS a crafting table, we can craft it in our own 2x2 grid.)
+    let tableBlock: Block | null = null;
+    if (goalItem !== "crafting_table") {
+      tableBlock = await this.findOrPlaceCraftingTable();
+      if (!tableBlock) {
+        this.bot.chat("Could not find or place a crafting table!");
+        throw new Error("Failed to acquire crafting table.");
       }
-      this.bot.chat(`Crafted ${goalItem}.`);
-    } catch (err) {
-      this.bot.chat(`Couldn't craft ${goalItem}: ${err}`);
+    }
+
+    // 3) Query possible recipes ignoring whether we have the materials
+    const possibleRecipesAll = this.bot.recipesAll(itemId, null, tableBlock);
+    if (!possibleRecipesAll || possibleRecipesAll.length === 0) {
+      this.bot.chat(`No recipe found for "${goalItem}".`);
+      throw new Error(`No recipe for ${goalItem}`);
+    }
+
+    // 4) Query recipes that the bot can actually perform given current inventory
+    const possibleRecipesFor = this.bot.recipesFor(itemId, null, 1, tableBlock);
+    if (!possibleRecipesFor || possibleRecipesFor.length === 0) {
+      this.bot.chat(`Missing ingredients to craft "${goalItem}".`);
+      throw new Error(`Don't have enough/correct ingredients to craft ${goalItem}`);
+    }
+
+    // 5) Attempt crafting with the first valid recipe
+    for (const recipe of possibleRecipesFor) {
+      try {
+        // If it's not the table, use the table we found/placed; otherwise use null
+        await this.bot.craft(recipe, 1, goalItem !== "crafting_table" ? (tableBlock ?? undefined) : undefined);
+        this.bot.chat(`Successfully crafted "${goalItem}".`);
+        return;
+      } catch (err) {
+        this.bot.chat(`Failed crafting "${goalItem}" with a recipe: ${err}`);
+      }
+    }
+
+    this.bot.chat(`Could not craft "${goalItem}" with any available recipe.`);
+  }
+
+
+  /**
+   * -----------------------------------
+   * UPDATED helper: findOrPlaceCraftingTable
+   * -----------------------------------
+   *
+   * 1) Update knowledge of visible blocks.
+   * 2) Check known crafting table positions and pick the closest.
+   * 3) If we have a valid table within 30 blocks, use it.
+   *    Otherwise:
+   *      - Check if we have a crafting_table item in inventory. If not, attempt to craft one.
+   *      - Then place it.
+   */
+  private async findOrPlaceCraftingTable(): Promise<Block | null> {
+    // 1) Gather visible blocks
+    const visibleBlocks = await this.observer.getVisibleBlockTypes();
+
+    // If there's a newly discovered crafting table, add it to the sharedState
+    if (visibleBlocks.BlockTypes["crafting_table"]) {
+      const vPos = visibleBlocks.BlockTypes["crafting_table"];
+      const knownAlready = this.sharedState.craftingTablePositions.some(
+        (p) => p.x === vPos.x && p.y === vPos.y && p.z === vPos.z
+      );
+      if (!knownAlready) {
+        this.sharedState.addCraftingTablePosition(new Vec3(vPos.x, vPos.y, vPos.z));
+      }
+    }
+
+    // 2) Among all known crafting tables, pick the closest
+    let bestPos: Vec3 | null = null;
+    let bestDist = Number.POSITIVE_INFINITY;
+    for (const cPos of this.sharedState.craftingTablePositions) {
+      const dist = this.bot.entity.position.distanceTo(cPos);
+      if (dist < bestDist) {
+        bestDist = dist;
+        bestPos = cPos;
+      }
+    }
+
+    // 3) If we have a table within 30 blocks, verify it's still there and use it
+    if (bestPos && bestDist <= 30) {
+      const maybeTable = this.bot.blockAt(bestPos);
+      if (maybeTable && maybeTable.name === "crafting_table") {
+        await this.navigation.move(bestPos.x, bestPos.y, bestPos.z);
+        return maybeTable;
+      } else {
+        // It's no longer valid, remove it from sharedState
+        this.removeCraftingTableFromShared(bestPos);
+      }
+    }
+
+    // If we do NOT have a valid table within 30 blocks:
+    // - Check if we have a crafting table in inventory
+    // - If not, attempt to craft one as a last resort
+    const tableItemInInventory = this.bot.inventory.findInventoryItem(
+      this.mcData.itemsByName["crafting_table"].id, null, false
+    );
+    if (!tableItemInInventory) {
+      this.bot.chat("No crafting table in inventory; attempting to craft one...");
+      try {
+        // The craft method can craft a table in the 2x2 grid if resources are available
+        await this.craft("crafting_table");
+      } catch (err) {
+        this.bot.chat(`Failed to craft a crafting_table: ${err}`);
+        // If we still don't have it after that, we abort
+        const stillNoTable = this.bot.inventory.findInventoryItem(
+          this.mcData.itemsByName["crafting_table"].id, null, false
+        );
+        if (!stillNoTable) {
+          this.bot.chat("Still no crafting table after trying to craft.");
+          return null;
+        }
+      }
+    }
+
+    // Now we definitely have a table item (either we had one or successfully crafted one)
+    // So let's place it.
+    await this.placeCraftingTable();
+
+    // Check if we have a newly placed table
+    let placedBlock: Block | null = null;
+    let placedPos: Vec3 | null = null;
+    let placedDist = Number.POSITIVE_INFINITY;
+
+    // Among the known positions, find the closest again
+    for (const cPos of this.sharedState.craftingTablePositions) {
+      const dist = this.bot.entity.position.distanceTo(cPos);
+      if (dist < placedDist) {
+        placedDist = dist;
+        placedPos = cPos;
+      }
+    }
+
+    if (placedPos) {
+      placedBlock = this.bot.blockAt(placedPos);
+      if (placedBlock?.name === "crafting_table") {
+        // Move to it and return
+        await this.navigation.move(placedPos.x, placedPos.y, placedPos.z);
+        return placedBlock;
+      }
+    }
+
+    // If all else fails, return null
+    return null;
+  }
+
+
+  private removeCraftingTableFromShared(pos: Vec3): void {
+    const arr = this.sharedState.craftingTablePositions;
+    const idx = arr.findIndex(
+      (c) => c.x === pos.x && c.y === pos.y && c.z === pos.z
+    );
+    if (idx !== -1) arr.splice(idx, 1);
+  }
+
+  /**
+   * Places a crafting table from inventory, if possible.
+   */
+  async placeCraftingTable(): Promise<void> {
+    this.sharedState.addPendingAction("Place Crafting Table");
+
+    const table = this.bot.inventory.findInventoryItem(
+      this.mcData.itemsByName.crafting_table.id,
+      null,
+      false
+    );
+    if (!table) {
+      this.bot.chat("I don't have a crafting table in my inventory!");
+      return;
+    }
+
+    const safePos = this.findSafePlacement();
+    if (!safePos) {
+      this.bot.chat("No valid spot to place the crafting table!");
+      return;
+    }
+
+    const maxRetries = 3;
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        await this.bot.lookAt(safePos.offset(0.5, 0.5, 0.5));
+        const referenceBlock = this.bot.blockAt(safePos.offset(0, -1, 0));
+        if (!referenceBlock) {
+          this.bot.chat("No block beneath to place the crafting table on.");
+          return;
+        }
+        await this.bot.equip(table, "hand");
+        await this.bot.placeBlock(referenceBlock, new Vec3(0, 1, 0));
+        this.bot.chat("Crafting table placed!");
+
+        // Record the new table's location in SharedAgentState
+        const placedPos = referenceBlock.position.offset(0, 1, 0);
+        this.sharedState.addCraftingTablePosition(placedPos);
+        return;
+      } catch (err) {
+        this.bot.chat(`Attempt ${attempt} to place crafting table failed: ${err}`);
+        if (attempt < maxRetries) {
+          await this.sleep(1000);
+        } else {
+          this.bot.chat("All attempts to place crafting table failed.");
+        }
+      }
     }
   }
 
@@ -162,98 +369,55 @@ export class Actions {
     }
   }
 
-/**
- * Attacks a specified type of mob using the mineflayer-pvp plugin.
- */
-async attack(mobType: string): Promise<void> {
-  this.sharedState.addPendingAction(`Attack ${mobType}`);
-
-  // Explicit plugin check: ensure mineflayer-pvp is loaded.
-  const pvp = (this.bot as any).pvp;
-  if (!pvp) {
-    const errorMsg =
-      "Error: mineflayer-pvp plugin not loaded. Attack action disabled.";
-    this.bot.chat(errorMsg);
-    throw new Error(errorMsg);
-  }
-
-  const mobs = Object.values(this.bot.entities).filter(
-    (entity: any) =>
-      entity.name && entity.name.toLowerCase() === mobType.toLowerCase()
-  );
-  if (mobs.length === 0) {
-    this.bot.chat(`No ${mobType} found nearby to attack.`);
-    return;
-  }
-
-  // Select the nearest mob of that type based on distance.
-  const target = mobs.reduce((nearest: any, mob: any) => {
-    return this.bot.entity.position.distanceTo(mob.position) <
-      this.bot.entity.position.distanceTo(nearest.position)
-      ? mob
-      : nearest;
-  }, mobs[0]);
-
-  this.bot.chat(`Attacking the nearest ${mobType}...`);
-  try {
-    if (typeof pvp.attack === "function") {
-      pvp.attack(target);
-      this.bot.once("stoppedAttacking", () => {
-        // Check if the target is still present (alive) in the entities list.
-        if (this.bot.entities[target.id]) {
-          this.bot.chat(`Target still alive, attacking again!`);
-          // Recursively call attack to finish off the target.
-          this.attack(mobType);
-        } else {
-          this.bot.chat("Target has been killed!");
-        }
-      });
-    } else {
-      this.bot.chat("pvp.attack is not a function. Plugin mismatch?");
-    }
-  } catch (err: unknown) {
-    const errMsg: string = err instanceof Error ? err.message : String(err);
-    this.bot.chat(`Error while attacking ${mobType}: ${errMsg}`);
-  }
-}
-
   /**
-   * Places a crafting table at a safe nearby position.
+   * Attacks a specified type of mob using the mineflayer-pvp plugin.
    */
-  async placeCraftingTable(): Promise<void> {
-    this.sharedState.addPendingAction("Place Crafting Table");
+  async attack(mobType: string): Promise<void> {
+    this.sharedState.addPendingAction(`Attack ${mobType}`);
 
-    const table = this.bot.inventory.findInventoryItem(
-      this.mcData.itemsByName.crafting_table.id,
-      null,
-      false
+    const pvp = (this.bot as any).pvp;
+    if (!pvp) {
+      const errorMsg =
+        "Error: mineflayer-pvp plugin not loaded. Attack action disabled.";
+      this.bot.chat(errorMsg);
+      throw new Error(errorMsg);
+    }
+
+    const mobs = Object.values(this.bot.entities).filter(
+      (entity: any) =>
+        entity.name && entity.name.toLowerCase() === mobType.toLowerCase()
     );
-    if (!table) {
-      this.bot.chat("I don't have a crafting table!");
+    if (mobs.length === 0) {
+      this.bot.chat(`No ${mobType} found nearby to attack.`);
       return;
     }
 
-    const safePos = this.findSafePlacement();
-    if (!safePos) {
-      this.bot.chat("No valid spot to place the crafting table!");
-      return;
-    }
+    // Select nearest mob
+    const target = mobs.reduce((nearest: any, mob: any) => {
+      return this.bot.entity.position.distanceTo(mob.position) <
+        this.bot.entity.position.distanceTo(nearest.position)
+        ? mob
+        : nearest;
+    }, mobs[0]);
 
+    this.bot.chat(`Attacking the nearest ${mobType}...`);
     try {
-      await this.bot.lookAt(safePos.offset(0.5, 0.5, 0.5));
-      const referenceBlock = this.bot.blockAt(safePos.offset(0, -1, 0));
-      if (!referenceBlock) {
-        this.bot.chat("No block found to place the crafting table on.");
-        return;
+      if (typeof pvp.attack === "function") {
+        pvp.attack(target);
+        this.bot.once("stoppedAttacking", () => {
+          if (this.bot.entities[target.id]) {
+            this.bot.chat(`Target still alive, attacking again!`);
+            this.attack(mobType);
+          } else {
+            this.bot.chat("Target has been killed!");
+          }
+        });
+      } else {
+        this.bot.chat("pvp.attack is not a function. Plugin mismatch?");
       }
-      await this.bot.equip(table, "hand");
-      await this.bot.placeBlock(referenceBlock, new Vec3(0, 1, 0));
-      this.bot.chat("Crafting table placed!");
-    } catch (err) {
-      this.bot.chat(
-        "Failed to place crafting table: " +
-          (err instanceof Error ? err.message : err)
-      );
+    } catch (err: unknown) {
+      const errMsg: string = err instanceof Error ? err.message : String(err);
+      this.bot.chat(`Error while attacking ${mobType}: ${errMsg}`);
     }
   }
 
@@ -292,22 +456,13 @@ async attack(mobType: string): Promise<void> {
 
   /**
    * -----------------------
-   * 2) New Methods
+   * 2) New/Existing Methods
    * -----------------------
-   * These implementations are simplified placeholders demonstrating
-   * potential approaches to smelting, farming, tool management, inventory
-   * management, and chest interaction. Production code often needs more
-   * robust logic and error-handling.
    */
 
-  /**
-   * 2a) Smelting & Furnace Interaction
-   * Attempts to smelt a given item (e.g., "iron_ore") into its smelted product.
-   */
   async smelt(inputItemName: string, quantity: number): Promise<void> {
     this.sharedState.addPendingAction(`Smelt ${inputItemName} x${quantity}`);
 
-    // 1) Ensure we have a furnace placed or place one.
     let furnaceBlock = this.findNearbyFurnace(3);
     if (!furnaceBlock) {
       this.bot.chat("No furnace nearby. Attempting to place one...");
@@ -319,7 +474,6 @@ async attack(mobType: string): Promise<void> {
       }
     }
 
-    // 2) Equip item to open furnace GUI
     try {
       await this.bot.activateBlock(furnaceBlock);
       this.bot.chat("Opened furnace...");
@@ -328,13 +482,11 @@ async attack(mobType: string): Promise<void> {
       return;
     }
 
-    // 3) Insert fuel
     if (!(await this.addFuelToFurnace())) {
       this.bot.chat("Failed to add fuel to furnace. Aborting smelt.");
       return;
     }
 
-    // 4) Insert the input items into the top slot
     const neededCount = this.moveItemToFurnaceInput(inputItemName, quantity);
     if (neededCount === 0) {
       this.bot.chat(`No "${inputItemName}" found to smelt!`);
@@ -343,26 +495,21 @@ async attack(mobType: string): Promise<void> {
       this.bot.chat(`Smelting up to ${neededCount} ${inputItemName}...`);
     }
 
-    // 5) Wait for smelting to complete, or at least partially complete.
     await this.sleep(5000);
-    // Fix: Only call closeWindow if currentWindow exists.
     if (this.bot.currentWindow) {
       this.bot.closeWindow(this.bot.currentWindow);
     }
     this.bot.chat(
-      `Smelting process done or in progress. Check furnace or inventory!`
+      `Smelting process done or in progress. Check furnace/inventory!`
     );
   }
 
-  /**
-   * Place a furnace from the bot's inventory if not currently found.
-   */
   private async placeFurnace(): Promise<void> {
     let furnaceItem = this.bot.inventory
       .items()
       .find((item) => item.name === "furnace");
     if (!furnaceItem) {
-      this.bot.chat("No furnace item in inventory; attempting to craft...");
+      this.bot.chat("No furnace in inventory; trying to craft...");
       await this.craft("furnace");
       furnaceItem = this.bot.inventory
         .items()
@@ -394,9 +541,6 @@ async attack(mobType: string): Promise<void> {
     }
   }
 
-  /**
-   * Looks for a furnace block within `maxDistance` blocks of the bot.
-   */
   private findNearbyFurnace(maxDistance: number) {
     const furnacePositions = this.bot.findBlocks({
       point: this.bot.entity.position,
@@ -409,9 +553,6 @@ async attack(mobType: string): Promise<void> {
     return this.bot.blockAt(pos);
   }
 
-  /**
-   * Adds fuel to the furnace's fuel slot if the furnace window is open.
-   */
   private async addFuelToFurnace(): Promise<boolean> {
     const window = this.bot.currentWindow;
     if (!window) {
@@ -433,7 +574,6 @@ async attack(mobType: string): Promise<void> {
         .find((it) => it.name.includes(fuelName));
       if (fuelItem) {
         try {
-          // Furnace fuel slot is typically index 1 in the furnace window.
           await this.bot.moveSlotItem(fuelItem.slot, 1);
           this.bot.chat(`Added ${fuelItem.count} of ${fuelItem.name} as fuel.`);
           return true;
@@ -445,28 +585,22 @@ async attack(mobType: string): Promise<void> {
         }
       }
     }
-
     this.bot.chat("No valid fuel found in inventory.");
     return false;
   }
 
-  /**
-   * Moves up to `count` items matching `inputItemName` into the top furnace slot (index 0).
-   * Returns the actual amount moved (up to `count`).
-   */
   private moveItemToFurnaceInput(inputItemName: string, count: number): number {
     const window = this.bot.currentWindow;
     if (!window) return 0;
 
     let remaining = count;
-
     const matchingItems = this.bot.inventory
       .items()
       .filter((it) => it.name.includes(inputItemName));
+
     for (const item of matchingItems) {
       const moveCount = Math.min(remaining, item.count);
       try {
-        // Fix: Remove third argument as moveSlotItem expects only two arguments.
         this.bot.moveSlotItem(item.slot, 0);
         remaining -= moveCount;
         if (remaining <= 0) break;
@@ -476,18 +610,9 @@ async attack(mobType: string): Promise<void> {
         );
       }
     }
-
     return count - remaining;
   }
 
-  /**
-   * 2b) Fuel Management
-   * (Additional fuel management logic could be added here.)
-   */
-
-  /**
-   * 2c) Farming & Resource Renewal
-   */
   async plantCrop(cropName: string): Promise<void> {
     this.bot.chat(`Attempting to plant ${cropName}...`);
     const seedItem = this.bot.inventory
@@ -544,7 +669,7 @@ async attack(mobType: string): Promise<void> {
   }
 
   /**
-   * 2d) Tool & Equipment Management
+   * Equips the best tool for the given block name.
    */
   async equipBestToolForBlock(blockName: string): Promise<void> {
     let toolCategory: "pickaxe" | "axe" | "shovel" | "hoe" | null = null;
@@ -565,9 +690,11 @@ async attack(mobType: string): Promise<void> {
     if (!toolCategory) return;
     const possibleToolNames = [
       `${toolCategory}`,
+      `wooden_${toolCategory}`,
       `stone_${toolCategory}`,
       `iron_${toolCategory}`,
       `diamond_${toolCategory}`,
+      `netherite_${toolCategory}`,
     ];
     for (const toolName of possibleToolNames) {
       const toolItem = this.bot.inventory
@@ -586,7 +713,7 @@ async attack(mobType: string): Promise<void> {
   }
 
   /**
-   * 2e) Inventory Management & Storage
+   * Basic inventory sort (example approach).
    */
   async sortInventory(): Promise<void> {
     this.bot.chat("Sorting inventory...");
@@ -614,7 +741,7 @@ async attack(mobType: string): Promise<void> {
         }
       }
     }
-    this.bot.chat("Finished sorting inventory (simple approach).");
+    this.bot.chat("Finished sorting inventory.");
   }
 
   async placeChest(): Promise<void> {
@@ -665,7 +792,6 @@ async attack(mobType: string): Promise<void> {
     }
 
     const chest = await this.bot.openChest(chestBlock);
-
     try {
       const toStore = this.bot.inventory
         .items()
@@ -693,7 +819,6 @@ async attack(mobType: string): Promise<void> {
     }
 
     const chest = await this.bot.openChest(chestBlock);
-
     try {
       const matchingItem = chest
         .containerItems()
@@ -730,28 +855,28 @@ async attack(mobType: string): Promise<void> {
    * 3) Helper Methods
    * -----------------------
    */
-
   private sleep(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
+
   private findSafePlacement(): Vec3 | null {
+    this.bot.waitForChunksToLoad();
     const pos = this.bot.entity.position;
-    // Determine the block coordinates the bot currently occupies
     const botBlockX = Math.floor(pos.x);
     const botBlockY = Math.floor(pos.y);
     const botBlockZ = Math.floor(pos.z);
 
-    // Start the search at a minimum distance of 2
+    // Start searching outward from distance=2
     for (let d = 2; d <= 3; d++) {
       for (let yOffset = 0; yOffset <= 1; yOffset++) {
         const ring = this.getRingPositions(d);
         for (const offset of ring) {
           const candidate = pos.offset(offset.x, yOffset, offset.z);
-          // Compute candidate's block coordinates.
           const candX = Math.floor(candidate.x);
           const candY = Math.floor(candidate.y);
           const candZ = Math.floor(candidate.z);
-          // Skip if candidate is in the block the bot occupies or directly above it.
+
+          // Skip if candidate is exactly where the bot stands or the block above it
           if (
             (candX === botBlockX &&
               candY === botBlockY &&
@@ -762,8 +887,9 @@ async attack(mobType: string): Promise<void> {
           ) {
             continue;
           }
+
           const block = this.bot.blockAt(candidate);
-          if (block && block.name === "air") {
+          if (block && block.name === "air" && this.bot.canSeeBlock(block)) {
             return candidate;
           }
         }
@@ -782,74 +908,5 @@ async attack(mobType: string): Promise<void> {
       }
     }
     return positions;
-  }
-
-  /**
-   * Updated ensureCraftingTableIfNeeded
-   *
-   * Returns either the coordinates (Vec3) of a nearby crafting table or one that has just been placed,
-   * or a string message if no crafting table is available (or could be crafted).
-   */
-  private async ensureCraftingTableIfNeeded(
-    recipe: any
-  ): Promise<Vec3 | string> {
-    if (recipe.requiresTable) {
-      // Try to find a nearby crafting table.
-      const positions = this.bot.findBlocks({
-        point: this.bot.entity.position,
-        matching: (block: any) => block && block.name === "crafting_table",
-        maxDistance: 4.4,
-        count: 1,
-      });
-      if (positions.length > 0) {
-        const tableBlock = this.bot.blockAt(positions[0]);
-        if (tableBlock) {
-          return tableBlock.position;
-        }
-      }
-      // No nearby table. Check if the bot has a crafting table in inventory.
-      let tableItem = this.bot.inventory
-        .items()
-        .find((item) => item.name === "crafting_table");
-      if (tableItem) {
-        // Place the table from inventory.
-        await this.placeCraftingTable();
-        const newPositions = this.bot.findBlocks({
-          point: this.bot.entity.position,
-          matching: (block: any) => block && block.name === "crafting_table",
-          maxDistance: 4.4,
-          count: 1,
-        });
-        if (newPositions.length > 0) {
-          const newTableBlock = this.bot.blockAt(newPositions[0]);
-          if (newTableBlock) {
-            return newTableBlock.position;
-          }
-        }
-      } else {
-        // Bot does not have a crafting table item; attempt to craft one.
-        await this.craft("crafting_table");
-        tableItem = this.bot.inventory
-          .items()
-          .find((item) => item.name === "crafting_table");
-        if (tableItem) {
-          await this.placeCraftingTable();
-          const newPositions = this.bot.findBlocks({
-            point: this.bot.entity.position,
-            matching: (block: any) => block && block.name === "crafting_table",
-            maxDistance: 4.4,
-            count: 1,
-          });
-          if (newPositions.length > 0) {
-            const newTableBlock = this.bot.blockAt(newPositions[0]);
-            if (newTableBlock) {
-              return newTableBlock.position;
-            }
-          }
-        }
-      }
-      return "No crafting table nearby or in inventory, and one could not be crafted.";
-    }
-    return "No crafting table required.";
   }
 }

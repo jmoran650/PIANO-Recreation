@@ -1,10 +1,11 @@
+// src/functions/functionCalling.ts
 /*****************************************************
  * src/integratedFunctionCaller.ts
  *****************************************************/
 import { Actions } from "../actions";
 import { SharedAgentState } from "../sharedAgentState";
 import { OpenAI } from "openai";
-import {tools} from "./tools"
+import { tools } from "./tools"
 
 export class FunctionCaller {
   private lastDiffStateSnapshot: {
@@ -19,39 +20,64 @@ export class FunctionCaller {
     private openai: OpenAI
   ) {}
 
+  /**
+   * Formats the shared state into clearly delimited sections.
+   * Only the 10 nearest mobs (sorted by distance) are included.
+   */
   public getSharedStateAsText(): string {
     const st = this.sharedState;
-    const lines: string[] = [];
-    lines.push(`Health: ${st.botHealth}`);
-    lines.push(`Hunger: ${st.botHunger}`);
-    const invSummary =
-      st.inventory && st.inventory.length > 0
-        ? st.inventory.join(", ")
-        : "(nothing)";
-    lines.push(`Inventory: ${invSummary}`);
+    let text = "";
 
+    // Health & Hunger Section
+    text += "===== Bot Status =====\n";
+    text += "--- Health & Hunger ---\n";
+    text += `Health: ${st.botHealth}\nHunger: ${st.botHunger}\n`;
+    text += "-----------------------\n\n";
+
+    // Inventory Section
+    text += "===== Inventory =====\n";
+    const invSummary =
+      st.inventory && st.inventory.length > 0 ? st.inventory.join(", ") : "(nothing)";
+    text += `Inventory: ${invSummary}\n`;
+    text += "-----------------------\n\n";
+
+    // Mobs Section: only the 10 nearest mobs sorted by distance
+    text += "===== Mobs (Nearest 10) =====\n";
     if (st.visibleMobs && st.visibleMobs.Mobs.length > 0) {
-      const mobSummary = st.visibleMobs.Mobs.map(
+      const sortedMobs = st.visibleMobs.Mobs.slice().sort((a, b) => a.distance - b.distance);
+      const top10 = sortedMobs.slice(0, 10);
+      const mobSummary = top10.map(
         (m) => `${m.name} (~${m.distance.toFixed(1)}m away)`
       ).join(", ");
-      lines.push(`Mobs: ${mobSummary}`);
+      text += `Mobs: ${mobSummary}\n`;
     } else {
-      lines.push("Mobs: none");
+      text += "Mobs: none\n";
     }
+    text += "-----------------------\n\n";
 
+    // Players Nearby Section
+    text += "===== Players Nearby =====\n";
     if (st.playersNearby && st.playersNearby.length > 0) {
-      lines.push(`Players Nearby: ${st.playersNearby.join(", ")}`);
+      text += `Players Nearby: ${st.playersNearby.join(", ")}\n`;
     } else {
-      lines.push("Players Nearby: none");
+      text += "Players Nearby: none\n";
+    }
+    text += "-----------------------\n\n";
+
+    // Pending Actions Section (if any)
+    if (st.pendingActions && st.pendingActions.length > 0) {
+      text += "===== Pending Actions =====\n";
+      text += `Pending Actions: ${st.pendingActions.join(" | ")}\n`;
+      text += "-----------------------\n\n";
     }
 
-    if (st.pendingActions.length > 0) {
-      lines.push(`Pending Actions: ${st.pendingActions.join(" | ")}`);
-    }
-
-    return lines.join("\n");
+    return text;
   }
 
+  /**
+   * Returns a summary of differences in state since the last tick.
+   * Now formatted with section markers.
+   */
   public getSharedStateDiffAsText(): string {
     const st = this.sharedState;
     if (!this.lastDiffStateSnapshot) {
@@ -112,30 +138,24 @@ export class FunctionCaller {
       }
     }
 
-    if (differences.length === 0) {
-      this.lastDiffStateSnapshot = {
-        health: st.botHealth,
-        hunger: st.botHunger,
-        visibleMobs: newMobs,
-      };
-      return "No notable changes since last tick.";
-    }
-
-    const result = [
-      "for clarity, these are the differences since last tick:",
-      ...differences,
-    ].join("\n");
-
     this.lastDiffStateSnapshot = {
       health: st.botHealth,
       hunger: st.botHunger,
       visibleMobs: newMobs,
     };
 
+    if (differences.length === 0) {
+      return "No notable changes since last tick.";
+    }
+
+    const result = [
+      "===== State Diff =====",
+      ...differences,
+      "======================"
+    ].join("\n");
+
     return result;
   }
-
-
 
   /**
    * callOpenAIWithTools
@@ -145,6 +165,11 @@ export class FunctionCaller {
   ): Promise<string> {
     const loopLimit = 5;
     let finalResponse = "";
+
+    // Log the initial messages sent to the model.
+    messages.forEach((m) => {
+      this.sharedState.addToConversationLog(`${m.role.toUpperCase()}: ${m.content}`);
+    });
 
     for (let loopCount = 0; loopCount < loopLimit; loopCount++) {
       const completion = await this.openai.chat.completions.create({
@@ -158,6 +183,11 @@ export class FunctionCaller {
 
       const choice = completion.choices[0];
       const msg = choice.message;
+
+      // Log the assistant's response.
+      if (msg.content) {
+        this.sharedState.addToConversationLog(`ASSISTANT: ${msg.content}`);
+      }
 
       // If the model doesn't call any functions, we have a final user-facing response
       if (!msg.tool_calls || msg.tool_calls.length === 0) {
@@ -267,6 +297,11 @@ export class FunctionCaller {
           toolCallResult = `ERROR calling function "${fnName}": ${String(err)}`;
         }
 
+        // Log the tool call and its result.
+        this.sharedState.addToConversationLog(
+          `TOOL CALL - ${fnName} with args: ${argsStr} -> Result: ${toolCallResult}`
+        );
+
         // Then push a new 'function' or 'assistant' message to continue:
         messages.push({
           role: "function",
@@ -279,6 +314,8 @@ export class FunctionCaller {
     if (!finalResponse) {
       finalResponse = "No final response from model after function calls.";
     }
+    // Log the final response.
+    this.sharedState.addToConversationLog(`FINAL RESPONSE: ${finalResponse}`);
     return finalResponse;
   }
 }

@@ -70,5 +70,7 @@ export const minecraftItems: Record<string, string> = {
 
   export const minecraftBlocks: Record<string, string> = {
     "TNT":"TNT blocks are crafted from 4 sand and 5 gunpowder.",
-    "Glass":"Glass is made by smelting sand blocks. Glass can not be mined."
+    "Glass":"Glass is made by smelting sand blocks. Glass can not be mined.",
+    "Crafting table":"A crafting table is made from 4 wood planks of any kind.",
+    "crafting_table":"A crafting table is crafted from 4 wood planks of any kind."
   }

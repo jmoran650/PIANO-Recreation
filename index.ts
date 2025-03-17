@@ -188,11 +188,6 @@ export async function main(): Promise<AgentBot> {
             break;
           }
 
-          case "safetable": {
-            await actions.placeCraftingTable();
-            break;
-          }
-
           case "usetable": {
             await actions.useCraftingTable();
             break;

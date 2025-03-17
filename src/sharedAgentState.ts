@@ -87,7 +87,29 @@ export class SharedAgentState {
 
   /**
    * -----------------------------
-   * 6) Initialization
+   * 6) Additional Data
+   * -----------------------------
+   * We store known crafting table positions here:
+   */
+  private _craftingTablePositions: Vec3[] = [];
+
+  /**
+   * -----------------------------
+   * 7) Equipped Items
+   * -----------------------------
+   * Stores the bot’s equipped items for head, chest, legs, feet, and offhand.
+   */
+  private _equippedItems: {
+    head: string | null;
+    chest: string | null;
+    legs: string | null;
+    feet: string | null;
+    offhand: string | null;
+  } = { head: null, chest: null, legs: null, feet: null, offhand: null };
+
+  /**
+   * -----------------------------
+   * 7) Initialization
    * -----------------------------
    */
   constructor() {
@@ -102,7 +124,7 @@ export class SharedAgentState {
 
   /**
    * -----------------------------
-   * 7) Environment Snapshot Methods
+   * 8) Environment Snapshot Methods
    * -----------------------------
    */
   public get visibleBlockTypes() {
@@ -156,7 +178,7 @@ export class SharedAgentState {
 
   /**
    * -----------------------------
-   * 8) Memory Index Methods
+   * 9) Memory Index Methods
    * -----------------------------
    */
   public get shortTermMemoryIndex(): Map<string, string> {
@@ -188,7 +210,7 @@ export class SharedAgentState {
 
   /**
    * -----------------------------
-   * 9) Goals & Actions
+   * 10) Goals & Actions
    * -----------------------------
    */
   public get longTermGoalQueue(): string[] {
@@ -227,7 +249,7 @@ export class SharedAgentState {
 
   /**
    * -----------------------------
-   * 10) Social Context
+   * 11) Social Context
    * -----------------------------
    */
   public get feelingsToOthers() {
@@ -270,7 +292,7 @@ export class SharedAgentState {
 
   /**
    * -----------------------------
-   * 11) Lock Status
+   * 12) Lock Status
    * -----------------------------
    */
   public get lockedInTask(): boolean {
@@ -278,5 +300,38 @@ export class SharedAgentState {
   }
   public set lockedInTask(value: boolean) {
     this._lockedInTask = value;
+  }
+
+  /**
+   * -----------------------------
+   * 13) Tracking Crafting Tables
+   * -----------------------------
+   */
+  public get craftingTablePositions(): Vec3[] {
+    return this._craftingTablePositions;
+  }
+
+  public addCraftingTablePosition(pos: Vec3): void {
+    this._craftingTablePositions.push(pos);
+  }
+
+  /**
+   * -----------------------------
+   * 14) Equipped Items
+   * -----------------------------
+   */
+  public get equippedItems() {
+    return this._equippedItems;
+  }
+  public set equippedItems(
+    value: {
+      head: string | null;
+      chest: string | null;
+      legs: string | null;
+      feet: string | null;
+      offhand: string | null;
+    }
+  ) {
+    this._equippedItems = value;
   }
 }

@@ -86359,10 +86359,10 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 const jsx_runtime_1 = __webpack_require__(/*! react/jsx-runtime */ "./node_modules/react/jsx-runtime.js");
-// viewer/Dashboard.tsx
 const react_1 = __webpack_require__(/*! react */ "./node_modules/react/index.js");
 const socket_io_client_1 = __importDefault(__webpack_require__(/*! socket.io-client */ "./node_modules/socket.io-client/build/cjs/index.js"));
 const react_router_dom_1 = __webpack_require__(/*! react-router-dom */ "./node_modules/react-router-dom/dist/index.js");
+const chatLog_1 = __importDefault(__webpack_require__(/*! ./chatLog */ "./viewer/chatLog.tsx"));
 const socket = (0, socket_io_client_1.default)();
 const Dashboard = () => {
     const [sharedState, setSharedState] = (0, react_1.useState)({});
@@ -86387,7 +86387,7 @@ const Dashboard = () => {
             alert("Error toggling LLM.");
         }
     };
-    return ((0, jsx_runtime_1.jsxs)("div", { className: "dashboard-container", children: [(0, jsx_runtime_1.jsxs)("header", { children: [(0, jsx_runtime_1.jsx)("h1", { children: "Minecraft Bot Dashboard" }), (0, jsx_runtime_1.jsx)("nav", { children: (0, jsx_runtime_1.jsx)(react_router_dom_1.Link, { to: "/goal-planner", children: "Goal Planner" }) })] }), (0, jsx_runtime_1.jsx)("div", { className: "container", children: (0, jsx_runtime_1.jsxs)("div", { className: "grid", children: [(0, jsx_runtime_1.jsxs)("div", { className: "tile", id: "environmentTile", children: [(0, jsx_runtime_1.jsx)("h2", { children: "Environment" }), (0, jsx_runtime_1.jsxs)("div", { className: "subtile", children: [(0, jsx_runtime_1.jsx)("h3", { children: "Visible Block Types" }), (0, jsx_runtime_1.jsx)("pre", { children: JSON.stringify(sharedState.visibleBlockTypes, null, 2) ||
+    return ((0, jsx_runtime_1.jsxs)("div", { className: "dashboard-container", children: [(0, jsx_runtime_1.jsxs)("header", { children: [(0, jsx_runtime_1.jsx)("h1", { children: "Minecraft Bot Dashboard" }), (0, jsx_runtime_1.jsx)("nav", { children: (0, jsx_runtime_1.jsx)(react_router_dom_1.Link, { to: "/goal-planner", children: "Goal Planner" }) })] }), (0, jsx_runtime_1.jsx)("div", { id: "chatLogSidebar", children: (0, jsx_runtime_1.jsx)(chatLog_1.default, { conversationLog: sharedState.conversationLog }) }), (0, jsx_runtime_1.jsx)("div", { className: "container", children: (0, jsx_runtime_1.jsxs)("div", { className: "grid", children: [(0, jsx_runtime_1.jsxs)("div", { className: "tile", id: "environmentTile", children: [(0, jsx_runtime_1.jsx)("h2", { children: "Environment" }), (0, jsx_runtime_1.jsxs)("div", { className: "subtile", children: [(0, jsx_runtime_1.jsx)("h3", { children: "Visible Block Types" }), (0, jsx_runtime_1.jsx)("pre", { children: JSON.stringify(sharedState.visibleBlockTypes, null, 2) ||
                                                 "Loading..." })] }), (0, jsx_runtime_1.jsxs)("div", { className: "subtile", children: [(0, jsx_runtime_1.jsx)("h3", { children: "Visible Mobs" }), (0, jsx_runtime_1.jsx)("pre", { children: JSON.stringify(sharedState.visibleMobs, null, 2) || "Loading..." })] }), (0, jsx_runtime_1.jsxs)("div", { className: "subtile", children: [(0, jsx_runtime_1.jsx)("h3", { children: "Players Nearby" }), (0, jsx_runtime_1.jsx)("pre", { children: JSON.stringify(sharedState.playersNearby, null, 2) ||
                                                 "Loading..." })] })] }), (0, jsx_runtime_1.jsxs)("div", { className: "tile", id: "memoryTile", children: [(0, jsx_runtime_1.jsx)("h2", { children: "Memory" }), (0, jsx_runtime_1.jsxs)("div", { className: "subtile", children: [(0, jsx_runtime_1.jsx)("h3", { children: "Short Term Memory" }), (0, jsx_runtime_1.jsx)("pre", { children: JSON.stringify(sharedState.shortTermMemoryIndex, null, 2) ||
                                                 "Loading..." })] }), (0, jsx_runtime_1.jsxs)("div", { className: "subtile", children: [(0, jsx_runtime_1.jsx)("h3", { children: "Long Term Memory" }), (0, jsx_runtime_1.jsx)("pre", { children: JSON.stringify(sharedState.longTermMemoryIndex, null, 2) ||
@@ -86399,8 +86399,7 @@ const Dashboard = () => {
                                                 "Loading..." })] }), (0, jsx_runtime_1.jsxs)("div", { className: "subtile", children: [(0, jsx_runtime_1.jsx)("h3", { children: "Locked In Task" }), (0, jsx_runtime_1.jsx)("pre", { children: JSON.stringify(sharedState.lockedInTask, null, 2) ||
                                                 "Loading..." })] })] }), (0, jsx_runtime_1.jsxs)("div", { className: "tile", id: "socialTile", children: [(0, jsx_runtime_1.jsx)("h2", { children: "Social" }), (0, jsx_runtime_1.jsxs)("div", { className: "subtile", children: [(0, jsx_runtime_1.jsx)("h3", { children: "Feelings To Others" }), (0, jsx_runtime_1.jsx)("pre", { children: JSON.stringify(sharedState.feelingsToOthers, null, 2) ||
                                                 "Loading..." })] }), (0, jsx_runtime_1.jsxs)("div", { className: "subtile", children: [(0, jsx_runtime_1.jsx)("h3", { children: "Others' Feelings Towards Self" }), (0, jsx_runtime_1.jsx)("pre", { children: JSON.stringify(sharedState.othersFeelingsTowardsSelf, null, 2) ||
-                                                "Loading..." })] }), (0, jsx_runtime_1.jsxs)("div", { className: "subtile", children: [(0, jsx_runtime_1.jsx)("h3", { children: "Conversation Log" }), (0, jsx_runtime_1.jsx)("pre", { children: JSON.stringify(sharedState.conversationLog, null, 2) ||
-                                                "Loading..." })] })] })] }) }), (0, jsx_runtime_1.jsxs)("div", { id: "llmSidebar", children: [(0, jsx_runtime_1.jsx)("h2", { children: "LLM Metrics" }), (0, jsx_runtime_1.jsxs)("div", { className: "sidebar-section", children: [(0, jsx_runtime_1.jsx)("h3", { children: "Total Requests" }), (0, jsx_runtime_1.jsx)("pre", { children: JSON.stringify(sharedState.llmMetrics?.totalRequests, null, 2) || "Loading..." })] }), (0, jsx_runtime_1.jsxs)("div", { className: "sidebar-section", children: [(0, jsx_runtime_1.jsx)("h3", { children: "Requests Last 10 Min" }), (0, jsx_runtime_1.jsx)("pre", { children: JSON.stringify(sharedState.llmMetrics?.requestsLast10Min, null, 2) || "Loading..." })] }), (0, jsx_runtime_1.jsxs)("div", { className: "sidebar-section", children: [(0, jsx_runtime_1.jsx)("h3", { children: "Total Input Characters" }), (0, jsx_runtime_1.jsx)("pre", { children: JSON.stringify(sharedState.llmMetrics?.totalInputChars, null, 2) || "Loading..." })] }), (0, jsx_runtime_1.jsxs)("div", { className: "sidebar-section", children: [(0, jsx_runtime_1.jsx)("h3", { children: "Total Output Characters" }), (0, jsx_runtime_1.jsx)("pre", { children: JSON.stringify(sharedState.llmMetrics?.totalOutputChars, null, 2) || "Loading..." })] }), (0, jsx_runtime_1.jsx)("button", { id: "toggleButton", onClick: handleToggleLLM, children: llmToggled ? "Kill LLM" : "Resume LLM" })] }), (0, jsx_runtime_1.jsx)("footer", { children: (0, jsx_runtime_1.jsx)("p", { children: "\u00A9 2025 Minecraft Bot Dashboard. All rights reserved." }) }), (0, jsx_runtime_1.jsx)("style", { children: `
+                                                "Loading..." })] })] }), (0, jsx_runtime_1.jsxs)("div", { className: "tile", id: "statusTile", children: [(0, jsx_runtime_1.jsx)("h2", { children: "Bot Status" }), (0, jsx_runtime_1.jsxs)("div", { className: "subtile", children: [(0, jsx_runtime_1.jsx)("h3", { children: "Inventory Contents" }), (0, jsx_runtime_1.jsx)("pre", { children: JSON.stringify(sharedState.inventory, null, 2) || "Loading..." })] }), (0, jsx_runtime_1.jsxs)("div", { className: "subtile", children: [(0, jsx_runtime_1.jsx)("h3", { children: "Health & Hunger" }), (0, jsx_runtime_1.jsxs)("pre", { children: ["Health: ", sharedState.botHealth, " | Hunger: ", sharedState.botHunger] })] }), (0, jsx_runtime_1.jsxs)("div", { className: "subtile", children: [(0, jsx_runtime_1.jsx)("h3", { children: "Equipped Items" }), (0, jsx_runtime_1.jsx)("pre", { children: JSON.stringify(sharedState.equippedItems, null, 2) || "Loading..." })] }), (0, jsx_runtime_1.jsxs)("div", { className: "subtile", children: [(0, jsx_runtime_1.jsx)("h3", { children: "Crafting Table Positions" }), (0, jsx_runtime_1.jsx)("pre", { children: JSON.stringify(sharedState.craftingTablePositions, null, 2) || "Loading..." })] })] })] }) }), (0, jsx_runtime_1.jsxs)("div", { id: "llmSidebar", children: [(0, jsx_runtime_1.jsx)("h2", { children: "LLM Metrics" }), (0, jsx_runtime_1.jsxs)("div", { className: "sidebar-section", children: [(0, jsx_runtime_1.jsx)("h3", { children: "Total Requests" }), (0, jsx_runtime_1.jsx)("pre", { children: JSON.stringify(sharedState.llmMetrics?.totalRequests, null, 2) || "Loading..." })] }), (0, jsx_runtime_1.jsxs)("div", { className: "sidebar-section", children: [(0, jsx_runtime_1.jsx)("h3", { children: "Requests Last 10 Min" }), (0, jsx_runtime_1.jsx)("pre", { children: JSON.stringify(sharedState.llmMetrics?.requestsLast10Min, null, 2) || "Loading..." })] }), (0, jsx_runtime_1.jsxs)("div", { className: "sidebar-section", children: [(0, jsx_runtime_1.jsx)("h3", { children: "Total Input Characters" }), (0, jsx_runtime_1.jsx)("pre", { children: JSON.stringify(sharedState.llmMetrics?.totalInputChars, null, 2) || "Loading..." })] }), (0, jsx_runtime_1.jsxs)("div", { className: "sidebar-section", children: [(0, jsx_runtime_1.jsx)("h3", { children: "Total Output Characters" }), (0, jsx_runtime_1.jsx)("pre", { children: JSON.stringify(sharedState.llmMetrics?.totalOutputChars, null, 2) || "Loading..." })] }), (0, jsx_runtime_1.jsx)("button", { id: "toggleButton", onClick: handleToggleLLM, children: llmToggled ? "Kill LLM" : "Resume LLM" })] }), (0, jsx_runtime_1.jsx)("footer", { children: (0, jsx_runtime_1.jsx)("p", { children: "\u00A9 2025 Minecraft Bot Dashboard. All rights reserved." }) }), (0, jsx_runtime_1.jsx)("style", { children: `
         .dashboard-container {
           font-family: "Poppins", sans-serif;
           background: #f8f9fa;
@@ -86470,6 +86469,20 @@ const Dashboard = () => {
           border-radius: 5px;
           overflow-x: auto;
         }
+        /* Floating Chat Log Sidebar on the left */
+        #chatLogSidebar {
+          position: fixed;
+          top: 80px;
+          left: 20px;
+          width: 250px;
+          background-color: #3949ab;
+          color: #fff;
+          padding: 20px;
+          border-radius: 10px;
+          box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+          z-index: 1000;
+        }
+        /* Fixed LLM Metrics Sidebar on the right */
         #llmSidebar {
           position: fixed;
           top: 80px;
@@ -86768,6 +86781,74 @@ const GoalPlanner = () => {
                             }, children: selectedNode.debugPrompt ?? "(No debug prompt stored for this node.)" }), (0, jsx_runtime_1.jsx)("button", { onClick: closeModal, children: "Close" })] }) }))] }));
 };
 exports["default"] = GoalPlanner;
+
+
+/***/ }),
+
+/***/ "./viewer/chatLog.tsx":
+/*!****************************!*\
+  !*** ./viewer/chatLog.tsx ***!
+  \****************************/
+/***/ ((__unused_webpack_module, exports, __webpack_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+const jsx_runtime_1 = __webpack_require__(/*! react/jsx-runtime */ "./node_modules/react/jsx-runtime.js");
+const ChatLog = ({ conversationLog }) => {
+    return ((0, jsx_runtime_1.jsxs)("div", { className: "chat-log-container", children: [(0, jsx_runtime_1.jsx)("h2", { children: "FunctionCaller Chat Log" }), (0, jsx_runtime_1.jsx)("div", { className: "chat-log-content", children: conversationLog && conversationLog.length > 0 ? (conversationLog.map((line, index) => {
+                    // Determine if it's from the user or the assistant (or a fallback)
+                    // We treat lines starting with "USER:" as user messages
+                    // And lines starting with "ASSISTANT:", "TOOL CALL", or "FINAL RESPONSE" as model messages
+                    // Everything else we give a neutral style (you can adjust as desired).
+                    const isUser = line.startsWith("USER:");
+                    const isAssistant = line.startsWith("ASSISTANT:") ||
+                        line.startsWith("TOOL CALL") ||
+                        line.startsWith("FINAL RESPONSE");
+                    const messageClass = isUser
+                        ? "user-message"
+                        : isAssistant
+                            ? "assistant-message"
+                            : "system-message";
+                    return ((0, jsx_runtime_1.jsx)("div", { className: `chat-line ${messageClass}`, children: line }, index));
+                })) : ((0, jsx_runtime_1.jsx)("div", { className: "chat-line system-message", children: "Loading..." })) }), (0, jsx_runtime_1.jsx)("style", { children: `
+        .chat-log-container {
+          font-family: Arial, sans-serif;
+        }
+
+        .chat-log-content {
+          /* Allow the user to drag both horizontally and vertically */
+          resize: both;
+          overflow: auto;
+          border: 1px solid #ccc;
+          width: 400px; /* Starting width - can be resized by user */
+          height: 300px; /* Starting height - can be resized by user */
+          padding: 8px;
+          border-radius: 4px;
+          background-color: #f9f9f9;
+        }
+
+        .chat-line {
+          margin-bottom: 8px;
+          padding: 8px;
+          border-radius: 4px;
+          word-wrap: break-word;
+        }
+
+        .user-message {
+          background-color: #add8e6; /* Light blue */
+        }
+
+        .assistant-message {
+          background-color: #ffd580; /* Light orange / peach */
+        }
+
+        .system-message {
+          background-color: #eeeeee; /* Neutral / grey background */
+        }
+      ` })] }));
+};
+exports["default"] = ChatLog;
 
 
 /***/ }),

@@ -1,3 +1,4 @@
+// src/observer.ts
 import { Bot } from "mineflayer";
 import type { Entity } from "prismarine-entity";
 import type { Block } from "prismarine-block";
@@ -25,7 +26,7 @@ export class Observer {
     this.bot = bot;
     this.radius = options.radius ?? 200;
     this.sharedState = sharedState;
-    // We need minecraft-data to look up items and recipes.
+    // Initialize minecraft-data for version 1.21.4
     this.mcData = minecraftData("1.21.4");
 
     // Schedule periodic updates of the bot's inventory, health, and hunger.
@@ -43,6 +44,9 @@ export class Observer {
     // Assumes mineflayer bot has properties "health" and "food"
     this.sharedState.botHealth = this.bot.health;
     this.sharedState.botHunger = this.bot.food;
+    // Update equipped items from bot's current equipment.
+    const equipped = this.getEquippedItems();
+    this.sharedState.equippedItems = equipped;
   }
 
   /**
@@ -129,8 +133,26 @@ export class Observer {
         continue;
       const dist = center.distanceTo(entity.position);
       if (dist <= this.radius) {
-        const name = entity.name ?? "unknown_mob";
-        result.Mobs.push({ name, distance: parseFloat(dist.toFixed(2)) });
+        // Default to entity.name or "unknown_mob"
+        let mobName = entity.name ?? "unknown_mob";
+
+        // If the entity is a dropped item, try to extract the actual item name.
+        if (
+          mobName === "item" &&
+          (entity as any).metadata &&
+          (entity as any).metadata[7]
+        ) {
+          const itemMeta = (entity as any).metadata[7];
+          // Check if itemMeta is an object with an id property
+          if (itemMeta && typeof itemMeta === "object" && itemMeta.id !== undefined) {
+            const itemData = this.mcData.items[itemMeta.id];
+            if (itemData && itemData.name) {
+              mobName = itemData.name;
+            }
+          }
+        }
+
+        result.Mobs.push({ name: mobName, distance: parseFloat(dist.toFixed(2)) });
       }
     }
 
@@ -346,9 +368,9 @@ export class Observer {
   }
 
   /**
-   * -------------------------------------
+   * ----------------------------
    * 6) Detailed Block View (New Method!)
-   * -------------------------------------
+   * ----------------------------
    * Returns a list of every block (including air) within the specified radius.
    */
   public async getAllBlocksInRadius(
@@ -360,7 +382,7 @@ export class Observer {
     // We pick a large count to ensure we collect all blocks in a 10-block radius.
     const blockPositions = this.bot.findBlocks({
       point: center,
-      matching: (b) => b && b.name !== "air", // includes air and everything else
+      matching: (b) => b && b.name !== "air", // includes only non-air blocks
       maxDistance: radius,
       count: 9999,
     });
