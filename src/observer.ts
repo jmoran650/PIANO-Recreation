@@ -44,6 +44,12 @@ export class Observer {
     // Assumes mineflayer bot has properties "health" and "food"
     this.sharedState.botHealth = this.bot.health;
     this.sharedState.botHunger = this.bot.food;
+    // Update bot position as well
+    this.sharedState.botPosition = {
+      x: this.bot.entity.position.x,
+      y: this.bot.entity.position.y,
+      z: this.bot.entity.position.z,
+    };
     // Update equipped items from bot's current equipment.
     const equipped = this.getEquippedItems();
     this.sharedState.equippedItems = equipped;

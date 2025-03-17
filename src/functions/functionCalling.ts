@@ -5,8 +5,15 @@
 import { Actions } from "../actions";
 import { SharedAgentState } from "../sharedAgentState";
 import { OpenAI } from "openai";
-import { tools } from "./tools"
+import { tools } from "./tools";
+import { minecraftItems, minecraftBlocks } from "../../data/minecraftItems";
 
+/**
+ * FunctionCaller:
+ * The central class for interacting with the OpenAI function-calling model,
+ * capturing and logging all user messages, assistant responses, tool/function calls,
+ * and final outputs. Also logs updated shared state information.
+ */
 export class FunctionCaller {
   private lastDiffStateSnapshot: {
     health: number;
@@ -21,62 +28,14 @@ export class FunctionCaller {
   ) {}
 
   /**
-   * Formats the shared state into clearly delimited sections.
-   * Only the 10 nearest mobs (sorted by distance) are included.
+   * Formats the shared state for a textual summary.
    */
   public getSharedStateAsText(): string {
-    const st = this.sharedState;
-    let text = "";
-
-    // Health & Hunger Section
-    text += "===== Bot Status =====\n";
-    text += "--- Health & Hunger ---\n";
-    text += `Health: ${st.botHealth}\nHunger: ${st.botHunger}\n`;
-    text += "-----------------------\n\n";
-
-    // Inventory Section
-    text += "===== Inventory =====\n";
-    const invSummary =
-      st.inventory && st.inventory.length > 0 ? st.inventory.join(", ") : "(nothing)";
-    text += `Inventory: ${invSummary}\n`;
-    text += "-----------------------\n\n";
-
-    // Mobs Section: only the 10 nearest mobs sorted by distance
-    text += "===== Mobs (Nearest 10) =====\n";
-    if (st.visibleMobs && st.visibleMobs.Mobs.length > 0) {
-      const sortedMobs = st.visibleMobs.Mobs.slice().sort((a, b) => a.distance - b.distance);
-      const top10 = sortedMobs.slice(0, 10);
-      const mobSummary = top10.map(
-        (m) => `${m.name} (~${m.distance.toFixed(1)}m away)`
-      ).join(", ");
-      text += `Mobs: ${mobSummary}\n`;
-    } else {
-      text += "Mobs: none\n";
-    }
-    text += "-----------------------\n\n";
-
-    // Players Nearby Section
-    text += "===== Players Nearby =====\n";
-    if (st.playersNearby && st.playersNearby.length > 0) {
-      text += `Players Nearby: ${st.playersNearby.join(", ")}\n`;
-    } else {
-      text += "Players Nearby: none\n";
-    }
-    text += "-----------------------\n\n";
-
-    // Pending Actions Section (if any)
-    if (st.pendingActions && st.pendingActions.length > 0) {
-      text += "===== Pending Actions =====\n";
-      text += `Pending Actions: ${st.pendingActions.join(" | ")}\n`;
-      text += "-----------------------\n\n";
-    }
-
-    return text;
+    return this.sharedState.getSharedStateAsText();
   }
 
   /**
    * Returns a summary of differences in state since the last tick.
-   * Now formatted with section markers.
    */
   public getSharedStateDiffAsText(): string {
     const st = this.sharedState;
@@ -108,32 +67,28 @@ export class FunctionCaller {
 
     for (const oldMob of oldMobs) {
       if (!newNames.includes(oldMob.name)) {
-        differences.push(`Mob "${oldMob.name}" no longer visible`);
+        differences.push(`Mob \"${oldMob.name}\" no longer visible`);
       }
     }
     for (const newMob of newMobs) {
       if (!oldNames.includes(newMob.name)) {
-        differences.push(`New mob visible: "${newMob.name}" at ~${newMob.distance}m`);
+        differences.push(
+          `New mob visible: \"${newMob.name}\" at ~${newMob.distance}m`
+        );
       }
     }
+
     for (const oldMob of oldMobs) {
       const matchingNew = newMobs.find((m) => m.name === oldMob.name);
       if (matchingNew) {
         const oldDist = oldMob.distance;
         const newDist = matchingNew.distance;
-        if (oldDist !== 0) {
-          const diffRatio = Math.abs(newDist - oldDist) / oldDist;
-          if (diffRatio >= 0.15) {
-            differences.push(
-              `Mob "${oldMob.name}" distance changed from ${oldDist.toFixed(1)}m to ${newDist.toFixed(1)}m`
-            );
-          }
-        } else {
-          if (Math.abs(newDist - oldDist) > 0.1) {
-            differences.push(
-              `Mob "${oldMob.name}" distance changed from ${oldDist.toFixed(1)}m to ${newDist.toFixed(1)}m`
-            );
-          }
+        if (oldDist !== 0 && Math.abs(newDist - oldDist) / oldDist >= 0.15) {
+          differences.push(
+            `Mob \"${oldMob.name}\" distance changed from ${oldDist.toFixed(
+              1
+            )}m to ${newDist.toFixed(1)}m`
+          );
         }
       }
     }
@@ -148,17 +103,13 @@ export class FunctionCaller {
       return "No notable changes since last tick.";
     }
 
-    const result = [
-      "===== State Diff =====",
-      ...differences,
-      "======================"
-    ].join("\n");
-
-    return result;
+    return `State Diff: < ${differences.join(" | ")} >`;
   }
 
   /**
-   * callOpenAIWithTools
+   * callOpenAIWithTools:
+   * Sends user messages + context to the LLM, logs the conversation,
+   * handles function calls, logs tool-call results, and returns final text.
    */
   public async callOpenAIWithTools(
     messages: Array<{ role: "user"; content: string }>
@@ -166,43 +117,72 @@ export class FunctionCaller {
     const loopLimit = 5;
     let finalResponse = "";
 
-    // Log the initial messages sent to the model.
-    messages.forEach((m) => {
-      this.sharedState.addToConversationLog(`${m.role.toUpperCase()}: ${m.content}`);
-    });
+    // 1. Log the initial user messages
+    for (const msg of messages) {
+      this.sharedState.logMessage("user", msg.content);
+    }
+
+    // 2. Repeatedly call the model until it produces a final output or hits loopLimit
+    let allMessages = [...messages];
 
     for (let loopCount = 0; loopCount < loopLimit; loopCount++) {
+      // Send request
       const completion = await this.openai.chat.completions.create({
         model: "gpt-4o",
-        messages,
+        messages: allMessages,
         tools: tools,
         tool_choice: "auto",
         parallel_tool_calls: false,
-        store: true,
+        store: true
       });
 
       const choice = completion.choices[0];
       const msg = choice.message;
 
-      // Log the assistant's response.
+      // 3. Log the assistant's response content (if any)
       if (msg.content) {
-        this.sharedState.addToConversationLog(`ASSISTANT: ${msg.content}`);
+        this.sharedState.logMessage("assistant", msg.content);
       }
 
-      // If the model doesn't call any functions, we have a final user-facing response
+      // 4. Check for function calls
       if (!msg.tool_calls || msg.tool_calls.length === 0) {
+        // No function calls => final user-facing response
         finalResponse = msg.content ?? "";
         break;
       }
 
-      // Otherwise, handle each tool call:
+      // 5. If there are tool calls, handle each one in sequence
       for (const toolCall of msg.tool_calls) {
         const fnName = toolCall.function.name;
         const argsStr = toolCall.function.arguments; // JSON string
         let toolCallResult = "";
 
+        // Attempt to parse arguments and run the corresponding action
+        let parsedArgs: any;
         try {
-          const parsedArgs = JSON.parse(argsStr);
+          parsedArgs = JSON.parse(argsStr);
+        } catch (err) {
+          toolCallResult = `ERROR: Could not parse function arguments as JSON. Raw args = ${argsStr}`;
+          this.sharedState.logMessage(
+            "function",
+            `Function call parse error for "${fnName}"`,
+            {
+              rawArguments: argsStr,
+              error: String(err)
+            }
+          );
+          // Provide a partial function message so the model can continue or correct
+          const partialErrorContent = `Function call parse error for "${fnName}": ${toolCallResult}`;
+          allMessages.push({
+            role: "function",
+            name: fnName,
+            content: partialErrorContent
+          } as any);
+          continue;
+        }
+
+        // Actually call the function
+        try {
           switch (fnName) {
             case "mine": {
               const { goalBlock, desiredCount } = parsedArgs;
@@ -259,11 +239,6 @@ export class FunctionCaller {
               }
               break;
             }
-            case "sortInventory": {
-              await this.actions.sortInventory();
-              toolCallResult = `Sorted inventory.`;
-              break;
-            }
             case "placeChest": {
               await this.actions.placeChest();
               toolCallResult = `Placed chest.`;
@@ -281,41 +256,68 @@ export class FunctionCaller {
               toolCallResult = `Retrieved ${count} of ${itemName} from chest.`;
               break;
             }
-            case "get_shared_state": {
-              toolCallResult = this.getSharedStateAsText();
-              break;
-            }
-            case "get_shared_state_diff": {
-              toolCallResult = this.getSharedStateDiffAsText();
-              break;
-            }
             default:
               toolCallResult = `Function "${fnName}" not implemented.`;
+              break;
           }
         } catch (err) {
           console.error("Error calling function:", fnName, err);
           toolCallResult = `ERROR calling function "${fnName}": ${String(err)}`;
+
+          // If it's a craft error about missing ingredients, attach acquisition info
+          if (
+            fnName === "craft" &&
+            String(err).includes("Don't have enough/correct ingredients")
+          ) {
+            try {
+              const craftArgs = parsedArgs;
+              const itemName = craftArgs.goalItem;
+              const infoFromItems = minecraftItems[itemName] || "";
+              const infoFromBlocks = minecraftBlocks[itemName] || "";
+              const acquisitionInfo = infoFromItems || infoFromBlocks;
+              if (acquisitionInfo) {
+                toolCallResult += ` Acquisition info: "${acquisitionInfo}"`;
+              }
+            } catch (jsonErr) {
+              // Do nothing if we fail to parse more info
+            }
+          }
         }
 
-        // Log the tool call and its result.
-        this.sharedState.addToConversationLog(
-          `TOOL CALL - ${fnName} with args: ${argsStr} -> Result: ${toolCallResult}`
-        );
+        // 6. Log the tool call (function call) with arguments + result
+        this.sharedState.logMessage("function", `Tool call: ${fnName}`, {
+          arguments: parsedArgs,
+          result: toolCallResult
+        });
 
-        // Then push a new 'function' or 'assistant' message to continue:
-        messages.push({
+        // 7. Provide an updated shared state snippet so the model can continue
+        const updatedStateText = this.getSharedStateAsText();
+        const combinedContent = `Updated Shared State:\n${updatedStateText}\n\nTool Call Result:\n${toolCallResult}`;
+
+        // Also log the updated shared state for debugging
+        this.sharedState.logMessage("function", "Updated Shared State", {
+          updatedState: updatedStateText
+        });
+
+        // Finally push a new 'function' message for the model to see
+        allMessages.push({
           role: "function",
           name: fnName,
-          content: toolCallResult,
+          content: combinedContent
         } as any);
       }
     }
 
+    // 8. If we never returned a finalResponse, set a default
     if (!finalResponse) {
       finalResponse = "No final response from model after function calls.";
     }
-    // Log the final response.
-    this.sharedState.addToConversationLog(`FINAL RESPONSE: ${finalResponse}`);
+
+    // 9. Log the final response
+    this.sharedState.logMessage("assistant", finalResponse, {
+      note: "Final consolidated assistant response."
+    });
+
     return finalResponse;
   }
 }

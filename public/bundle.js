@@ -86475,6 +86475,8 @@ const Dashboard = () => {
           top: 80px;
           left: 20px;
           width: 250px;
+          resize: both;
+          overflow: auto;
           background-color: #3949ab;
           color: #fff;
           padding: 20px;
@@ -86796,55 +86798,114 @@ exports["default"] = GoalPlanner;
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 const jsx_runtime_1 = __webpack_require__(/*! react/jsx-runtime */ "./node_modules/react/jsx-runtime.js");
 const ChatLog = ({ conversationLog }) => {
-    return ((0, jsx_runtime_1.jsxs)("div", { className: "chat-log-container", children: [(0, jsx_runtime_1.jsx)("h2", { children: "FunctionCaller Chat Log" }), (0, jsx_runtime_1.jsx)("div", { className: "chat-log-content", children: conversationLog && conversationLog.length > 0 ? (conversationLog.map((line, index) => {
-                    // Determine if it's from the user or the assistant (or a fallback)
-                    // We treat lines starting with "USER:" as user messages
-                    // And lines starting with "ASSISTANT:", "TOOL CALL", or "FINAL RESPONSE" as model messages
-                    // Everything else we give a neutral style (you can adjust as desired).
-                    const isUser = line.startsWith("USER:");
-                    const isAssistant = line.startsWith("ASSISTANT:") ||
-                        line.startsWith("TOOL CALL") ||
-                        line.startsWith("FINAL RESPONSE");
-                    const messageClass = isUser
-                        ? "user-message"
-                        : isAssistant
-                            ? "assistant-message"
-                            : "system-message";
-                    return ((0, jsx_runtime_1.jsx)("div", { className: `chat-line ${messageClass}`, children: line }, index));
-                })) : ((0, jsx_runtime_1.jsx)("div", { className: "chat-line system-message", children: "Loading..." })) }), (0, jsx_runtime_1.jsx)("style", { children: `
+    return ((0, jsx_runtime_1.jsxs)("div", { className: "chat-log-container", children: [(0, jsx_runtime_1.jsx)("h2", { children: "Conversation Log" }), (0, jsx_runtime_1.jsx)("div", { className: "chat-log-content", children: conversationLog && conversationLog.length > 0 ? (conversationLog.map((line, index) => {
+                    let entry;
+                    try {
+                        const parsed = JSON.parse(line);
+                        // Validate required properties exist
+                        if (typeof parsed.role === "string" &&
+                            typeof parsed.timestamp === "string" &&
+                            typeof parsed.content === "string") {
+                            entry = parsed;
+                        }
+                        else {
+                            entry = {
+                                role: "system",
+                                timestamp: "",
+                                content: line,
+                                metadata: {},
+                            };
+                        }
+                    }
+                    catch {
+                        // Fallback for non-JSON log lines
+                        entry = {
+                            role: "system",
+                            timestamp: "",
+                            content: line,
+                            metadata: {},
+                        };
+                    }
+                    const { role, timestamp, content, metadata } = entry;
+                    return ((0, jsx_runtime_1.jsxs)("div", { className: "chat-entry", children: [(0, jsx_runtime_1.jsxs)("div", { className: "chat-entry-header", children: [(0, jsx_runtime_1.jsx)("div", { className: "chat-role-container", children: (0, jsx_runtime_1.jsx)("span", { className: `chat-role ${role.toLowerCase()}`, children: role.toUpperCase() }) }), (0, jsx_runtime_1.jsx)("div", { className: "chat-timestamp-container", children: (0, jsx_runtime_1.jsx)("span", { className: "chat-timestamp", children: timestamp }) })] }), (0, jsx_runtime_1.jsxs)("div", { className: "chat-entry-body", children: [(0, jsx_runtime_1.jsxs)("div", { className: "chat-content", children: [(0, jsx_runtime_1.jsx)("strong", { children: "Message:" }), (0, jsx_runtime_1.jsx)("p", { children: content })] }), metadata && Object.keys(metadata).length > 0 && ((0, jsx_runtime_1.jsxs)("div", { className: "chat-metadata", children: [(0, jsx_runtime_1.jsx)("strong", { children: "Metadata:" }), (0, jsx_runtime_1.jsx)("ul", { children: Object.entries(metadata).map(([key, value]) => ((0, jsx_runtime_1.jsxs)("li", { children: [(0, jsx_runtime_1.jsxs)("strong", { children: [key, ":"] }), " ", JSON.stringify(value)] }, key))) })] }))] })] }, index));
+                })) : ((0, jsx_runtime_1.jsx)("div", { className: "chat-entry", children: "Loading..." })) }), (0, jsx_runtime_1.jsx)("style", { children: `
         .chat-log-container {
           font-family: Arial, sans-serif;
+          color: #333;
+          padding: 16px;
         }
-
         .chat-log-content {
-          /* Allow the user to drag both horizontally and vertically */
-          resize: both;
-          overflow: auto;
-          border: 1px solid #ccc;
-          width: 400px; /* Starting width - can be resized by user */
-          height: 300px; /* Starting height - can be resized by user */
-          padding: 8px;
-          border-radius: 4px;
-          background-color: #f9f9f9;
+          overflow-y: auto;
+          border: 1px solid #ddd;
+          padding: 16px;
+          border-radius: 8px;
+          background-color: #fafafa;
+          max-height: 400px;
         }
-
-        .chat-line {
+        .chat-entry {
+          border-bottom: 1px solid #eee;
+          padding: 12px 0;
+          margin-bottom: 12px;
+        }
+        .chat-entry:last-child {
+          border-bottom: none;
+          margin-bottom: 0;
+        }
+        .chat-entry-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
           margin-bottom: 8px;
+        }
+        .chat-role-container {
+          flex: 0 0 auto;
+        }
+        .chat-timestamp-container {
+          flex: 0 0 auto;
+          font-size: 0.85em;
+          color: #999;
+        }
+        .chat-role {
+          font-weight: bold;
+          padding: 4px 8px;
+          border-radius: 4px;
+        }
+        .chat-role.user {
+          background-color: #add8e6;
+          color: #000;
+        }
+        .chat-role.assistant {
+          background-color: #ffd580;
+          color: #000;
+        }
+        .chat-role.function {
+          background-color: #c0ffc0;
+          color: #000;
+        }
+        .chat-role.system {
+          background-color: #eee;
+          color: #666;
+        }
+        .chat-entry-body {
+          padding-left: 8px;
+        }
+        .chat-content p {
+          margin: 4px 0 0 0;
+          white-space: pre-wrap;
+        }
+        .chat-metadata {
+          margin-top: 8px;
+          font-size: 0.85em;
+          background-color: #f0f0f0;
           padding: 8px;
           border-radius: 4px;
-          word-wrap: break-word;
         }
-
-        .user-message {
-          background-color: #add8e6; /* Light blue */
+        .chat-metadata ul {
+          margin: 4px 0 0 0;
+          padding-left: 16px;
         }
-
-        .assistant-message {
-          background-color: #ffd580; /* Light orange / peach */
-        }
-
-        .system-message {
-          background-color: #eeeeee; /* Neutral / grey background */
+        .chat-metadata li {
+          margin-bottom: 4px;
         }
       ` })] }));
 };

@@ -12,10 +12,6 @@ export class SharedAgentState {
    * -----------------------------
    * 1) Environment Snapshot Data
    * -----------------------------
-   * This is where environment-related information that the Observer collects can be stored:
-   *   - Visible block types
-   *   - Visible mobs
-   *   - Player presence, etc.
    */
   private _visibleBlockTypes: {
     BlockTypes: {
@@ -27,10 +23,9 @@ export class SharedAgentState {
     Mobs: { name: string; distance: number }[];
   } | null = null;
 
-  // Example for storing info about which players are nearby or in the environment
   private _playersNearby: string[] = [];
 
-  // New properties for inventory, health, and hunger
+  // Bot status
   private _inventory: string[] = [];
   private _botHealth: number = 20;
   private _botHunger: number = 20;
@@ -39,49 +34,45 @@ export class SharedAgentState {
    * -----------------------------
    * 2) Memory Indices
    * -----------------------------
-   * Optionally store references to short-term or long-term memory keys
-   * or replicate the entire Memory class's data here if you prefer fully centralized storing.
    */
-  private _shortTermMemoryIndex: Map<string, string>; // e.g. name => info
-  private _longTermMemoryIndex: Map<string, string>; // e.g. name => info
-  private _locationMemoryIndex: Map<string, Vec3>; // e.g. name => coords
+  private _shortTermMemoryIndex: Map<string, string>;
+  private _longTermMemoryIndex: Map<string, string>;
+  private _locationMemoryIndex: Map<string, Vec3>;
 
   /**
    * -----------------------------
    * 3) Goals & Actions
    * -----------------------------
-   * Data for the Goals module and potential subtask breakdowns.
    */
   private _longTermGoalQueue: string[] = [];
   private _currentLongTermGoal: string | null = null;
   private _currentShortTermGoal: string | null = null;
-
-  // If your agent wants to store planned or pending actions in the shared state:
   private _pendingActions: string[] = [];
 
   /**
    * -----------------------------
    * 4) Social Context
    * -----------------------------
-   * Data for the Social module: feelings towards others, how others feel about us, conversation logs, etc.
    */
-  private _feelingsToOthers: Map<
-    string,
-    { sentiment: number; reasons: string[] }
-  >;
-  private _othersFeelingsTowardsSelf: Map<
-    string,
-    { sentiment: number; reasons: string[] }
-  >;
+  private _feelingsToOthers: Map<string, { sentiment: number; reasons: string[] }>;
+  private _othersFeelingsTowardsSelf: Map<string, { sentiment: number; reasons: string[] }>;
 
-  // Optionally store conversation logs or chat messages for higher-level processing
+  /**
+   * conversationLog:
+   * Now stores each entry as a JSON string containing:
+   * {
+   *   "timestamp": string,
+   *   "role": "user"|"assistant"|"function"|"system",
+   *   "content": string,
+   *   "metadata": any
+   * }
+   */
   private _conversationLog: string[] = [];
 
   /**
    * -----------------------------
    * 5) Status Flags / Lock-Ins
    * -----------------------------
-   * The CognitiveController has a notion of “lockedInTask.” That can live here too.
    */
   private _lockedInTask: boolean = false;
 
@@ -89,7 +80,6 @@ export class SharedAgentState {
    * -----------------------------
    * 6) Additional Data
    * -----------------------------
-   * We store known crafting table positions here:
    */
   private _craftingTablePositions: Vec3[] = [];
 
@@ -97,7 +87,6 @@ export class SharedAgentState {
    * -----------------------------
    * 7) Equipped Items
    * -----------------------------
-   * Stores the bot’s equipped items for head, chest, legs, feet, and offhand.
    */
   private _equippedItems: {
     head: string | null;
@@ -108,10 +97,10 @@ export class SharedAgentState {
   } = { head: null, chest: null, legs: null, feet: null, offhand: null };
 
   /**
-   * -----------------------------
-   * 7) Initialization
-   * -----------------------------
+   * Bot position:
    */
+  private _botPosition: { x: number; y: number; z: number } = { x: 0, y: 0, z: 0 };
+
   constructor() {
     // Initialize memory data
     this._shortTermMemoryIndex = new Map();
@@ -122,18 +111,12 @@ export class SharedAgentState {
     this._othersFeelingsTowardsSelf = new Map();
   }
 
-  /**
-   * -----------------------------
-   * 8) Environment Snapshot Methods
-   * -----------------------------
-   */
+  // ------------ ENVIRONMENT ------------
   public get visibleBlockTypes() {
     return this._visibleBlockTypes;
   }
   public set visibleBlockTypes(
-    data: {
-      BlockTypes: { [blockName: string]: { x: number; y: number; z: number } };
-    } | null
+    data: { BlockTypes: { [blockName: string]: { x: number; y: number; z: number } } } | null
   ) {
     this._visibleBlockTypes = data;
   }
@@ -141,9 +124,7 @@ export class SharedAgentState {
   public get visibleMobs() {
     return this._visibleMobs;
   }
-  public set visibleMobs(
-    data: { Mobs: { name: string; distance: number }[] } | null
-  ) {
+  public set visibleMobs(data: { Mobs: { name: string; distance: number }[] } | null) {
     this._visibleMobs = data;
   }
 
@@ -154,7 +135,6 @@ export class SharedAgentState {
     this._playersNearby = playerList;
   }
 
-  // New getters and setters for inventory, health, and hunger
   public get inventory(): string[] {
     return this._inventory;
   }
@@ -176,11 +156,15 @@ export class SharedAgentState {
     this._botHunger = hunger;
   }
 
-  /**
-   * -----------------------------
-   * 9) Memory Index Methods
-   * -----------------------------
-   */
+  // ------------- BOT POSITION -------------
+  public get botPosition() {
+    return this._botPosition;
+  }
+  public set botPosition(pos: { x: number; y: number; z: number }) {
+    this._botPosition = pos;
+  }
+
+  // ------------- MEMORY -------------
   public get shortTermMemoryIndex(): Map<string, string> {
     return this._shortTermMemoryIndex;
   }
@@ -193,7 +177,6 @@ export class SharedAgentState {
     return this._locationMemoryIndex;
   }
 
-  // Example methods to add or remove memory items:
   public addShortTermMemory(key: string, value: string): void {
     this._shortTermMemoryIndex.set(key, value);
   }
@@ -208,11 +191,7 @@ export class SharedAgentState {
     this._locationMemoryIndex.set(key, coords);
   }
 
-  /**
-   * -----------------------------
-   * 10) Goals & Actions
-   * -----------------------------
-   */
+  // ------------- GOALS & ACTIONS -------------
   public get longTermGoalQueue(): string[] {
     return this._longTermGoalQueue;
   }
@@ -224,7 +203,6 @@ export class SharedAgentState {
   public get currentLongTermGoal(): string | null {
     return this._currentLongTermGoal;
   }
-
   public set currentLongTermGoal(goal: string | null) {
     this._currentLongTermGoal = goal;
   }
@@ -232,7 +210,6 @@ export class SharedAgentState {
   public get currentShortTermGoal(): string | null {
     return this._currentShortTermGoal;
   }
-
   public set currentShortTermGoal(goal: string | null) {
     this._currentShortTermGoal = goal;
   }
@@ -247,11 +224,7 @@ export class SharedAgentState {
     this._pendingActions.push(action);
   }
 
-  /**
-   * -----------------------------
-   * 11) Social Context
-   * -----------------------------
-   */
+  // ------------- SOCIAL -------------
   public get feelingsToOthers() {
     return this._feelingsToOthers;
   }
@@ -260,41 +233,45 @@ export class SharedAgentState {
     return this._othersFeelingsTowardsSelf;
   }
 
+  /**
+   * conversationLog is an array of JSON strings representing each message/event in the conversation.
+   */
   public get conversationLog(): string[] {
     return this._conversationLog;
   }
 
-  public addToConversationLog(line: string): void {
-    this._conversationLog.push(line);
+  /**
+   * logMessage:
+   * Adds a structured log entry (in JSON form) to conversationLog.
+   *
+   * role can be: "user", "assistant", "function", or "system".
+   * content is the textual content or summary of the message/event.
+   * metadata is any extra JSON-serializable object with details.
+   */
+  public logMessage(
+    role: "user" | "assistant" | "function" | "system",
+    content: string,
+    metadata?: any
+  ): void {
+    const entry = {
+      timestamp: new Date().toISOString(),
+      role,
+      content,
+      metadata: metadata || {}
+    };
+    const jsonStr = JSON.stringify(entry);
+    this._conversationLog.push(jsonStr);
   }
 
-  /**
-   * Helper to update feelings towards a person.
-   */
-  public updateFeelingsTowards(
-    person: string,
-    sentiment: number,
-    reasons: string[]
-  ): void {
+  public updateFeelingsTowards(person: string, sentiment: number, reasons: string[]): void {
     this._feelingsToOthers.set(person, { sentiment, reasons });
   }
 
-  /**
-   * Helper to update how a person feels about the agent.
-   */
-  public updateOthersFeelingsTowardsSelf(
-    person: string,
-    sentiment: number,
-    reasons: string[]
-  ): void {
+  public updateOthersFeelingsTowardsSelf(person: string, sentiment: number, reasons: string[]): void {
     this._othersFeelingsTowardsSelf.set(person, { sentiment, reasons });
   }
 
-  /**
-   * -----------------------------
-   * 12) Lock Status
-   * -----------------------------
-   */
+  // ------------- LOCKED TASK -------------
   public get lockedInTask(): boolean {
     return this._lockedInTask;
   }
@@ -302,24 +279,15 @@ export class SharedAgentState {
     this._lockedInTask = value;
   }
 
-  /**
-   * -----------------------------
-   * 13) Tracking Crafting Tables
-   * -----------------------------
-   */
+  // ------------- CRAFTING TABLES -------------
   public get craftingTablePositions(): Vec3[] {
     return this._craftingTablePositions;
   }
-
   public addCraftingTablePosition(pos: Vec3): void {
     this._craftingTablePositions.push(pos);
   }
 
-  /**
-   * -----------------------------
-   * 14) Equipped Items
-   * -----------------------------
-   */
+  // ------------- EQUIPPED ITEMS -------------
   public get equippedItems() {
     return this._equippedItems;
   }
@@ -333,5 +301,45 @@ export class SharedAgentState {
     }
   ) {
     this._equippedItems = value;
+  }
+
+  // ------------- HELPER FOR TEXT SUMMARY -------------
+  public getSharedStateAsText(): string {
+    const st = this;
+    let text = "";
+
+    text += `Bot Status: < Health: ${st.botHealth}, Hunger: ${st.botHunger} >\n\n`;
+
+    const invSummary = st.inventory && st.inventory.length > 0
+      ? st.inventory.join(", ")
+      : "(nothing)";
+    text += `Inventory: < ${invSummary} >\n\n`;
+
+    // Add position info
+    text += `Position: < x=${st.botPosition.x.toFixed(1)}, y=${st.botPosition.y.toFixed(
+      1
+    )}, z=${st.botPosition.z.toFixed(1)} >\n\n`;
+
+    if (st.visibleMobs && st.visibleMobs.Mobs.length > 0) {
+      const sortedMobs = st.visibleMobs.Mobs.slice().sort((a, b) => a.distance - b.distance);
+      const top10 = sortedMobs.slice(0, 10);
+      const mobSummary = top10
+        .map((m) => `${m.name} (~${m.distance.toFixed(1)}m away)`)
+        .join(", ");
+      text += `Mobs: < ${mobSummary} >\n\n`;
+    } else {
+      text += "Mobs: < none >\n\n";
+    }
+
+    const playersNearby = st.playersNearby && st.playersNearby.length > 0
+      ? st.playersNearby.join(", ")
+      : "none";
+    text += `Players Nearby: < ${playersNearby} >\n\n`;
+
+    if (st.pendingActions && st.pendingActions.length > 0) {
+      text += `Pending Actions: < ${st.pendingActions.join(" | ")} >\n\n`;
+    }
+
+    return text;
   }
 }

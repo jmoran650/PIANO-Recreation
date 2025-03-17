@@ -1,5 +1,5 @@
 export const minecraftItems: Record<string, string> = {
-    "Stick": "Crafted from 2 wooden planks. Conversion rate: 2 planks turns to 4 sticks",
+    "Stick": "Crafted from 2 wooden planks of any kind. Conversion rate: 2 planks turns to 4 sticks",
     "Coal": "Mined from coal ore.",
     "Charcoal": "Obtained by smelting wood logs in a furnace. One to one conversion rate",
     "Iron Ingot": "Obtained by smelting iron ore in a furnace.",
@@ -8,6 +8,9 @@ export const minecraftItems: Record<string, string> = {
     "Emerald": "Obtained by mining emerald ore or trading with villagers.",
     "Lapis Lazuli": "Obtained by mining lapis lazuli ore.",
     "Redstone Dust": "Obtained by mining redstone ore.",
+    "wooden_pickaxe":"A wooden pickaxe is crafted from three wooden planks of any kind and two sticks",
+    "wooden_axe":"A wooden axe is crafted from three wooden planks of any kind and two sticks",
+    "wooden_sword":"A wooden sword is crafted from one stick and two wooden planks of any kind",
     "Glowstone Dust": "Obtained by mining glowstone blocks in the Nether or trading with cleric villagers.",
     "Nether Quartz": "Mined from Nether quartz ore in the Nether.",
     "Netherite Scrap": "Obtained by smelting ancient debris found in the Nether.",
@@ -72,5 +75,6 @@ export const minecraftItems: Record<string, string> = {
     "TNT":"TNT blocks are crafted from 4 sand and 5 gunpowder.",
     "Glass":"Glass is made by smelting sand blocks. Glass can not be mined.",
     "Crafting table":"A crafting table is made from 4 wood planks of any kind.",
-    "crafting_table":"A crafting table is crafted from 4 wood planks of any kind."
+    "crafting_table":"A crafting table is crafted from 4 wood planks of any kind.",
+
   }
