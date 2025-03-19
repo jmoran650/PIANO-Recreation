@@ -6,6 +6,7 @@ import minecraftData from "minecraft-data";
 import { Block } from "prismarine-block";
 import { SharedAgentState } from "./sharedAgentState";
 import { Observer } from "./observer";
+import { blockDropMapping } from "../data/minecraftItems";
 
 declare module "mineflayer" {
   interface BotEvents {
@@ -33,61 +34,119 @@ export class Actions {
     this.observer = observer;
   }
 
-  /**
-   * Mines a specified block type until the desired number of blocks has been mined.
-   */
-  async mine(goalBlock: string, desiredCount: number): Promise<void> {
-    this.sharedState.addPendingAction(`Mine ${goalBlock} x${desiredCount}`);
+/**
+ * Mines a specified block type until the desired number of blocks has been mined.
+ */
+async mine(goalBlock: string, desiredCount: number): Promise<void> {
+  this.bot.waitForChunksToLoad();
+  this.sharedState.addPendingAction(`Mine ${goalBlock} x${desiredCount}`);
+  await this.equipBestToolForBlock(goalBlock);
+  
+  let count = 0;
+  while (count < desiredCount) {
+    const blockPositions = this.bot.findBlocks({
+      point: this.bot.entity.position,
+      matching: (block) => block && block.name === goalBlock,
+      maxDistance: 500,
+    });
 
-    let count = 0;
-    while (count < desiredCount) {
-      const blockPositions = this.bot.findBlocks({
-        point: this.bot.entity.position,
-        matching: (block) => block && block.name === goalBlock,
-        maxDistance: 50,
-      });
-
-      if (blockPositions.length === 0) {
-        this.bot.chat(`No ${goalBlock} found nearby.`);
-        break;
-      }
-
-      const botPos = this.bot.entity.position;
-      let closestBlockPos = blockPositions[0];
-      let closestDistance = botPos.distanceTo(closestBlockPos);
-
-      for (let i = 1; i < blockPositions.length; i++) {
-        const currentDistance = botPos.distanceTo(blockPositions[i]);
-        if (currentDistance < closestDistance) {
-          closestDistance = currentDistance;
-          closestBlockPos = blockPositions[i];
-        }
-      }
-
-      const block = this.bot.blockAt(closestBlockPos);
-      if (!block) continue;
-
-      // Equip the best tool for mining this block
-      await this.equipBestToolForBlock(goalBlock);
-
-      await this.navigation.move(
-        closestBlockPos.x,
-        closestBlockPos.y,
-        closestBlockPos.z
-      );
-
-      try {
-        await this.bot.dig(block);
-        count++;
-        this.bot.chat(`Mined ${count} of ${desiredCount} ${goalBlock}.`);
-      } catch (err) {
-        this.bot.chat(`Error mining block: ${err}`);
-      }
-
+    if (blockPositions.length === 0) {
+      this.bot.chat(`No ${goalBlock} found nearby.`);
       await this.sleep(100);
+      break;
     }
-    this.bot.chat(`finished mining after mining ${count} blocks`);
+
+    const botPos = this.bot.entity.position;
+    let closestBlockPos = blockPositions[0];
+    let closestDistance = botPos.distanceTo(closestBlockPos);
+
+    // Find the closest block position
+    for (let i = 1; i < blockPositions.length; i++) {
+      const currentDistance = botPos.distanceTo(blockPositions[i]);
+      if (currentDistance < closestDistance) {
+        closestDistance = currentDistance;
+        closestBlockPos = blockPositions[i];
+      }
+    }
+
+    const block = this.bot.blockAt(closestBlockPos);
+    if (!block) continue;
+
+    // Equip the best tool for mining this block
+    
+
+    await this.navigation.moveToLookAt(
+      closestBlockPos.x,
+      closestBlockPos.y,
+      closestBlockPos.z
+    );
+
+    try {
+      await this.bot.dig(block);
+      count++;
+      this.bot.chat(`Mined ${count} of ${desiredCount} ${goalBlock}.`);
+    } catch (err) {
+      this.bot.chat(`Error mining block: ${err}`);
+    }
+
+    await this.sleep(200);
+
+    // Check if there are any more blocks of this type in the immediate vicinity (defining the vein)
+    const nearbyBlockPositions = this.bot.findBlocks({
+      point: closestBlockPos,
+      matching: (b) => b && b.name === goalBlock,
+      maxDistance: 8, // adjust this radius as needed for your definition of a "vein"
+    });
+
+    // If no more blocks are nearby, assume the vein is finished.
+    if (nearbyBlockPositions.length === 0) {
+      await this.sleep(200);
+      await this.collectDroppedItems(closestBlockPos, goalBlock);
+    }
   }
+  this.bot.chat(`Finished mining after mining ${count} blocks.`);
+}
+
+/**
+ * Collect dropped items near the provided origin that match the expected drop for the mined block.
+ */
+async collectDroppedItems(origin: Vec3, goalBlock: string): Promise<void> {
+  const collectionRadius = 20; // radius around the origin to search for drops
+  this.bot.chat('collectDroppedItems called.')
+  // Look up the expected drop from the mapping.
+  // Cast blockDropMapping to a record type to fix the index error.
+  const expectedDrop = (blockDropMapping as Record<string, string>)[goalBlock];
+  if (!expectedDrop) {
+    this.bot.chat(`No expected drop mapping for ${goalBlock}. Skipping drop collection.`);
+    return;
+  }
+
+  // Filter entities to find dropped items matching the expected drop.
+  const drops = Object.values(this.bot.entities).filter((entity: any) => {
+    if (entity.name !== 'item') return false;
+    if (entity.position.distanceTo(origin) > collectionRadius) return false;
+    if (!entity.getDroppedItem || typeof entity.getDroppedItem !== 'function') return false;
+    return entity.getDroppedItem().name === expectedDrop;
+  });
+
+  if (drops.length === 0) {
+    this.bot.chat(`No valid dropped ${expectedDrop} items found near the vein.`);
+    return;
+  }
+
+  this.bot.chat(`Collecting ${drops.length} dropped ${expectedDrop} item(s)...`);
+  for (const drop of drops) {
+    try {
+      // Navigate to the drop's position to pick it up.
+      await this.navigation.move(drop.position.x, drop.position.y, drop.position.z);
+      this.bot.chat(`Collected drop at ${drop.position}`);
+      await this.sleep(100); // slight delay between collecting drops
+    } catch (err) {
+      this.bot.chat(`Error collecting drop: ${err}`);
+    }
+  }
+}
+
 
   /**
    * Crafts an item. If it's not the crafting table itself or planks, we attempt to find or place a table.
@@ -109,7 +168,7 @@ export class Actions {
     if (goalItem !== "crafting_table" && !goalItem.toLowerCase().includes("planks")) {
       // (a) First, see if a placed table is already near us
       await this.observer.getVisibleBlockTypes(); // refresh environment
-      const nearTable = this.findNearbyPlacedTable(40); // e.g. 4-block radius
+      const nearTable = this.findNearbyPlacedTable(40); // e.g. 40-block radius
       if (nearTable) {
         this.bot.chat("Using an existing placed crafting table near me.");
         tableBlock = nearTable;
@@ -206,7 +265,7 @@ export class Actions {
     if (bestPos && bestDist <= 30) {
       const maybeTable = this.bot.blockAt(bestPos);
       if (maybeTable && maybeTable.name === "crafting_table") {
-        await this.navigation.move(bestPos.x, bestPos.y, bestPos.z);
+        await this.navigation.moveToLookAt(bestPos.x, bestPos.y, bestPos.z);
         return maybeTable;
       } else {
         this.removeCraftingTableFromShared(bestPos);

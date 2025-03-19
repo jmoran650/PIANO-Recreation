@@ -1,11 +1,11 @@
 // src/cc.ts
 import { Bot } from "mineflayer";
-import { Memory } from "./memory";
-import { Social } from "./social";
+import { Actions } from "./actions";
+import { Memory } from "./functions/memory/memory";
 import { Goals } from "./goals";
 import { Observer } from "./observer";
-import { Actions } from "./actions";
 import { SharedAgentState } from "./sharedAgentState";
+import { Social } from "./social";
 
 interface CognitiveControllerOptions {
   // configuration parameters if needed

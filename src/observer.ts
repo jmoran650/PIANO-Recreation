@@ -67,7 +67,6 @@ export class Observer {
 
     const positions = this.bot.findBlocks({
       point: this.bot.entity.position,
-      maxDistance: 2000,
       matching: (block: Block | null) => {
         if (!block) return false;
         // Explicit check: if block's type is 265 (sugar cane), include it even if its name is "air"

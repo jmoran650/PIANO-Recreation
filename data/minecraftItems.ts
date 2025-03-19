@@ -78,3 +78,50 @@ export const minecraftItems: Record<string, string> = {
     "crafting_table":"A crafting table is crafted from 4 wood planks of any kind.",
 
   }
+
+
+  export const blockDropMapping = {
+    // Ores
+    'iron_ore': 'raw_iron',      
+    'gold_ore': 'raw_gold',       
+    'diamond_ore': 'diamond',
+    'emerald_ore': 'emerald',
+    'coal_ore': 'coal',
+    'lapis_ore': 'lapis_lazuli',
+    'redstone_ore': 'redstone',   
+    'nether_quartz_ore': 'quartz',
+    'nether_gold_ore': 'nether_gold_ore', 
+    'copper_ore': 'raw_copper',
+    'ancient_debris': 'ancient_debris',
+  
+    // Deepslate variants
+    'deepslate_iron_ore': 'raw_iron',
+    'deepslate_gold_ore': 'raw_gold',
+    'deepslate_diamond_ore': 'diamond',
+    'deepslate_emerald_ore': 'emerald',
+    'deepslate_coal_ore': 'coal',
+    'deepslate_lapis_ore': 'lapis_lazuli',
+    'deepslate_redstone_ore': 'redstone',
+  
+    // Logs (they drop themselves)
+    'oak_log': 'oak_log',
+    'spruce_log': 'spruce_log',
+    'birch_log': 'birch_log',
+    'jungle_log': 'jungle_log',
+    'acacia_log': 'acacia_log',
+    'dark_oak_log': 'dark_oak_log',
+    'mangrove_log': 'mangrove_log',
+    'crimson_stem': 'crimson_stem', // Nether wood variant
+    'warped_stem': 'warped_stem',   // Nether wood variant
+  
+    // Other common blocks that drop themselves
+    'sand': 'sand',
+    'red_sand': 'red_sand',
+    'gravel': 'gravel',
+    'dirt': 'dirt',
+    'clay': 'clay',
+    'netherrack': 'netherrack',
+    'soul_sand': 'soul_sand',
+    'soul_soil': 'soul_soil',
+    'obsidian': 'obsidian'
+  };

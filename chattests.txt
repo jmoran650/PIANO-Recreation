@@ -38,13 +38,7 @@ Test Commands:
    - Note: This test will ensure a furnace is placed, open its GUI, insert fuel and the input items,
            and then wait briefly before closing the furnace window.
 
-4. test fuel
-   - Description: Provides information about fuel management.
-   - Usage:
-       • "test fuel"
-         => The bot will respond that fuel management is handled internally (mainly within the smelting process).
-
-5. test farm <plant|harvest> <cropName>
+4. test farm <plant|harvest> <cropName>
    - Description: Handles basic farming actions.
    - Usage:
        • "test farm plant wheat_seeds"
@@ -52,42 +46,29 @@ Test Commands:
        • "test farm harvest wheat"
          => Commands the bot to search for and harvest fully grown wheat.
 
-6. test equip <blockName>
+5. test equip <blockName>
    - Description: Instructs the bot to equip the best tool for interacting with a block.
    - Usage:
        • "test equip stone"
          => The bot will attempt to equip an appropriate tool (e.g., a pickaxe) for stone.
 
-7. test safetable
+6. test safetable
    - Description: Commands the bot to place a crafting table at a safe nearby location.
    - Usage:
        • "test safetable"
          => The bot will search for a valid placement spot and place a crafting table.
 
-8. test usetable
+7. test usetable
    - Description: Instructs the bot to use (i.e., interact with) a nearby crafting table.
    - Usage:
        • "test usetable"
          => The bot will locate a nearby crafting table and attempt to interact with it.
 
-9. test sort
+8. test sort
    - Description: Initiates a simple inventory sorting routine.
    - Usage:
        • "test sort"
-         => The bot will reorder its inventory, grouping similar items together using a basic sorting algorithm.
-
-10. test chest <place|store|get> [itemName] [count]
-    - Description: Tests chest-related interactions, including placement and item transfers.
-    - Subcommands:
-         a) test chest place
-            - Places a chest from the bot's inventory at a nearby valid location.
-         b) test chest store <itemName> [count]
-            - Stores up to the specified count of an item from the bot's inventory into an adjacent chest.
-              Example: "test chest store iron_ingot 5"
-         c) test chest get <itemName> [count]
-            - Retrieves up to the specified count of an item from a nearby chest into the bot's inventory.
-              Example: "test chest get iron_ingot 3"
-    - Note: These commands require that a chest is present (or placed) nearby and that the chest has the relevant items.
+         => The bot will reorder its inventory, grouping similar items together in one stack.
 
 Usage Notes:
 ------------

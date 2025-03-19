@@ -335,6 +335,8 @@ const Dashboard: React.FC = () => {
           width: 250px;
           resize: both;
           overflow: auto;
+          display: flex;
+          flex-direction: column;
           background-color: #3949ab;
           color: #fff;
           padding: 20px;

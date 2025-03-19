@@ -66,10 +66,6 @@ async function actualLLMCall(prompt: string): Promise<string> {
  * Uses the OpenAI API to generate a completion for the given system+user instructions,
  * but *attempts* to force the model to adhere to a JSON Schema. 
  * 
- * In practice, the official OpenAI Node library does NOT yet have a native `response_format` 
- * or `json_schema` parameter. If you are using a custom or experimental version, or a 
- * plugin-based approach, you'll need to ensure that the model's output is valid JSON 
- * in the .message.content field. 
  */
 async function actualLLMCallJsonSchema(
   systemMsg: string,

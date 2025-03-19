@@ -1,17 +1,16 @@
 // createAgentBot.ts
 import mineflayer, { Bot } from "mineflayer";
-import { pathfinder, Movements } from "mineflayer-pathfinder";
+import { Movements, pathfinder } from "mineflayer-pathfinder";
 import { plugin as pvp } from "mineflayer-pvp";
-import minecraftData from "minecraft-data";
 import OpenAI from "openai";
-import { SharedAgentState } from "./src/sharedAgentState";
-import { Memory } from "./src/memory";
-import { Social } from "./src/social";
-import { Goals } from "./src/goals";
-import { Observer } from "./src/observer";
-import { Navigation } from "./src/navigation";
 import { Actions } from "./src/actions";
 import { CognitiveController } from "./src/cc";
+import { Memory } from "./src/functions/memory/memory";
+import { Goals } from "./src/goals";
+import { Navigation } from "./src/navigation";
+import { Observer } from "./src/observer";
+import { SharedAgentState } from "./src/sharedAgentState";
+import { Social } from "./src/social";
 // NEW IMPORTS FOR FUNCTIONCALLER:
 import { FunctionCaller } from "./src/functions/functionCalling";
 
@@ -36,7 +35,6 @@ export interface AgentBot {
 }
 
 export async function createAgentBot(options: BotOptions): Promise<AgentBot> {
-
   console.log("attempting to create and connect bot! \n");
   // 1. Create the bot.
   const bot: Bot = mineflayer.createBot({
@@ -44,7 +42,7 @@ export async function createAgentBot(options: BotOptions): Promise<AgentBot> {
     port: options.port,
     username: options.username,
     version: options.version,
-    viewDistance: "far",
+    viewDistance: 127,
   });
   // 2. Wait for spawn.
   await new Promise<void>((resolve, reject) => {
@@ -85,7 +83,7 @@ export async function createAgentBot(options: BotOptions): Promise<AgentBot> {
     apiKey: process.env.OPENAI_API_KEY,
   });
 
-  const functionCaller = new FunctionCaller(actions, sharedState, openai);
+  const functionCaller = new FunctionCaller(actions, sharedState, openai, memory);
 
   bot.chat("Hello, I've been created by createAgentBot!");
 

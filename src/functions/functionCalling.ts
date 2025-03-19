@@ -7,6 +7,8 @@ import { SharedAgentState } from "../sharedAgentState";
 import { OpenAI } from "openai";
 import { tools } from "./tools";
 import { minecraftItems, minecraftBlocks } from "../../data/minecraftItems";
+import {updateMemoryViaLLM} from "./memory/memoryModule"
+import { Memory } from "./memory/memory";
 
 /**
  * FunctionCaller:
@@ -24,7 +26,8 @@ export class FunctionCaller {
   constructor(
     private actions: Actions,
     private sharedState: SharedAgentState,
-    private openai: OpenAI
+    private openai: OpenAI,
+    private memory: Memory
   ) {}
 
   /**
@@ -114,7 +117,7 @@ export class FunctionCaller {
   public async callOpenAIWithTools(
     messages: Array<{ role: "user"; content: string }>
   ): Promise<string> {
-    const loopLimit = 5;
+    const loopLimit = 10;
     let finalResponse = "";
 
     // 1. Log the initial user messages
@@ -292,7 +295,7 @@ export class FunctionCaller {
 
         // 7. Provide an updated shared state snippet so the model can continue
         const updatedStateText = this.getSharedStateAsText();
-        const combinedContent = `Updated Shared State:\n${updatedStateText}\n\nTool Call Result:\n${toolCallResult}`;
+        const combinedContent = `Updated Shared State:${updatedStateText} - Tool Call Result:${toolCallResult}`;
 
         // Also log the updated shared state for debugging
         this.sharedState.logMessage("function", "Updated Shared State", {
@@ -317,6 +320,8 @@ export class FunctionCaller {
     this.sharedState.logMessage("assistant", finalResponse, {
       note: "Final consolidated assistant response."
     });
+
+    updateMemoryViaLLM(finalResponse, this.memory, this.sharedState, this.openai);
 
     return finalResponse;
   }

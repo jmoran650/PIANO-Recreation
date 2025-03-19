@@ -1,12 +1,13 @@
 import { Bot } from "mineflayer";
 import { pathfinder, Movements, goals } from "mineflayer-pathfinder";
+import { Vec3 } from "vec3"; // Make sure to have vec3 installed and imported
 
-// Destructure out the specific goal class we want to use
-const { GoalBlock } = goals;
+// Destructure the goal classes we need from the goals object.
+const { GoalBlock, GoalLookAtBlock, GoalPlaceBlock } = goals;
 
 /**
- * A simple Movement class that uses mineflayer-pathfinder to move the bot to
- * a specified coordinate (x, y, z).
+ * A simple Navigation class that uses mineflayer-pathfinder to move the bot
+ * to a specified coordinate (x, y, z) using different types of goals.
  */
 export class Navigation {
   private bot: Bot;
@@ -31,23 +32,74 @@ export class Navigation {
     const goal = new GoalBlock(x, y, z);
     try {
       await this.bot.pathfinder.goto(goal);
-      //this.bot.chat("Arrived at my goal!");
+      // Optionally: this.bot.chat("Arrived at my goal!");
     } catch (err) {
-      // Use proper narrowing to get an error message.
       let errMsg: string;
       if (err instanceof Error) {
         errMsg = err.message;
       } else {
         errMsg = String(err);
       }
-      // Chat the error message so the bot lets you know what happened.
       this.bot.chat(`Pathfinder error: ${errMsg}`);
     }
   }
 
-  //TODO: Safe movement (avoid lava, falling) ?? May not be necessary.
+  /**
+   * moveToLookAt(x, y, z): Uses GoalLookAtBlock to move the bot to a location where it can see the block
+   * at the provided coordinates.
+   * @param x number
+   * @param y number
+   * @param z number
+   */
+  public async moveToLookAt(x: number, y: number, z: number): Promise<void> {
+    const pos = new Vec3(x, y, z);
+    const goal = new GoalLookAtBlock(pos, this.bot.world);
+    try {
+      await this.bot.pathfinder.goto(goal);
+    } catch (err) {
+      let errMsg: string;
+      if (err instanceof Error) {
+        errMsg = err.message;
+      } else {
+        errMsg = String(err);
+      }
+      this.bot.chat(`Pathfinder error (look at block): ${errMsg}`);
+    }
+  }
 
-  //TODO: evasive movement (if one decides to run away from mobs or other bots, has optional goal in case of trying to get back to village, safety,etc. )
-
-  //TODO: Normal movement: avoid breaking things to reach someone if not necessary.
+  /**
+   * moveToPlaceBlock(x, y, z, options): Uses GoalPlaceBlock to move the bot to a location where it can
+   * place a block on the target block at the provided coordinates.
+   * @param x number
+   * @param y number
+   * @param z number
+   * @param options Optional options object for GoalPlaceBlock such as range, faces, facing, etc.
+   */
+  public async moveToPlaceBlock(
+    x: number,
+    y: number,
+    z: number,
+    options: { range?: number; faces?: number[]; facing?: string; facing3D?: boolean; half?: string; LOS?: boolean} = {}
+  ): Promise<void> {
+    const pos = new Vec3(x, y, z);
+    const goal = new GoalPlaceBlock(pos, this.bot.world, {
+      range: 4.5,                           // Maximum distance from the face; default is 5.
+      faces: [new Vec3(0, 1, 0)],           // Only allow clicking the top face (i.e. placing on top).
+      facing: "down",                    // Require the bot to face down (adjust as needed).
+      //facing3D: false,                    // Only consider horizontal orientation.
+      //half: "top",                        // Click on the top half of the target block.
+      LOS: true                           // Ensure the bot has line of sight to the placement face.
+    });
+    try {
+      await this.bot.pathfinder.goto(goal);
+    } catch (err) {
+      let errMsg: string;
+      if (err instanceof Error) {
+        errMsg = err.message;
+      } else {
+        errMsg = String(err);
+      }
+      this.bot.chat(`Pathfinder error (place block): ${errMsg}`);
+    }
+  }
 }

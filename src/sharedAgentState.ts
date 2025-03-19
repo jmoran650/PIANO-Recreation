@@ -249,7 +249,7 @@ export class SharedAgentState {
    * metadata is any extra JSON-serializable object with details.
    */
   public logMessage(
-    role: "user" | "assistant" | "function" | "system",
+    role: "user" | "assistant" | "function" | "system" | "memory",
     content: string,
     metadata?: any
   ): void {

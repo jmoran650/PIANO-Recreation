@@ -1,6 +1,6 @@
 // src/memory.ts
 import { Vec3 } from "vec3";
-import { SharedAgentState } from "./sharedAgentState";
+import { SharedAgentState } from "../../sharedAgentState";
 
 export class Memory {
   private sharedState: SharedAgentState;
@@ -50,7 +50,7 @@ export class Memory {
   }
 
   private async stmToLtm(name: string, info: string): Promise<void> {
-    // For now, always store in LTM
+    //rewrite this function so that memories can be moved by ID into long term memory
     this.sharedState.longTermMemoryIndex.set(name, info);
   }
 
