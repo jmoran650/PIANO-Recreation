@@ -89,11 +89,10 @@ const ChatLog: React.FC<ChatLogProps> = ({ conversationLog }) => {
   font-family: Arial, sans-serif;
   color: #333;
   box-sizing: border-box;
-  display: flex;
-  flex-direction: column;
-  width: 100%;
-  height: 100%;
-  padding: 16px;
+  /* Removed the fixed height so it can grow or shrink within the resizable sidebar */
+  /* height: 100%; */
+  margin: 0;
+  padding: 0;
 }
 
 .chat-log-container h2 {
@@ -101,7 +100,6 @@ const ChatLog: React.FC<ChatLogProps> = ({ conversationLog }) => {
 }
 
 .chat-log-content {
-  flex: 1;
   overflow-y: auto;
   border: 1px solid #ddd;
   padding: 16px;

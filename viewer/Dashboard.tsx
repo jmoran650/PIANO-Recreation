@@ -296,6 +296,8 @@ const Dashboard: React.FC = () => {
           display: grid;
           grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
           gap: 20px;
+          /* Ensure each tile's height is determined by its own content. */
+          align-items: start;
         }
         .tile {
           background: #fff;
@@ -325,16 +327,21 @@ const Dashboard: React.FC = () => {
           background: #e9ecef;
           padding: 10px;
           border-radius: 5px;
-          overflow-x: auto;
+          overflow: auto; /* let text expand vertically and/or scroll if necessary */
         }
-        /* Floating Chat Log Sidebar on the left */
+        /* Resizable Chat Log Sidebar */
         #chatLogSidebar {
           position: fixed;
           top: 80px;
           left: 20px;
-          width: 250px;
+          /* Start at a reasonable size. */
+          width: 300px;
+          height: 400px;
+          /* Let the user resize it horizontally & vertically. */
           resize: both;
           overflow: auto;
+          min-width: 250px;
+          min-height: 200px;
           display: flex;
           flex-direction: column;
           background-color: #3949ab;
@@ -380,6 +387,9 @@ const Dashboard: React.FC = () => {
           font-size: 0.9rem;
           line-height: 1.4;
           margin: 0;
+        }
+        #toggleButton {
+          margin-top: 10px;
         }
         footer {
           text-align: center;
