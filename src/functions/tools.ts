@@ -1,4 +1,6 @@
+// src/functions/tools.ts
 import { ChatCompletionTool } from "openai/resources/chat/completions";
+
 export const tools: ChatCompletionTool[] = [
   {
     type: "function",
@@ -104,20 +106,55 @@ export const tools: ChatCompletionTool[] = [
       strict: true,
     },
   },
+  // {  //disabling planting and harvesting crops because its not relevant right now
+  //   type: "function",
+  //   function: {
+  //     name: "plantCrop",
+  //     description: "Plants the specified crop on farmland.",
+  //     parameters: {
+  //       type: "object",
+  //       properties: {
+  //         cropName: {
+  //           type: "string",
+  //           description: "Name of the seed or crop (e.g. 'wheat_seeds')",
+  //         },
+  //       },
+  //       required: ["cropName"],
+  //       additionalProperties: false,
+  //     },
+  //     strict: true,
+  //   },
+  // },
+  // {
+  //   type: "function",
+  //   function: {
+  //     name: "harvestCrop",
+  //     description:
+  //       "Harvests the specified crop, optionally specifying count or 'all'.",
+  //     parameters: {
+  //       type: "object",
+  //       properties: {
+  //         cropName: { type: "string" },
+  //         countOrAll: {
+  //           type: "string",
+  //           description: "Either a number as string or 'all'",
+  //         },
+  //       },
+  //       required: ["cropName", "countOrAll"],
+  //       additionalProperties: false,
+  //     },
+  //     strict: true,
+  //   },
+  // },
   {
     type: "function",
     function: {
-      name: "plantCrop",
-      description: "Plants the specified crop on farmland.",
+      name: "placeChest",
+      description: "Places a chest block into the world from inventory.",
       parameters: {
         type: "object",
-        properties: {
-          cropName: {
-            type: "string",
-            description: "Name of the seed or crop (e.g. 'wheat_seeds')",
-          },
-        },
-        required: ["cropName"],
+        properties: {},
+        required: [],
         additionalProperties: false,
       },
       strict: true,
@@ -126,19 +163,65 @@ export const tools: ChatCompletionTool[] = [
   {
     type: "function",
     function: {
-      name: "harvestCrop",
-      description:
-        "Harvests the specified crop, optionally specifying count or 'all'.",
+      name: "storeItemInChest",
+      description: "Stores a specified quantity of an item in an available chest.",
       parameters: {
         type: "object",
         properties: {
-          cropName: { type: "string" },
-          countOrAll: {
+          itemName: {
             type: "string",
-            description: "Either a number as string or 'all'",
+            description: "Name of the item to store (e.g. 'dirt', 'cobblestone')",
+          },
+          count: {
+            type: "number",
+            description: "How many items to store",
           },
         },
-        required: ["cropName", "countOrAll"],
+        required: ["itemName", "count"],
+        additionalProperties: false,
+      },
+      strict: true,
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "retrieveItemFromChest",
+      description: "Retrieves a specified quantity of an item from a nearby chest.",
+      parameters: {
+        type: "object",
+        properties: {
+          itemName: {
+            type: "string",
+            description: "Name of the item to retrieve (e.g. 'stone', 'apple')",
+          },
+          count: {
+            type: "number",
+            description: "How many items to retrieve",
+          },
+        },
+        required: ["itemName", "count"],
+        additionalProperties: false,
+      },
+      strict: true,
+    },
+  },
+  {
+    /* NEW CHAT FUNCTION */
+    type: "function",
+    function: {
+      name: "chat",
+      description:
+        "Make the bot say the provided text out loud in Minecraft. Use this to speak with other players and characters.",
+      parameters: {
+        type: "object",
+        properties: {
+          speech: {
+            type: "string",
+            description: "The text the bot should chat",
+          },
+        },
+        required: ["speech"],
         additionalProperties: false,
       },
       strict: true,

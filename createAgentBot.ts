@@ -6,11 +6,11 @@ import OpenAI from "openai";
 import { Actions } from "./src/actions";
 import { CognitiveController } from "./src/cc";
 import { Memory } from "./src/functions/memory/memory";
+import { Social } from "./src/functions/social/social";
 import { Goals } from "./src/goals";
 import { Navigation } from "./src/navigation";
 import { Observer } from "./src/observer";
 import { SharedAgentState } from "./src/sharedAgentState";
-import { Social } from "./src/social";
 // NEW IMPORTS FOR FUNCTIONCALLER:
 import { FunctionCaller } from "./src/functions/functionCalling";
 
@@ -83,7 +83,12 @@ export async function createAgentBot(options: BotOptions): Promise<AgentBot> {
     apiKey: process.env.OPENAI_API_KEY,
   });
 
-  const functionCaller = new FunctionCaller(actions, sharedState, openai, memory);
+  const functionCaller = new FunctionCaller(
+    actions,
+    sharedState,
+    openai,
+    memory
+  );
 
   bot.chat("Hello, I've been created by createAgentBot!");
 

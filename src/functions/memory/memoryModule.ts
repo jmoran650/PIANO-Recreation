@@ -27,22 +27,22 @@ export async function updateMemoryViaLLM(
   // Gather a recent excerpt from the conversation log.
   const recentConversation = sharedState.conversationLog.slice(-10).join("\n");
   const memoryPrompt = `
-You are a minecraft Agent's memory center with biological-like memory formation. Always speak in the first person.
+You are a minecraft Agent's memory center with biological-like memory formation. Always speak in the first person, because the information you see is happening to you.
 Analyze the following recent events and conversation excerpt and decide what key details,
-actions, or context you should remember for future tasks. Things that may be useful for you to remember in the short term should be sent to the short term Memory, and likewise for Long term memories.
-Return a concise summary containing only the most important information.
-Conversation excerpt:
+actions, or context to store as memories. Things that may be useful for you to remember in the short term should be sent to the short term Memory.
+Use function calls to store relevant memories. Try not to store stats, instead store new things you have learned about the world you are in.
+Here is the information:
 ${recentConversation}
   `.trim();
 
   // Begin with a user message containing the memory prompt.
 
   const messages: ChatCompletionMessageParam[] = [
-    { role: "user", content: memoryPrompt },
+    { role: "developer", content: memoryPrompt },
   ];
 
   // Allow multiple rounds for function calls, up to a loop limit.
-  const loopLimit = 10;
+  const loopLimit = 5;
   let memoryFinalResponse = "";
 
   for (let loopCount = 0; loopCount < loopLimit; loopCount++) {

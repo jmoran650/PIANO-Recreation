@@ -51,7 +51,7 @@ async mine(goalBlock: string, desiredCount: number): Promise<void> {
     });
 
     if (blockPositions.length === 0) {
-      this.bot.chat(`No ${goalBlock} found nearby.`);
+      console.log(`No ${goalBlock} found nearby.`);
       await this.sleep(100);
       break;
     }
@@ -84,9 +84,9 @@ async mine(goalBlock: string, desiredCount: number): Promise<void> {
     try {
       await this.bot.dig(block);
       count++;
-      this.bot.chat(`Mined ${count} of ${desiredCount} ${goalBlock}.`);
+      console.log(`Mined ${count} of ${desiredCount} ${goalBlock}.`);
     } catch (err) {
-      this.bot.chat(`Error mining block: ${err}`);
+      console.log(`Error mining block: ${err}`);
     }
 
     await this.sleep(200);
@@ -104,7 +104,7 @@ async mine(goalBlock: string, desiredCount: number): Promise<void> {
       await this.collectDroppedItems(closestBlockPos, goalBlock);
     }
   }
-  this.bot.chat(`Finished mining after mining ${count} blocks.`);
+  console.log(`Finished mining after mining ${count} blocks.`);
 }
 
 /**
@@ -112,12 +112,12 @@ async mine(goalBlock: string, desiredCount: number): Promise<void> {
  */
 async collectDroppedItems(origin: Vec3, goalBlock: string): Promise<void> {
   const collectionRadius = 20; // radius around the origin to search for drops
-  this.bot.chat('collectDroppedItems called.')
+  console.log('collectDroppedItems called.')
   // Look up the expected drop from the mapping.
   // Cast blockDropMapping to a record type to fix the index error.
   const expectedDrop = (blockDropMapping as Record<string, string>)[goalBlock];
   if (!expectedDrop) {
-    this.bot.chat(`No expected drop mapping for ${goalBlock}. Skipping drop collection.`);
+    console.log(`No expected drop mapping for ${goalBlock}. Skipping drop collection.`);
     return;
   }
 
@@ -130,19 +130,19 @@ async collectDroppedItems(origin: Vec3, goalBlock: string): Promise<void> {
   });
 
   if (drops.length === 0) {
-    this.bot.chat(`No valid dropped ${expectedDrop} items found near the vein.`);
+    console.log(`No valid dropped ${expectedDrop} items found near the vein.`);
     return;
   }
 
-  this.bot.chat(`Collecting ${drops.length} dropped ${expectedDrop} item(s)...`);
+  console.log(`Collecting ${drops.length} dropped ${expectedDrop} item(s)...`);
   for (const drop of drops) {
     try {
       // Navigate to the drop's position to pick it up.
       await this.navigation.move(drop.position.x, drop.position.y, drop.position.z);
-      this.bot.chat(`Collected drop at ${drop.position}`);
+      console.log(`Collected drop at ${drop.position}`);
       await this.sleep(100); // slight delay between collecting drops
     } catch (err) {
-      this.bot.chat(`Error collecting drop: ${err}`);
+      console.log(`Error collecting drop: ${err}`);
     }
   }
 }
@@ -157,11 +157,11 @@ async collectDroppedItems(origin: Vec3, goalBlock: string): Promise<void> {
     // 1) Look up item data
     const itemData = this.mcData.itemsByName[goalItem];
     if (!itemData) {
-      this.bot.chat(`No item data found for "${goalItem}".`);
+      console.log(`No item data found for "${goalItem}".`);
       throw new Error(`Item data not found: ${goalItem}`);
     }
     const itemId = itemData.id;
-    this.bot.chat(`The item.id for "${goalItem}" is: ${itemId}`);
+    console.log(`The item.id for "${goalItem}" is: ${itemId}`);
 
     // 2) If not crafting table or planks, ensure we have a table available
     let tableBlock: Block | null = null;
@@ -170,14 +170,14 @@ async collectDroppedItems(origin: Vec3, goalBlock: string): Promise<void> {
       await this.observer.getVisibleBlockTypes(); // refresh environment
       const nearTable = this.findNearbyPlacedTable(40); // e.g. 40-block radius
       if (nearTable) {
-        this.bot.chat("Using an existing placed crafting table near me.");
+        console.log("Using an existing placed crafting table near me.");
         tableBlock = nearTable;
       } else {
         // (b) If not found, place or craft one
         tableBlock = await this.findOrPlaceCraftingTable();
         if (!tableBlock) {
           // Only throw if we truly cannot get a table
-          this.bot.chat("Could not find/place a crafting table.");
+          console.log("Could not find/place a crafting table.");
           throw new Error("Failed to acquire crafting table.");
         }
       }
@@ -186,14 +186,14 @@ async collectDroppedItems(origin: Vec3, goalBlock: string): Promise<void> {
     // 3) Get all possible recipes
     const possibleRecipesAll = this.bot.recipesAll(itemId, null, tableBlock);
     if (!possibleRecipesAll || possibleRecipesAll.length === 0) {
-      this.bot.chat(`No recipe found for "${goalItem}".`);
+      console.log(`No recipe found for "${goalItem}".`);
       throw new Error(`No recipe for ${goalItem}`);
     }
 
     // 4) Check which recipes we can actually craft with current inventory
     const possibleRecipesFor = this.bot.recipesFor(itemId, null, 1, tableBlock);
     if (!possibleRecipesFor || possibleRecipesFor.length === 0) {
-      this.bot.chat(`Missing ingredients to craft "${goalItem}".`);
+      console.log(`Missing ingredients to craft "${goalItem}".`);
       throw new Error(`Don't have enough/correct ingredients to craft ${goalItem}`);
     }
 
@@ -206,17 +206,17 @@ async collectDroppedItems(origin: Vec3, goalBlock: string): Promise<void> {
           1,
           goalItem !== "crafting_table" ? (tableBlock ?? undefined) : undefined
         );
-        this.bot.chat(`Successfully crafted "${goalItem}".`);
+        console.log(`Successfully crafted "${goalItem}".`);
         success = true;
         return;
       } catch (err) {
-        this.bot.chat(`Failed crafting "${goalItem}" with a recipe: ${err}`);
+        console.log(`Failed crafting "${goalItem}" with a recipe: ${err}`);
       }
     }
 
     // If we never succeed, throw a final error
     if (!success) {
-      this.bot.chat(`Could not craft "${goalItem}" with any available recipe.`);
+      console.log(`Could not craft "${goalItem}" with any available recipe.`);
       throw new Error(`Failed to craft: ${goalItem}`);
     }
   }
@@ -277,16 +277,16 @@ async collectDroppedItems(origin: Vec3, goalBlock: string): Promise<void> {
       this.mcData.itemsByName["crafting_table"].id, null, false
     );
     if (!tableItemInInventory) {
-      this.bot.chat("No crafting table in inventory; attempting to craft one...");
+      console.log("No crafting table in inventory; attempting to craft one...");
       try {
         await this.craft("crafting_table");
       } catch (err) {
-        this.bot.chat(`Failed to craft a crafting_table: ${err}`);
+        console.log(`Failed to craft a crafting_table: ${err}`);
         const stillNoTable = this.bot.inventory.findInventoryItem(
           this.mcData.itemsByName["crafting_table"].id, null, false
         );
         if (!stillNoTable) {
-          this.bot.chat("Still no crafting table after trying to craft.");
+          console.log("Still no crafting table after trying to craft.");
           return null;
         }
       }
@@ -337,13 +337,13 @@ async collectDroppedItems(origin: Vec3, goalBlock: string): Promise<void> {
       false
     );
     if (!table) {
-      this.bot.chat("I don't have a crafting table in my inventory!");
+      console.log("I don't have a crafting table in my inventory!");
       return;
     }
 
     const safePos = this.findSafePlacement();
     if (!safePos) {
-      this.bot.chat("No valid spot to place the crafting table!");
+      console.log("No valid spot to place the crafting table!");
       return;
     }
 
@@ -353,21 +353,21 @@ async collectDroppedItems(origin: Vec3, goalBlock: string): Promise<void> {
         await this.bot.lookAt(safePos.offset(0.5, 0.5, 0.5));
         const referenceBlock = this.bot.blockAt(safePos.offset(0, -1, 0));
         if (!referenceBlock) {
-          this.bot.chat("No block beneath to place the crafting table on.");
+          console.log("No block beneath to place the crafting table on.");
           return;
         }
         await this.bot.equip(table, "hand");
         await this.bot.placeBlock(referenceBlock, new Vec3(0, 1, 0));
-        this.bot.chat("Crafting table placed!");
+        console.log("Crafting table placed!");
         const placedPos = referenceBlock.position.offset(0, 1, 0);
         this.sharedState.addCraftingTablePosition(placedPos);
         return;
       } catch (err) {
-        this.bot.chat(`Attempt ${attempt} to place crafting table failed: ${err}`);
+        console.log(`Attempt ${attempt} to place crafting table failed: ${err}`);
         if (attempt < maxRetries) {
           await this.sleep(1000);
         } else {
-          this.bot.chat("All attempts to place crafting table failed.");
+          console.log("All attempts to place crafting table failed.");
         }
       }
     }
@@ -380,13 +380,13 @@ async collectDroppedItems(origin: Vec3, goalBlock: string): Promise<void> {
       .items()
       .find((item) => item.name === blockType);
     if (!blockItem) {
-      this.bot.chat(`${blockType} not in inventory; trying to craft...`);
+      console.log(`${blockType} not in inventory; trying to craft...`);
       await this.craft(blockType);
       blockItem = this.bot.inventory
         .items()
         .find((item) => item.name === blockType);
       if (!blockItem) {
-        this.bot.chat(`Unable to obtain ${blockType}.`);
+        console.log(`Unable to obtain ${blockType}.`);
         return;
       }
     }
@@ -394,23 +394,23 @@ async collectDroppedItems(origin: Vec3, goalBlock: string): Promise<void> {
     try {
       await this.bot.equip(blockItem, "hand");
     } catch (err) {
-      this.bot.chat(`Failed to equip ${blockType}: ${err}`);
+      console.log(`Failed to equip ${blockType}: ${err}`);
       return;
     }
 
     const referencePos = this.bot.entity.position.offset(2, 0, 0);
     const maybeRefBlock = this.bot.blockAt(referencePos);
     if (!maybeRefBlock) {
-      this.bot.chat("No reference block below me to place onto.");
+      console.log("No reference block below me to place onto.");
       return;
     }
     const refBlock: Block = maybeRefBlock;
 
     try {
       await this.bot.placeBlock(refBlock, new Vec3(0, 1, 0));
-      this.bot.chat(`Placed ${blockType}.`);
+      console.log(`Placed ${blockType}.`);
     } catch (err) {
-      this.bot.chat(`Error placing ${blockType}: ${err}`);
+      console.log(`Error placing ${blockType}: ${err}`);
     }
   }
 
@@ -421,7 +421,7 @@ async collectDroppedItems(origin: Vec3, goalBlock: string): Promise<void> {
     if (!pvp) {
       const errorMsg =
         "Error: mineflayer-pvp plugin not loaded. Attack action disabled.";
-      this.bot.chat(errorMsg);
+      console.log(errorMsg);
       throw new Error(errorMsg);
     }
 
@@ -430,7 +430,7 @@ async collectDroppedItems(origin: Vec3, goalBlock: string): Promise<void> {
         entity.name && entity.name.toLowerCase() === mobType.toLowerCase()
     );
     if (mobs.length === 0) {
-      this.bot.chat(`No ${mobType} found nearby to attack.`);
+      console.log(`No ${mobType} found nearby to attack.`);
       return;
     }
 
@@ -441,24 +441,24 @@ async collectDroppedItems(origin: Vec3, goalBlock: string): Promise<void> {
         : nearest;
     }, mobs[0]);
 
-    this.bot.chat(`Attacking the nearest ${mobType}...`);
+    console.log(`Attacking the nearest ${mobType}...`);
     try {
       if (typeof pvp.attack === "function") {
         pvp.attack(target);
         this.bot.once("stoppedAttacking", () => {
           if (this.bot.entities[target.id]) {
-            this.bot.chat("Target still alive, attacking again!");
+            console.log("Target still alive, attacking again!");
             this.attack(mobType);
           } else {
-            this.bot.chat("Target has been killed!");
+            console.log("Target has been killed!");
           }
         });
       } else {
-        this.bot.chat("pvp.attack is not a function. Plugin mismatch?");
+        console.log("pvp.attack is not a function. Plugin mismatch?");
       }
     } catch (err: unknown) {
       const errMsg: string = err instanceof Error ? err.message : String(err);
-      this.bot.chat(`Error while attacking ${mobType}: ${errMsg}`);
+      console.log(`Error while attacking ${mobType}: ${errMsg}`);
     }
   }
 
@@ -472,20 +472,20 @@ async collectDroppedItems(origin: Vec3, goalBlock: string): Promise<void> {
       count: 1,
     });
     if (positions.length === 0) {
-      this.bot.chat("No crafting table nearby.");
+      console.log("No crafting table nearby.");
       return;
     }
     const pos = positions[0];
     const block = this.bot.blockAt(pos);
     if (!block) {
-      this.bot.chat("Crafting table block not found.");
+      console.log("Crafting table block not found.");
       return;
     }
     try {
       await this.bot.activateBlock(block);
-      this.bot.chat("Used the crafting table.");
+      console.log("Used the crafting table.");
     } catch (err) {
-      this.bot.chat(
+      console.log(
         "Failed to use crafting table: " +
           (err instanceof Error ? err.message : err)
       );
@@ -497,41 +497,41 @@ async collectDroppedItems(origin: Vec3, goalBlock: string): Promise<void> {
 
     let furnaceBlock = this.findNearbyFurnace(3);
     if (!furnaceBlock) {
-      this.bot.chat("No furnace nearby. Attempting to place one...");
+      console.log("No furnace nearby. Attempting to place one...");
       await this.placeFurnace();
       furnaceBlock = this.findNearbyFurnace(3);
       if (!furnaceBlock) {
-        this.bot.chat("Unable to place a furnace. Aborting smelt.");
+        console.log("Unable to place a furnace. Aborting smelt.");
         return;
       }
     }
 
     try {
       await this.bot.activateBlock(furnaceBlock);
-      this.bot.chat("Opened furnace...");
+      console.log("Opened furnace...");
     } catch (err) {
-      this.bot.chat("Failed to open furnace: " + err);
+      console.log("Failed to open furnace: " + err);
       return;
     }
 
     if (!(await this.addFuelToFurnace())) {
-      this.bot.chat("Failed to add fuel to furnace. Aborting smelt.");
+      console.log("Failed to add fuel to furnace. Aborting smelt.");
       return;
     }
 
     const neededCount = this.moveItemToFurnaceInput(inputItemName, quantity);
     if (neededCount === 0) {
-      this.bot.chat(`No "${inputItemName}" found to smelt!`);
+      console.log(`No "${inputItemName}" found to smelt!`);
       return;
     } else {
-      this.bot.chat(`Smelting up to ${neededCount} ${inputItemName}...`);
+      console.log(`Smelting up to ${neededCount} ${inputItemName}...`);
     }
 
     await this.sleep(5000);
     if (this.bot.currentWindow) {
       this.bot.closeWindow(this.bot.currentWindow);
     }
-    this.bot.chat(
+    console.log(
       `Smelting process done or in progress. Check furnace/inventory!`
     );
   }
@@ -541,13 +541,13 @@ async collectDroppedItems(origin: Vec3, goalBlock: string): Promise<void> {
       .items()
       .find((item) => item.name === "furnace");
     if (!furnaceItem) {
-      this.bot.chat("No furnace in inventory; trying to craft...");
+      console.log("No furnace in inventory; trying to craft...");
       await this.craft("furnace");
       furnaceItem = this.bot.inventory
         .items()
         .find((item) => item.name === "furnace");
       if (!furnaceItem) {
-        this.bot.chat("Unable to craft furnace!");
+        console.log("Unable to craft furnace!");
         return;
       }
     }
@@ -555,21 +555,21 @@ async collectDroppedItems(origin: Vec3, goalBlock: string): Promise<void> {
     try {
       await this.bot.equip(furnaceItem, "hand");
     } catch (err) {
-      this.bot.chat(`Failed to equip furnace: ${err}`);
+      console.log(`Failed to equip furnace: ${err}`);
       return;
     }
 
     const referencePos = this.bot.entity.position.offset(1, 0, 0);
     const refBlock = this.bot.blockAt(referencePos);
     if (!refBlock) {
-      this.bot.chat("No block next to me to place the furnace onto.");
+      console.log("No block next to me to place the furnace onto.");
       return;
     }
     try {
       await this.bot.placeBlock(refBlock, new Vec3(0, 1, 0));
-      this.bot.chat("Furnace placed.");
+      console.log("Furnace placed.");
     } catch (err) {
-      this.bot.chat(`Error placing furnace: ${err}`);
+      console.log(`Error placing furnace: ${err}`);
     }
   }
 
@@ -588,7 +588,7 @@ async collectDroppedItems(origin: Vec3, goalBlock: string): Promise<void> {
   private async addFuelToFurnace(): Promise<boolean> {
     const window = this.bot.currentWindow;
     if (!window) {
-      this.bot.chat("No furnace window open to add fuel.");
+      console.log("No furnace window open to add fuel.");
       return false;
     }
 
@@ -607,17 +607,17 @@ async collectDroppedItems(origin: Vec3, goalBlock: string): Promise<void> {
       if (fuelItem) {
         try {
           await this.bot.moveSlotItem(fuelItem.slot, 1);
-          this.bot.chat(`Added ${fuelItem.count} of ${fuelItem.name} as fuel.`);
+          console.log(`Added ${fuelItem.count} of ${fuelItem.name} as fuel.`);
           return true;
         } catch (err) {
-          this.bot.chat(
+          console.log(
             `Failed to move fuel item ${fuelItem.name} into furnace: ${err}`
           );
           return false;
         }
       }
     }
-    this.bot.chat("No valid fuel found in inventory.");
+    console.log("No valid fuel found in inventory.");
     return false;
   }
 
@@ -637,7 +637,7 @@ async collectDroppedItems(origin: Vec3, goalBlock: string): Promise<void> {
         remaining -= moveCount;
         if (remaining <= 0) break;
       } catch (err) {
-        this.bot.chat(
+        console.log(
           `Error transferring item "${item.name}" to furnace input: ${err}`
         );
       }
@@ -646,33 +646,33 @@ async collectDroppedItems(origin: Vec3, goalBlock: string): Promise<void> {
   }
 
   async plantCrop(cropName: string): Promise<void> {
-    this.bot.chat(`Attempting to plant ${cropName}...`);
+    console.log(`Attempting to plant ${cropName}...`);
     const seedItem = this.bot.inventory
       .items()
       .find((it) => it.name === cropName);
     if (!seedItem) {
-      this.bot.chat(`No seeds (${cropName}) found in inventory.`);
+      console.log(`No seeds (${cropName}) found in inventory.`);
       return;
     }
 
     const referencePos = this.bot.entity.position.offset(0, -1, 1);
     const blockBeneath = this.bot.blockAt(referencePos);
     if (!blockBeneath || blockBeneath.name !== "farmland") {
-      this.bot.chat("No farmland in front of me to plant seeds.");
+      console.log("No farmland in front of me to plant seeds.");
       return;
     }
 
     try {
       await this.bot.equip(seedItem, "hand");
       await this.bot.placeBlock(blockBeneath, new Vec3(0, 1, 0));
-      this.bot.chat(`${cropName} planted successfully!`);
+      console.log(`${cropName} planted successfully!`);
     } catch (err) {
-      this.bot.chat(`Error planting crop: ${err}`);
+      console.log(`Error planting crop: ${err}`);
     }
   }
 
   async harvestCrop(cropName: string): Promise<void> {
-    this.bot.chat(`Looking for fully grown ${cropName} to harvest...`);
+    console.log(`Looking for fully grown ${cropName} to harvest...`);
     const blockPositions = this.bot.findBlocks({
       point: this.bot.entity.position,
       matching: (block) => block && block.name.includes(cropName),
@@ -680,13 +680,13 @@ async collectDroppedItems(origin: Vec3, goalBlock: string): Promise<void> {
       count: 1,
     });
     if (blockPositions.length === 0) {
-      this.bot.chat(`No ${cropName} found nearby to harvest.`);
+      console.log(`No ${cropName} found nearby to harvest.`);
       return;
     }
     const pos = blockPositions[0];
     const block = this.bot.blockAt(pos);
     if (!block) {
-      this.bot.chat("Could not resolve crop block at found position.");
+      console.log("Could not resolve crop block at found position.");
       return;
     }
 
@@ -694,9 +694,9 @@ async collectDroppedItems(origin: Vec3, goalBlock: string): Promise<void> {
     await this.navigation.move(pos.x, pos.y, pos.z);
     try {
       await this.bot.dig(block);
-      this.bot.chat(`${cropName} harvested!`);
+      console.log(`${cropName} harvested!`);
     } catch (err) {
-      this.bot.chat(`Error harvesting crop: ${err}`);
+      console.log(`Error harvesting crop: ${err}`);
     }
   }
 
@@ -735,10 +735,10 @@ async collectDroppedItems(origin: Vec3, goalBlock: string): Promise<void> {
       if (toolItem) {
         try {
           await this.bot.equip(toolItem, "hand");
-          this.bot.chat(`Equipped ${toolItem.name} for ${blockName}`);
+          console.log(`Equipped ${toolItem.name} for ${blockName}`);
           return;
         } catch (err) {
-          this.bot.chat(`Failed to equip tool ${toolItem.name}: ${err}`);
+          console.log(`Failed to equip tool ${toolItem.name}: ${err}`);
         }
       }
     }
@@ -748,7 +748,7 @@ async collectDroppedItems(origin: Vec3, goalBlock: string): Promise<void> {
    * Basic inventory sort (example approach).
    */
   async sortInventory(): Promise<void> {
-    this.bot.chat("Sorting inventory...");
+    console.log("Sorting inventory...");
     const items = this.bot.inventory.items();
     const sorted = [...items].sort((a, b) => {
       if (a.name < b.name) return -1;
@@ -769,11 +769,11 @@ async collectDroppedItems(origin: Vec3, goalBlock: string): Promise<void> {
         try {
           await this.bot.moveSlotItem(itemSlot, targetSlot);
         } catch (err) {
-          this.bot.chat(`Error while sorting item ${sortedItem.name}: ${err}`);
+          console.log(`Error while sorting item ${sortedItem.name}: ${err}`);
         }
       }
     }
-    this.bot.chat("Finished sorting inventory.");
+    console.log("Finished sorting inventory.");
   }
 
   async placeChest(): Promise<void> {
@@ -783,13 +783,13 @@ async collectDroppedItems(origin: Vec3, goalBlock: string): Promise<void> {
       .items()
       .find((it) => it.name.includes("chest"));
     if (!chestItem) {
-      this.bot.chat("No chest in inventory; trying to craft a chest...");
+      console.log("No chest in inventory; trying to craft a chest...");
       await this.craft("chest");
       chestItem = this.bot.inventory
         .items()
         .find((it) => it.name.includes("chest"));
       if (!chestItem) {
-        this.bot.chat("Unable to obtain a chest.");
+        console.log("Unable to obtain a chest.");
         return;
       }
     }
@@ -797,29 +797,29 @@ async collectDroppedItems(origin: Vec3, goalBlock: string): Promise<void> {
     try {
       await this.bot.equip(chestItem, "hand");
     } catch (err) {
-      this.bot.chat(`Failed to equip chest: ${err}`);
+      console.log(`Failed to equip chest: ${err}`);
       return;
     }
 
     const referencePos = this.bot.entity.position.offset(1, 0, 0);
     const refBlock = this.bot.blockAt(referencePos);
     if (!refBlock) {
-      this.bot.chat("No reference block next to me to place the chest onto.");
+      console.log("No reference block next to me to place the chest onto.");
       return;
     }
 
     try {
       await this.bot.placeBlock(refBlock, new Vec3(0, 1, 0));
-      this.bot.chat("Chest placed.");
+      console.log("Chest placed.");
     } catch (err) {
-      this.bot.chat(`Error placing chest: ${err}`);
+      console.log(`Error placing chest: ${err}`);
     }
   }
 
   async storeItemInChest(itemName: string, count: number): Promise<void> {
     const chestBlock = this.findNearbyChest(3);
     if (!chestBlock) {
-      this.bot.chat("No chest found nearby to store items.");
+      console.log("No chest found nearby to store items.");
       return;
     }
 
@@ -829,16 +829,16 @@ async collectDroppedItems(origin: Vec3, goalBlock: string): Promise<void> {
         .items()
         .find((it) => it.name.includes(itemName) && it.count > 0);
       if (!toStore) {
-        this.bot.chat(`I have no "${itemName}" to store.`);
+        console.log(`I have no "${itemName}" to store.`);
         chest.close();
         return;
       }
       const moveCount = Math.min(toStore.count, count);
 
       await chest.deposit(toStore.type, null, moveCount);
-      this.bot.chat(`Stored ${moveCount} of ${itemName} into the chest.`);
+      console.log(`Stored ${moveCount} of ${itemName} into the chest.`);
     } catch (err) {
-      this.bot.chat(`Error storing item: ${err}`);
+      console.log(`Error storing item: ${err}`);
     }
     chest.close();
   }
@@ -846,7 +846,7 @@ async collectDroppedItems(origin: Vec3, goalBlock: string): Promise<void> {
   async retrieveItemFromChest(itemName: string, count: number): Promise<void> {
     const chestBlock = this.findNearbyChest(3);
     if (!chestBlock) {
-      this.bot.chat("No chest found nearby to retrieve items.");
+      console.log("No chest found nearby to retrieve items.");
       return;
     }
 
@@ -856,16 +856,16 @@ async collectDroppedItems(origin: Vec3, goalBlock: string): Promise<void> {
         .containerItems()
         .find((it) => it.name.includes(itemName));
       if (!matchingItem) {
-        this.bot.chat(`Chest does not contain "${itemName}".`);
+        console.log(`Chest does not contain "${itemName}".`);
         chest.close();
         return;
       }
       const moveCount = Math.min(matchingItem.count, count);
 
       await chest.withdraw(matchingItem.type, null, moveCount);
-      this.bot.chat(`Withdrew ${moveCount} of ${itemName} from the chest.`);
+      console.log(`Withdrew ${moveCount} of ${itemName} from the chest.`);
     } catch (err) {
-      this.bot.chat(`Error retrieving item: ${err}`);
+      console.log(`Error retrieving item: ${err}`);
     }
     chest.close();
   }

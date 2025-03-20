@@ -19,7 +19,6 @@ interface SharedState {
   othersFeelingsTowardsSelf?: any;
   conversationLog?: string[];
   llmMetrics?: any;
-  // New fields:
   inventory?: any;
   botHealth?: number;
   botHunger?: number;

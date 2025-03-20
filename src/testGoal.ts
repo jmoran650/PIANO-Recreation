@@ -5,7 +5,7 @@ export async function handleTestGoal(bot: any, functionCaller: any, parts: strin
       bot.chat("Usage: test goal: <goal description>");
       return;
     }
-    bot.chat(`Understood. Let me see how to achieve the goal: "${goalItem}" using the LLM...`);
+    bot.chat(`Goal Accepted`);
   
     // Build a user prompt that includes the bot's current SharedAgentState:
     const userPrompt = `
@@ -23,5 +23,5 @@ export async function handleTestGoal(bot: any, functionCaller: any, parts: strin
     ]);
   
     // Relay the final response in chat.
-    bot.chat(`AI says: ${finalResponse}`);
+    bot.chat(`${finalResponse}`);
   }
