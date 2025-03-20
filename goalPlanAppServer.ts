@@ -8,7 +8,7 @@ import fs from "fs"; // For writing conversation logs to file
 import { main } from "./index";
 import { SharedAgentState } from "./src/sharedAgentState";
 import { getLLMMetrics, toggleLLMEnabled } from "./utils/llmWrapper";
-import { buildGoalTree, StepNode } from "./src/goalPlanner.deprecated";
+import { buildGoalTree, StepNode } from "./src/goalPlanner";
 
 // Helper functions to serialize data
 function mapToObj(map: Map<string, string>): Record<string, string> {

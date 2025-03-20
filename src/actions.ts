@@ -34,119 +34,130 @@ export class Actions {
     this.observer = observer;
   }
 
-/**
- * Mines a specified block type until the desired number of blocks has been mined.
- */
-async mine(goalBlock: string, desiredCount: number): Promise<void> {
-  this.bot.waitForChunksToLoad();
-  this.sharedState.addPendingAction(`Mine ${goalBlock} x${desiredCount}`);
-  await this.equipBestToolForBlock(goalBlock);
-  
-  let count = 0;
-  while (count < desiredCount) {
-    const blockPositions = this.bot.findBlocks({
-      point: this.bot.entity.position,
-      matching: (block) => block && block.name === goalBlock,
-      maxDistance: 500,
-    });
+  /**
+   * Mines a specified block type until the desired number of blocks has been mined.
+   */
+  async mine(goalBlock: string, desiredCount: number): Promise<void> {
+    this.bot.waitForChunksToLoad();
+    this.sharedState.addPendingAction(`Mine ${goalBlock} x${desiredCount}`);
+    await this.equipBestToolForBlock(goalBlock);
 
-    if (blockPositions.length === 0) {
-      console.log(`No ${goalBlock} found nearby.`);
-      await this.sleep(100);
-      break;
-    }
+    let count = 0;
+    while (count < desiredCount) {
+      const blockPositions = this.bot.findBlocks({
+        point: this.bot.entity.position,
+        matching: (block) => block && block.name === goalBlock,
+        maxDistance: 500,
+      });
 
-    const botPos = this.bot.entity.position;
-    let closestBlockPos = blockPositions[0];
-    let closestDistance = botPos.distanceTo(closestBlockPos);
+      if (blockPositions.length === 0) {
+        console.log(`No ${goalBlock} found nearby.`);
+        await this.sleep(100);
+        break;
+      }
 
-    // Find the closest block position
-    for (let i = 1; i < blockPositions.length; i++) {
-      const currentDistance = botPos.distanceTo(blockPositions[i]);
-      if (currentDistance < closestDistance) {
-        closestDistance = currentDistance;
-        closestBlockPos = blockPositions[i];
+      const botPos = this.bot.entity.position;
+      let closestBlockPos = blockPositions[0];
+      let closestDistance = botPos.distanceTo(closestBlockPos);
+
+      // Find the closest block position
+      for (let i = 1; i < blockPositions.length; i++) {
+        const currentDistance = botPos.distanceTo(blockPositions[i]);
+        if (currentDistance < closestDistance) {
+          closestDistance = currentDistance;
+          closestBlockPos = blockPositions[i];
+        }
+      }
+
+      const block = this.bot.blockAt(closestBlockPos);
+      if (!block) continue;
+
+      // Equip the best tool for mining this block
+
+      await this.navigation.moveToLookAt(
+        closestBlockPos.x,
+        closestBlockPos.y,
+        closestBlockPos.z
+      );
+
+      try {
+        await this.bot.dig(block);
+        count++;
+        console.log(`Mined ${count} of ${desiredCount} ${goalBlock}.`);
+      } catch (err) {
+        console.log(`Error mining block: ${err}`);
+      }
+
+      await this.sleep(200);
+
+      // Check if there are any more blocks of this type in the immediate vicinity (defining the vein)
+      const nearbyBlockPositions = this.bot.findBlocks({
+        point: closestBlockPos,
+        matching: (b) => b && b.name === goalBlock,
+        maxDistance: 8, // adjust this radius as needed for your definition of a "vein"
+      });
+
+      // If no more blocks are nearby, assume the vein is finished.
+      if (nearbyBlockPositions.length === 0) {
+        await this.sleep(200);
+        await this.collectDroppedItems(closestBlockPos, goalBlock);
       }
     }
+    console.log(`Finished mining after mining ${count} blocks.`);
+  }
 
-    const block = this.bot.blockAt(closestBlockPos);
-    if (!block) continue;
-
-    // Equip the best tool for mining this block
-    
-
-    await this.navigation.moveToLookAt(
-      closestBlockPos.x,
-      closestBlockPos.y,
-      closestBlockPos.z
-    );
-
-    try {
-      await this.bot.dig(block);
-      count++;
-      console.log(`Mined ${count} of ${desiredCount} ${goalBlock}.`);
-    } catch (err) {
-      console.log(`Error mining block: ${err}`);
+  /**
+   * Collect dropped items near the provided origin that match the expected drop for the mined block.
+   */
+  async collectDroppedItems(origin: Vec3, goalBlock: string): Promise<void> {
+    const collectionRadius = 20; // radius around the origin to search for drops
+    console.log("collectDroppedItems called.");
+    // Look up the expected drop from the mapping.
+    // Cast blockDropMapping to a record type to fix the index error.
+    const expectedDrop = (blockDropMapping as Record<string, string>)[
+      goalBlock
+    ];
+    if (!expectedDrop) {
+      console.log(
+        `No expected drop mapping for ${goalBlock}. Skipping drop collection.`
+      );
+      return;
     }
 
-    await this.sleep(200);
-
-    // Check if there are any more blocks of this type in the immediate vicinity (defining the vein)
-    const nearbyBlockPositions = this.bot.findBlocks({
-      point: closestBlockPos,
-      matching: (b) => b && b.name === goalBlock,
-      maxDistance: 8, // adjust this radius as needed for your definition of a "vein"
+    // Filter entities to find dropped items matching the expected drop.
+    const drops = Object.values(this.bot.entities).filter((entity: any) => {
+      if (entity.name !== "item") return false;
+      if (entity.position.distanceTo(origin) > collectionRadius) return false;
+      if (!entity.getDroppedItem || typeof entity.getDroppedItem !== "function")
+        return false;
+      return entity.getDroppedItem().name === expectedDrop;
     });
 
-    // If no more blocks are nearby, assume the vein is finished.
-    if (nearbyBlockPositions.length === 0) {
-      await this.sleep(200);
-      await this.collectDroppedItems(closestBlockPos, goalBlock);
+    if (drops.length === 0) {
+      console.log(
+        `No valid dropped ${expectedDrop} items found near the vein.`
+      );
+      return;
+    }
+
+    console.log(
+      `Collecting ${drops.length} dropped ${expectedDrop} item(s)...`
+    );
+    for (const drop of drops) {
+      try {
+        // Navigate to the drop's position to pick it up.
+        await this.navigation.move(
+          drop.position.x,
+          drop.position.y,
+          drop.position.z
+        );
+        console.log(`Collected drop at ${drop.position}`);
+        await this.sleep(100); // slight delay between collecting drops
+      } catch (err) {
+        console.log(`Error collecting drop: ${err}`);
+      }
     }
   }
-  console.log(`Finished mining after mining ${count} blocks.`);
-}
-
-/**
- * Collect dropped items near the provided origin that match the expected drop for the mined block.
- */
-async collectDroppedItems(origin: Vec3, goalBlock: string): Promise<void> {
-  const collectionRadius = 20; // radius around the origin to search for drops
-  console.log('collectDroppedItems called.')
-  // Look up the expected drop from the mapping.
-  // Cast blockDropMapping to a record type to fix the index error.
-  const expectedDrop = (blockDropMapping as Record<string, string>)[goalBlock];
-  if (!expectedDrop) {
-    console.log(`No expected drop mapping for ${goalBlock}. Skipping drop collection.`);
-    return;
-  }
-
-  // Filter entities to find dropped items matching the expected drop.
-  const drops = Object.values(this.bot.entities).filter((entity: any) => {
-    if (entity.name !== 'item') return false;
-    if (entity.position.distanceTo(origin) > collectionRadius) return false;
-    if (!entity.getDroppedItem || typeof entity.getDroppedItem !== 'function') return false;
-    return entity.getDroppedItem().name === expectedDrop;
-  });
-
-  if (drops.length === 0) {
-    console.log(`No valid dropped ${expectedDrop} items found near the vein.`);
-    return;
-  }
-
-  console.log(`Collecting ${drops.length} dropped ${expectedDrop} item(s)...`);
-  for (const drop of drops) {
-    try {
-      // Navigate to the drop's position to pick it up.
-      await this.navigation.move(drop.position.x, drop.position.y, drop.position.z);
-      console.log(`Collected drop at ${drop.position}`);
-      await this.sleep(100); // slight delay between collecting drops
-    } catch (err) {
-      console.log(`Error collecting drop: ${err}`);
-    }
-  }
-}
-
 
   /**
    * Crafts an item. If it's not the crafting table itself or planks, we attempt to find or place a table.
@@ -165,7 +176,10 @@ async collectDroppedItems(origin: Vec3, goalBlock: string): Promise<void> {
 
     // 2) If not crafting table or planks, ensure we have a table available
     let tableBlock: Block | null = null;
-    if (goalItem !== "crafting_table" && !goalItem.toLowerCase().includes("planks")) {
+    if (
+      goalItem !== "crafting_table" &&
+      !goalItem.toLowerCase().includes("planks")
+    ) {
       // (a) First, see if a placed table is already near us
       await this.observer.getVisibleBlockTypes(); // refresh environment
       const nearTable = this.findNearbyPlacedTable(40); // e.g. 40-block radius
@@ -194,7 +208,9 @@ async collectDroppedItems(origin: Vec3, goalBlock: string): Promise<void> {
     const possibleRecipesFor = this.bot.recipesFor(itemId, null, 1, tableBlock);
     if (!possibleRecipesFor || possibleRecipesFor.length === 0) {
       console.log(`Missing ingredients to craft "${goalItem}".`);
-      throw new Error(`Don't have enough/correct ingredients to craft ${goalItem}`);
+      throw new Error(
+        `Don't have enough/correct ingredients to craft ${goalItem}`
+      );
     }
 
     // 5) Attempt to craft with the first valid recipe
@@ -204,7 +220,7 @@ async collectDroppedItems(origin: Vec3, goalBlock: string): Promise<void> {
         await this.bot.craft(
           recipe,
           1,
-          goalItem !== "crafting_table" ? (tableBlock ?? undefined) : undefined
+          goalItem !== "crafting_table" ? tableBlock ?? undefined : undefined
         );
         console.log(`Successfully crafted "${goalItem}".`);
         success = true;
@@ -248,7 +264,9 @@ async collectDroppedItems(origin: Vec3, goalBlock: string): Promise<void> {
         (p) => p.x === vPos.x && p.y === vPos.y && p.z === vPos.z
       );
       if (!knownAlready) {
-        this.sharedState.addCraftingTablePosition(new Vec3(vPos.x, vPos.y, vPos.z));
+        this.sharedState.addCraftingTablePosition(
+          new Vec3(vPos.x, vPos.y, vPos.z)
+        );
       }
     }
 
@@ -274,7 +292,9 @@ async collectDroppedItems(origin: Vec3, goalBlock: string): Promise<void> {
 
     // Otherwise place from inventory or craft a new one
     const tableItemInInventory = this.bot.inventory.findInventoryItem(
-      this.mcData.itemsByName["crafting_table"].id, null, false
+      this.mcData.itemsByName["crafting_table"].id,
+      null,
+      false
     );
     if (!tableItemInInventory) {
       console.log("No crafting table in inventory; attempting to craft one...");
@@ -283,7 +303,9 @@ async collectDroppedItems(origin: Vec3, goalBlock: string): Promise<void> {
       } catch (err) {
         console.log(`Failed to craft a crafting_table: ${err}`);
         const stillNoTable = this.bot.inventory.findInventoryItem(
-          this.mcData.itemsByName["crafting_table"].id, null, false
+          this.mcData.itemsByName["crafting_table"].id,
+          null,
+          false
         );
         if (!stillNoTable) {
           console.log("Still no crafting table after trying to craft.");
@@ -363,7 +385,9 @@ async collectDroppedItems(origin: Vec3, goalBlock: string): Promise<void> {
         this.sharedState.addCraftingTablePosition(placedPos);
         return;
       } catch (err) {
-        console.log(`Attempt ${attempt} to place crafting table failed: ${err}`);
+        console.log(
+          `Attempt ${attempt} to place crafting table failed: ${err}`
+        );
         if (attempt < maxRetries) {
           await this.sleep(1000);
         } else {
@@ -903,8 +927,12 @@ async collectDroppedItems(origin: Vec3, goalBlock: string): Promise<void> {
           const candZ = Math.floor(candidate.z);
 
           if (
-            (candX === botBlockX && candY === botBlockY && candZ === botBlockZ) ||
-            (candX === botBlockX && candY === botBlockY + 1 && candZ === botBlockZ)
+            (candX === botBlockX &&
+              candY === botBlockY &&
+              candZ === botBlockZ) ||
+            (candX === botBlockX &&
+              candY === botBlockY + 1 &&
+              candZ === botBlockZ)
           ) {
             continue;
           }
@@ -929,5 +957,13 @@ async collectDroppedItems(origin: Vec3, goalBlock: string): Promise<void> {
       }
     }
     return positions;
+  }
+
+  /**
+   * New public method for chatting raw text (skips personality filtering).
+   * For personality filtering, see the new "chat" tool in functionCalling.
+   */
+  public async chat(message: string): Promise<void> {
+    this.bot.chat(message);
   }
 }

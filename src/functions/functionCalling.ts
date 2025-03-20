@@ -7,8 +7,9 @@ import { SharedAgentState } from "../sharedAgentState";
 import { OpenAI } from "openai";
 import { tools } from "./tools";
 import { minecraftItems, minecraftBlocks } from "../../data/minecraftItems";
-import {updateMemoryViaLLM} from "./memory/memoryModule"
+import { updateMemoryViaLLM } from "./memory/memoryModule";
 import { Memory } from "./memory/memory";
+import { Social } from "./social/social";
 
 /**
  * FunctionCaller:
@@ -27,7 +28,8 @@ export class FunctionCaller {
     private actions: Actions,
     private sharedState: SharedAgentState,
     private openai: OpenAI,
-    private memory: Memory
+    private memory: Memory,
+    private social: Social
   ) {}
 
   /**
@@ -136,7 +138,7 @@ export class FunctionCaller {
         tools: tools,
         tool_choice: "auto",
         parallel_tool_calls: false,
-        store: true
+        store: true,
       });
 
       const choice = completion.choices[0];
@@ -171,7 +173,7 @@ export class FunctionCaller {
             `Function call parse error for "${fnName}"`,
             {
               rawArguments: argsStr,
-              error: String(err)
+              error: String(err),
             }
           );
           // Provide a partial function message so the model can continue or correct
@@ -179,7 +181,7 @@ export class FunctionCaller {
           allMessages.push({
             role: "function",
             name: fnName,
-            content: partialErrorContent
+            content: partialErrorContent,
           } as any);
           continue;
         }
@@ -259,6 +261,15 @@ export class FunctionCaller {
               toolCallResult = `Retrieved ${count} of ${itemName} from chest.`;
               break;
             }
+            case "chat": {
+              const { speech } = parsedArgs;
+              // Filter speech with social module
+              const finalSpeech = await this.social.filterMessageForSpeech(speech);
+              // Then actually say it
+              await this.actions.chat(finalSpeech);
+              toolCallResult = `Chatted: ${finalSpeech}`;
+              break;
+            }
             default:
               toolCallResult = `Function "${fnName}" not implemented.`;
               break;
@@ -290,7 +301,7 @@ export class FunctionCaller {
         // 6. Log the tool call (function call) with arguments + result
         this.sharedState.logMessage("function", `Tool call: ${fnName}`, {
           arguments: parsedArgs,
-          result: toolCallResult
+          result: toolCallResult,
         });
 
         // 7. Provide an updated shared state snippet so the model can continue
@@ -299,14 +310,14 @@ export class FunctionCaller {
 
         // Also log the updated shared state for debugging
         this.sharedState.logMessage("function", "Updated Shared State", {
-          updatedState: updatedStateText
+          updatedState: updatedStateText,
         });
 
         // Finally push a new 'function' message for the model to see
         allMessages.push({
           role: "function",
           name: fnName,
-          content: combinedContent
+          content: combinedContent,
         } as any);
       }
     }
@@ -316,13 +327,23 @@ export class FunctionCaller {
       finalResponse = "No final response from model after function calls.";
     }
 
-    // 9. Log the final response
+    // 9. Log the unfiltered final response
     this.sharedState.logMessage("assistant", finalResponse, {
-      note: "Final consolidated assistant response."
+      note: "Unfiltered assistant response.",
     });
 
-    updateMemoryViaLLM(finalResponse, this.memory, this.sharedState, this.openai);
+    // 10. Filter the final response through the Social module
+    const filteredResponse = await this.social.filterMessageForSpeech(finalResponse);
 
-    return finalResponse;
+    // 11. Log the post-filter response
+    this.sharedState.logMessage("assistant", filteredResponse, {
+      note: "Final filtered assistant response.",
+    });
+
+    // 12. Update memory with the filtered text
+    updateMemoryViaLLM(filteredResponse, this.memory, this.sharedState, this.openai);
+
+    // 13. Return the filtered response
+    return filteredResponse;
   }
 }
