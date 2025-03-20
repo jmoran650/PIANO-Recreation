@@ -4,7 +4,7 @@ import { Movements, pathfinder } from "mineflayer-pathfinder";
 import { plugin as pvp } from "mineflayer-pvp";
 import OpenAI from "openai";
 import { Actions } from "./src/actions";
-import { CognitiveController } from "./src/cc";
+import { CognitiveController } from "./src/cc.deprecated";
 import { Memory } from "./src/functions/memory/memory";
 import { Social } from "./src/functions/social/social";
 import { Goals } from "./src/goals";

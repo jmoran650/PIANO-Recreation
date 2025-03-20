@@ -1,5 +1,5 @@
 /*******************
- * src/goalPlanner.ts
+ * src/goalPlanner.ts DEPRECATED
  *******************/
 import { v4 as uuidv4 } from "uuid";
 import { callLLM, callLLMJsonSchema } from "../utils/llmWrapper";
