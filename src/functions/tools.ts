@@ -13,7 +13,7 @@ export const tools: ChatCompletionTool[] = [
         properties: {
           goalBlock: {
             type: "string",
-            description: "Type of block to mine (e.g. 'oak_log', 'stone')",
+            description: "Type of block to mine (e.g. 'oak_log', 'stone', 'coal_ore')",
           },
           desiredCount: {
             type: "number",
@@ -49,7 +49,7 @@ export const tools: ChatCompletionTool[] = [
     type: "function",
     function: {
       name: "place",
-      description: "Places a block (e.g. furnace or crafting table).",
+      description: "Places a block down in the world (e.g. furnace or crafting table).",
       parameters: {
         type: "object",
         properties: {
@@ -207,12 +207,11 @@ export const tools: ChatCompletionTool[] = [
     },
   },
   {
-    /* NEW CHAT FUNCTION */
     type: "function",
     function: {
       name: "chat",
       description:
-        "Make the bot say the provided text out loud in Minecraft. Use this to speak with other players and characters.",
+        "Make the bot say the provided text out loud in Minecraft. Use this to communicate with other players and characters.",
       parameters: {
         type: "object",
         properties: {

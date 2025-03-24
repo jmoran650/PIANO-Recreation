@@ -91,8 +91,6 @@ export async function createAgentBot(options: BotOptions): Promise<AgentBot> {
     social
   );
 
-  bot.chat("Hello, I've been created by createAgentBot!");
-
   cc.startConcurrentLoops();
 
   // 7. Return all the components.

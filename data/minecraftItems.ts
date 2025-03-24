@@ -34,7 +34,7 @@ export const minecraftItems: Record<string, string> = {
     "Egg": "Occasionally laid by chickens. Can be found in village chests.",
     "Ink Sac": "Dropped by squids.",
     "Paper": "Crafted from 3 sugar cane.",
-    "Book": "Crafted from 3 leather and 1 paper. Can also be obtained by mining bookshelves.",
+    "Book": "Crafted from 3 paper and 1 leather.",
     "Enchanted Book": "Obtained from fishing or trading with librarian villagers.",
     "Potion": "Brewed using water bottles, nether wart, and other ingredients in brewing stands.",
     "Glass Bottle": "Crafted from 3 glass blocks.",
@@ -68,7 +68,7 @@ export const minecraftItems: Record<string, string> = {
     "Raw Porkchop": "Dropped by pigs when killed.",
     "Raw Chicken": "Dropped by chickens when killed.",
     "Raw Mutton": "Dropped by sheep when killed.",
-    "End Crystal": "Found in the ender dragon boss fight island. Must be destroyed with arrows before the ender dragon can be damaged."
+    "End Crystal": "Found in the ender dragon boss fight island. Must be destroyed with arrows before the ender dragon can be damaged.",
   };
 
   export const minecraftBlocks: Record<string, string> = {

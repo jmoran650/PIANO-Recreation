@@ -179,9 +179,9 @@ export class Observer {
     const items = this.bot.inventory.items();
     const totalMainSlots = 36; // 27 storage + 9 hotbar
     const emptySlots = totalMainSlots - items.length;
-    const header = `Empty slots: ${emptySlots}`;
+    // const header = `Empty slots: ${emptySlots}`;
     const itemStrings = items.map((item) => `${item.name}:${item.count}`);
-    return [header, ...itemStrings];
+    return [...itemStrings];
   }
 
   /**

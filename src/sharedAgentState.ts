@@ -308,37 +308,45 @@ export class SharedAgentState {
     const st = this;
     let text = "";
 
-    text += `Bot Status: < Health: ${st.botHealth}, Hunger: ${st.botHunger} >\n\n`;
+    text += `Bot Status: < Health: ${st.botHealth}, Hunger: ${st.botHunger} >`;
 
     const invSummary = st.inventory && st.inventory.length > 0
       ? st.inventory.join(", ")
       : "(nothing)";
-    text += `Inventory: < ${invSummary} >\n\n`;
+    text += `Inventory: < ${invSummary} >`;
 
     // Add position info
     text += `Position: < x=${st.botPosition.x.toFixed(1)}, y=${st.botPosition.y.toFixed(
       1
-    )}, z=${st.botPosition.z.toFixed(1)} >\n\n`;
+    )}, z=${st.botPosition.z.toFixed(1)} >`;
 
     if (st.visibleMobs && st.visibleMobs.Mobs.length > 0) {
       const sortedMobs = st.visibleMobs.Mobs.slice().sort((a, b) => a.distance - b.distance);
-      const top10 = sortedMobs.slice(0, 10);
-      const mobSummary = top10
+      const topTenClosestMobs = sortedMobs.slice(0, 10);
+      const mobSummary = topTenClosestMobs
         .map((m) => `${m.name} (~${m.distance.toFixed(1)}m away)`)
         .join(", ");
-      text += `Mobs: < ${mobSummary} >\n\n`;
+      text += `Mobs: < ${mobSummary} >`;
     } else {
-      text += "Mobs: < none >\n\n";
+      text += "Mobs: < none >";
+    }
+
+    if (st.visibleBlockTypes && st.visibleBlockTypes.BlockTypes) {
+      const blocks = st.visibleBlockTypes.BlockTypes;
+      const blockSummary = Object.entries(blocks)
+      .map(([name, pos]) => `${name} (x=${pos.x}, y=${pos.y}, z=${pos.z})`)
+      .join(", ");
+      text += `Nearby Block Types: < ${blockSummary} >`
     }
 
     const playersNearby = st.playersNearby && st.playersNearby.length > 0
       ? st.playersNearby.join(", ")
       : "none";
-    text += `Players Nearby: < ${playersNearby} >\n\n`;
+    text += `Nearby Players: < ${playersNearby} >`;
 
-    if (st.pendingActions && st.pendingActions.length > 0) {
-      text += `Pending Actions: < ${st.pendingActions.join(" | ")} >\n\n`;
-    }
+    // if (st.pendingActions && st.pendingActions.length > 0) {
+    //   text += `Pending Actions: < ${st.pendingActions.join(" | ")} >`;
+    // }
 
     return text;
   }

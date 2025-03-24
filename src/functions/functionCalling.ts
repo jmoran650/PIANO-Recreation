@@ -332,18 +332,9 @@ export class FunctionCaller {
       note: "Unfiltered assistant response.",
     });
 
-    // 10. Filter the final response through the Social module
-    const filteredResponse = await this.social.filterMessageForSpeech(finalResponse);
-
-    // 11. Log the post-filter response
-    this.sharedState.logMessage("assistant", filteredResponse, {
-      note: "Final filtered assistant response.",
-    });
 
     // 12. Update memory with the filtered text
-    updateMemoryViaLLM(filteredResponse, this.memory, this.sharedState, this.openai);
-
     // 13. Return the filtered response
-    return filteredResponse;
+    return finalResponse;
   }
 }

@@ -5,7 +5,7 @@ export async function handleTestGoal(bot: any, functionCaller: any, parts: strin
       bot.chat("Usage: test goal: <goal description>");
       return;
     }
-    bot.chat(`Goal Accepted`);
+    bot.chat(`I'm alive!`);
   
     // Build a user prompt that includes the bot's current SharedAgentState:
     const userPrompt = `

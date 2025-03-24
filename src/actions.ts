@@ -184,7 +184,7 @@ export class Actions {
       await this.observer.getVisibleBlockTypes(); // refresh environment
       const nearTable = this.findNearbyPlacedTable(40); // e.g. 40-block radius
       if (nearTable) {
-        console.log("Using an existing placed crafting table near me.");
+        console.log("Agent found nearby table, plans to use that.");
         tableBlock = nearTable;
       } else {
         // (b) If not found, place or craft one
