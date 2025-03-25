@@ -68,13 +68,6 @@ export class CognitiveController {
   private async fastReflexTick(): Promise<void> {
     // 1. Possibly check for hostile mobs or urgent situations
     //    This is a good place to do quick environment scans or short-latency tasks
-    const visibleMobs = await this.observer.getVisibleMobs();
-    const hostiles = visibleMobs.Mobs.filter((m) => this.isHostile(m.name));
-    if (hostiles.length > 0) {
-      //this.bot.chat("[Reflex] Hostile mob detected!");
-      // Decide quickly whether to run away, fight, or alert
-      // For example, you might set a short-term "defend" sub-goal or call an action
-    }
 
     // 2. (Optional) Quickly handle any memory cleanup or ephemeral tasks
     // ...
@@ -87,7 +80,6 @@ export class CognitiveController {
   private async slowPlanningTick(): Promise<void> {
     // 1. Update environment info if not done by fastReflex
     //    You can skip or keep an additional observer call here
-    await this.observer.getVisibleBlockTypes();
 
     // 2. Check players
     const playersNearby = Object.values(this.bot.players).filter(

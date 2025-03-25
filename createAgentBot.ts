@@ -88,7 +88,8 @@ export async function createAgentBot(options: BotOptions): Promise<AgentBot> {
     sharedState,
     openai,
     memory,
-    social
+    social,
+    observer
   );
 
   cc.startConcurrentLoops();
