@@ -5,7 +5,7 @@
   "main": "dist/index.js",
   "scripts": {
     "build": "concurrently \"tsc\" \"webpack\"",
-    "start": "npm run build && node dist/server.js",
+    "start": "npm run build && node dist/goalPlanAppServer.js",
     "test": "echo \"Error: no test specified\" && exit 1",
     "postinstall": "for f in patches/*.patch; do patch -p1 --forward --silent < \"$f\" || true; done"
   },

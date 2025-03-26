@@ -1,7 +1,7 @@
 // src/observer.ts
 import { Bot } from "mineflayer";
 import type { Entity } from "prismarine-entity";
-import type { Block } from "prismarine-block";
+import { Block } from "prismarine-block";
 import { Vec3 } from "vec3";
 import minecraftData from "minecraft-data";
 import { SharedAgentState } from "./sharedAgentState";
@@ -17,8 +17,8 @@ export class Observer {
   private radius: number;
   private sharedState: SharedAgentState;
   private mcData: any;
-  private _wasHurt: boolean = false
-  private _swingArmAttacker: Entity | null = null
+  private _wasHurt: boolean = false;
+  private _swingArmAttacker: Entity | null = null;
 
   constructor(
     bot: Bot,
@@ -34,15 +34,19 @@ export class Observer {
     // Schedule periodic updates of the bot's inventory, health, and hunger.
     setInterval(() => {
       this.updateBotStats();
-    }, 1000);
+    }, 8000);
   }
 
   /**
    * New method to update the shared state with current bot stats.
    */
-  public async updateBotStats():  Promise<void> {
+  public async updateBotStats(): Promise<void> {
+
     const inventory = this.getInventoryContents();
+    //console.log("this is inventory: ", inventory);
     this.sharedState.inventory = inventory;
+    //console.log("this is sharedstate inv: ", this.sharedState.inventory);
+    
     // Assumes mineflayer bot has properties "health" and "food"
     this.sharedState.botHealth = this.bot.health;
     this.sharedState.botHunger = this.bot.food;
@@ -66,6 +70,8 @@ export class Observer {
 
   }
 
+
+
   /**
    * ------------------------------
    * 1) Visible Environment Methods
@@ -84,8 +90,11 @@ export class Observer {
         if (block.type === 265) return true;
         return block.name !== "air";
       },
-      count: 999,
+      maxDistance: this.radius,
+      count: 999999
     });
+    //console.log(`[Observer] findBlocks found ${positions.length} raw positions within ${this.radius} blocks.`);
+
 
     interface BlockInfo {
       blockName: string;
@@ -127,7 +136,7 @@ export class Observer {
       const { pos } = closestByType[blockName];
       result.BlockTypes[blockName] = { x: pos.x, y: pos.y, z: pos.z };
     }
-
+    console.log(`[Observer] Final result includes types: ${Object.keys(result.BlockTypes).join(', ')}`);
     this.sharedState.visibleBlockTypes = result;
     return result;
   }
@@ -160,7 +169,11 @@ export class Observer {
         ) {
           const itemMeta = (entity as any).metadata[7];
           // Check if itemMeta is an object with an id property
-          if (itemMeta && typeof itemMeta === "object" && itemMeta.id !== undefined) {
+          if (
+            itemMeta &&
+            typeof itemMeta === "object" &&
+            itemMeta.id !== undefined
+          ) {
             const itemData = this.mcData.items[itemMeta.id];
             if (itemData && itemData.name) {
               mobName = itemData.name;
@@ -168,7 +181,10 @@ export class Observer {
           }
         }
 
-        result.Mobs.push({ name: mobName, distance: parseFloat(dist.toFixed(2)) });
+        result.Mobs.push({
+          name: mobName,
+          distance: parseFloat(dist.toFixed(2)),
+        });
       }
     }
 
@@ -420,7 +436,7 @@ export class Observer {
     return results;
   }
 
-    /**
+  /**
    * Checks whether the bot is being attacked based on three conditions:
    * 1. The bot has taken damage (entityHurt).
    * 2. A mob is within 4 blocks of the bot (nearestEntity).
@@ -431,77 +447,127 @@ export class Observer {
    *   - attacker: the entity that is attacking the bot, if any
    *   - message: an alert message detailing the situation
    */
-    public checkIfUnderAttack(): {
-      isUnderAttack: boolean
-      attacker: Entity | null
-      message: string
-    } {
-      let attacker: Entity | null = null
-      let isUnderAttack = false
-      let message = ""
-  
-      // If the bot was hurt, mark it as under attack
-      if (this._wasHurt) {
-        isUnderAttack = true
-        // We’ll guess the attacker by checking the nearest mob within 4 blocks
-        attacker = this.findClosestMobWithinDistance(4)
-        message = `The bot has taken damage. Likely attacked by ${
-          attacker?.name ?? "unknown entity"
-        }.`
-      }
-  
-      // If an entity swung its arm close by, that entity is a strong candidate
-      if (this._swingArmAttacker) {
-        isUnderAttack = true
-        attacker = this._swingArmAttacker
-        message = `Mob ${attacker?.name} is swinging its arm near the bot.`
-      }
-  
-      // Check if there’s a mob within 4 blocks. If so, we consider that an attack scenario too.
-      const closeMob = this.findClosestMobWithinDistance(4)
-      if (closeMob) {
-        isUnderAttack = true
-        attacker = closeMob
-        if (!message) {
-          message = `There is a mob (${attacker.name}) within 4 blocks, might be attacking the bot.`
-        }
-      }
-  
-      // If none of the above triggered, the bot isn’t under attack
-      if (!isUnderAttack) {
-        message = "The bot is not currently under attack."
-      }
-  
-      // Reset flags so we only report once per check
-      this._wasHurt = false
-      this._swingArmAttacker = null
-  
-      return { isUnderAttack, attacker, message }
-    }
-  
-    /**
-     * Helper to find the closest non-player entity within a certain distance
-     */
-    private findClosestMobWithinDistance(maxDist: number): Entity | null {
-      let nearestMob: Entity | null = null
-      let nearestDist = Infinity
-  
-      for (const id in this.bot.entities) {
-        const e = this.bot.entities[id]
-        if (!e || e === this.bot.entity) continue
-        // Skip players
-        if ((e as any).username) continue
-        if (e.position) {
-          const dist = this.bot.entity.position.distanceTo(e.position)
-          if (dist <= maxDist && dist < nearestDist) {
-            nearestDist = dist
-            nearestMob = e
-          }
-        }
-      }
-  
-      return nearestMob
+  public checkIfUnderAttack(): {
+    isUnderAttack: boolean;
+    attacker: Entity | null;
+    message: string;
+  } {
+    let attacker: Entity | null = null;
+    let isUnderAttack = false;
+    let message = "";
+
+    // If the bot was hurt, mark it as under attack
+    if (this._wasHurt) {
+      isUnderAttack = true;
+      // We’ll guess the attacker by checking the nearest mob within 4 blocks
+      attacker = this.findClosestMobWithinDistance(4);
+      message = `The bot has taken damage. Likely attacked by ${
+        attacker?.name ?? "unknown entity"
+      }.`;
     }
 
+    // If an entity swung its arm close by, that entity is a strong candidate
+    if (this._swingArmAttacker) {
+      isUnderAttack = true;
+      attacker = this._swingArmAttacker;
+      message = `Mob ${attacker?.name} is swinging its arm near the bot.`;
+    }
 
+    // Check if there’s a mob within 4 blocks. If so, we consider that an attack scenario too.
+    const closeMob = this.findClosestMobWithinDistance(4);
+    if (closeMob) {
+      isUnderAttack = true;
+      attacker = closeMob;
+      if (!message) {
+        message = `There is a mob (${attacker.name}) within 4 blocks, might be attacking the bot.`;
+      }
+    }
+
+    // If none of the above triggered, the bot isn’t under attack
+    if (!isUnderAttack) {
+      message = "The bot is not currently under attack.";
+    }
+
+    // Reset flags so we only report once per check
+    this._wasHurt = false;
+    this._swingArmAttacker = null;
+
+    return { isUnderAttack, attacker, message };
+  }
+
+  /**
+   * Helper to find the closest non-player entity within a certain distance
+   */
+  private findClosestMobWithinDistance(maxDist: number): Entity | null {
+    let nearestMob: Entity | null = null;
+    let nearestDist = Infinity;
+
+    for (const id in this.bot.entities) {
+      const e = this.bot.entities[id];
+      if (!this.isHostileMob(e)) continue;
+
+      if (!e || e === this.bot.entity) continue;
+      
+      // Skip players
+      if ((e as any).username) continue;
+      if (e.position) {
+        const dist = this.bot.entity.position.distanceTo(e.position);
+        if (dist <= maxDist && dist < nearestDist) {
+          nearestDist = dist;
+          nearestMob = e;
+        }
+      }
+    }
+
+    return nearestMob;
+  }
+
+  /**
+   * Decide if an entity is a known hostile mob (e.g., zombie, skeleton).
+   * Skips players, items, and anything not recognized as hostile.
+   */
+  private isHostileMob(entity: Entity | null): boolean {
+    if (!entity || entity === this.bot.entity) return false;
+
+    // Skip players (they have a `username`)
+    if ((entity as any).username) return false;
+
+    // Skip item entities
+    if (entity.name === "item") return false;
+
+    // Whitelist of hostile mob names. Expand as needed for your version of MC.
+    const hostileMobNames = new Set([
+      "zombie",
+      "skeleton",
+      "creeper",
+      "spider",
+      "enderman",
+      "witch",
+      "blaze",
+      "ghast",
+      "slime",
+      "magma_cube",
+      "guardian",
+      "elder_guardian",
+      "vindicator",
+      "evoker",
+      "vex",
+      "pillager",
+      "ravager",
+      "phantom",
+      "drowned",
+      "piglin",
+      "hoglin",
+      "zombified_piglin",
+      "piglin_brute",
+      "warden",
+      "shulker",
+      "silverfish",
+      // Add more as needed
+    ]);
+
+    // Compare against the set
+    const entityName = entity.name?.toLowerCase() ?? "";
+    return hostileMobNames.has(entityName);
+  }
 }

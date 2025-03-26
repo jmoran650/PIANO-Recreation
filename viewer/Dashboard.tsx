@@ -44,9 +44,9 @@ const Dashboard: React.FC = () => {
   const handleToggleLLM = async () => {
     try {
       const response = await fetch("/toggle-llm", { method: "POST" });
-      const text = await response.text();
-      alert(text);
-      setLlmToggled(text.includes("enabled"));
+      const data = await response.json(); // Assuming server responds with JSON { enabled: boolean, message: string }
+      alert(data.message);
+      setLlmToggled(data.enabled);
     } catch (err) {
       console.error("Error toggling LLM:", err);
       alert("Error toggling LLM.");
@@ -62,13 +62,14 @@ const Dashboard: React.FC = () => {
           <Link to="/goal-planner">Goal Planner</Link>
         </nav>
       </header>
-      
+
       {/* Floating Chat Log Sidebar on the left */}
       <div id="chatLogSidebar">
         <ChatLog conversationLog={sharedState.conversationLog} />
       </div>
-      
+
       <div className="container">
+        {/* Apply masonry layout via CSS columns */}
         <div className="grid">
           {/* Environment Tile */}
           <div className="tile" id="environmentTile">
@@ -83,7 +84,8 @@ const Dashboard: React.FC = () => {
             <div className="subtile">
               <h3>Visible Mobs</h3>
               <pre>
-                {JSON.stringify(sharedState.visibleMobs, null, 2) || "Loading..."}
+                {JSON.stringify(sharedState.visibleMobs, null, 2) ||
+                  "Loading..."}
               </pre>
             </div>
             <div className="subtile">
@@ -171,8 +173,11 @@ const Dashboard: React.FC = () => {
             <div className="subtile">
               <h3>Others' Feelings Towards Self</h3>
               <pre>
-                {JSON.stringify(sharedState.othersFeelingsTowardsSelf, null, 2) ||
-                  "Loading..."}
+                {JSON.stringify(
+                  sharedState.othersFeelingsTowardsSelf,
+                  null,
+                  2
+                ) || "Loading..."}
               </pre>
             </div>
           </div>
@@ -188,22 +193,26 @@ const Dashboard: React.FC = () => {
             <div className="subtile">
               <h3>Health &amp; Hunger</h3>
               <pre>
-                Health: {sharedState.botHealth} | Hunger: {sharedState.botHunger}
+                Health: {sharedState.botHealth ?? "N/A"} | Hunger:{" "}
+                {sharedState.botHunger ?? "N/A"}
               </pre>
             </div>
             <div className="subtile">
               <h3>Equipped Items</h3>
               <pre>
-                {JSON.stringify(sharedState.equippedItems, null, 2) || "Loading..."}
+                {JSON.stringify(sharedState.equippedItems, null, 2) ||
+                  "Loading..."}
               </pre>
             </div>
             <div className="subtile">
               <h3>Crafting Table Positions</h3>
               <pre>
-                {JSON.stringify(sharedState.craftingTablePositions, null, 2) || "Loading..."}
+                {JSON.stringify(sharedState.craftingTablePositions, null, 2) ||
+                  "Loading..."}
               </pre>
             </div>
           </div>
+          {/* Add more tiles here if needed */}
         </div>
       </div>
       {/* Fixed LLM Metrics Sidebar on the right */}
@@ -212,11 +221,8 @@ const Dashboard: React.FC = () => {
         <div className="sidebar-section">
           <h3>Total Requests</h3>
           <pre>
-            {JSON.stringify(
-              sharedState.llmMetrics?.totalRequests,
-              null,
-              2
-            ) || "Loading..."}
+            {JSON.stringify(sharedState.llmMetrics?.totalRequests, null, 2) ||
+              "Loading..."}
           </pre>
         </div>
         <div className="sidebar-section">
@@ -232,11 +238,8 @@ const Dashboard: React.FC = () => {
         <div className="sidebar-section">
           <h3>Total Input Characters</h3>
           <pre>
-            {JSON.stringify(
-              sharedState.llmMetrics?.totalInputChars,
-              null,
-              2
-            ) || "Loading..."}
+            {JSON.stringify(sharedState.llmMetrics?.totalInputChars, null, 2) ||
+              "Loading..."}
           </pre>
         </div>
         <div className="sidebar-section">
@@ -256,13 +259,14 @@ const Dashboard: React.FC = () => {
       <footer>
         <p>&copy; 2025 Minecraft Bot Dashboard. All rights reserved.</p>
       </footer>
+      {/* Updated Styles */}
       <style>{`
         .dashboard-container {
           font-family: "Poppins", sans-serif;
           background: #f8f9fa;
           color: #212529;
           min-height: 100vh;
-          padding-bottom: 60px;
+          padding-bottom: 60px; /* For footer */
         }
         header {
           background: #3949ab;
@@ -290,21 +294,33 @@ const Dashboard: React.FC = () => {
           max-width: 1200px;
           margin: 30px auto;
           padding: 20px;
+          /* Add padding to prevent content from going under fixed sidebars if needed */
+          /* Example: padding-left: 360px; padding-right: 290px; */
+          /* Adjust based on sidebar widths and desired spacing */
         }
+
+        /* --- Masonry Layout --- */
         .grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-          gap: 20px;
-          /* Ensure each tile's height is determined by its own content. */
-          align-items: start;
+          /* Instead of CSS Grid, use multi-column layout for masonry effect */
+          column-width: 300px; /* Minimum width for columns */
+          column-gap: 20px;   /* Space between columns */
+          width: 100%;        /* Ensure it takes full width of container */
         }
+
         .tile {
           background: #fff;
           border-radius: 10px;
           padding: 20px;
           box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
           transition: transform 0.2s ease, box-shadow 0.2s ease;
+          margin-bottom: 20px; /* Space below each tile */
+          /* --- Prevent tiles from breaking across columns --- */
+          break-inside: avoid;
+          /* Ensure tile height is determined by content */
+          height: auto;
         }
+        /* --- End Masonry Layout --- */
+
         .tile:hover {
           transform: translateY(-5px);
           box-shadow: 0 12px 24px rgba(0, 0, 0, 0.15);
@@ -316,27 +332,38 @@ const Dashboard: React.FC = () => {
         .subtile {
           margin-bottom: 20px;
         }
+        .subtile:last-child {
+            margin-bottom: 0; /* Remove margin from last subtile */
+        }
         .subtile h3 {
           font-size: 1.1rem;
           margin-bottom: 5px;
           border-bottom: 1px solid #ccc;
           padding-bottom: 4px;
         }
+
+        /* Style for preformatted text to wrap and expand vertically */
         pre {
           background: #e9ecef;
           padding: 10px;
           border-radius: 5px;
-          overflow: auto; /* let text expand vertically and/or scroll if necessary */
+          overflow-x: auto; /* Allow horizontal scroll if absolutely needed */
+          white-space: pre-wrap;   /* Allow text to wrap */
+          word-wrap: break-word; /* Break long words */
+          overflow-wrap: break-word; /* Ensure wrapping works */
+          margin: 0; /* Remove default margin if any */
+          /* Let the content dictate the height */
+          min-height: 1.5em; /* Minimum height for empty pre */
+          height: auto;
         }
+
         /* Resizable Chat Log Sidebar */
         #chatLogSidebar {
           position: fixed;
-          top: 80px;
+          top: 80px; /* Adjust based on header height */
           left: 20px;
-          /* Start at a reasonable size. */
           width: 300px;
           height: 400px;
-          /* Let the user resize it horizontally & vertically. */
           resize: both;
           overflow: auto;
           min-width: 250px;
@@ -353,9 +380,11 @@ const Dashboard: React.FC = () => {
         /* Fixed LLM Metrics Sidebar on the right */
         #llmSidebar {
           position: fixed;
-          top: 80px;
+          top: 80px; /* Adjust based on header height */
           right: 20px;
           width: 250px;
+          max-height: calc(100vh - 100px); /* Limit height and allow scrolling */
+          overflow-y: auto;
           background-color: #3949ab;
           color: #fff;
           padding: 20px;
@@ -386,17 +415,36 @@ const Dashboard: React.FC = () => {
           font-size: 0.9rem;
           line-height: 1.4;
           margin: 0;
+          /* Ensure text wraps within sidebar */
+          white-space: pre-wrap;
+          word-wrap: break-word;
+          overflow-wrap: break-word;
         }
         #toggleButton {
-          margin-top: 10px;
+          display: block; /* Ensure button takes full width */
+          width: 100%;
+          padding: 10px;
+          margin-top: 15px;
+          background-color: #ff6f61; /* Example color */
+          color: white;
+          border: none;
+          border-radius: 5px;
+          cursor: pointer;
+          font-size: 1rem;
+          transition: background-color 0.2s ease;
+        }
+        #toggleButton:hover {
+            background-color: #e65a50; /* Darker shade on hover */
         }
         footer {
           text-align: center;
-          margin-top: 40px;
+          margin-top: 40px; /* Adjust if content overlaps */
           padding: 20px 0;
           font-size: 0.9rem;
           color: #777;
           border-top: 1px solid #ddd;
+          position: relative; /* Ensure footer is below floating elements in flow */
+          clear: both; /* May help in some complex layouts */
         }
       `}</style>
     </div>

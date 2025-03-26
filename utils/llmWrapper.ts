@@ -1,5 +1,3 @@
-// utils/llmWrapper.ts
-
 import OpenAI from "openai";
 
 interface LLMPendingRequest {
@@ -8,111 +6,158 @@ interface LLMPendingRequest {
   reject: (error: any) => void;
 }
 
-// A simple in-memory queue for pending LLM requests.
 const llmQueue: LLMPendingRequest[] = [];
-
-// Define your rate limit interval in milliseconds (e.g., 1000 ms = 1 call per second).
 const RATE_LIMIT_INTERVAL = 1000;
-
-// Maximum allowed length for prompts/responses.
 const MAX_LENGTH = 100000;
 
-// Metrics: total requests made, timestamps of each request (in ms), and character counters.
 let totalLLMRequests = 0;
 const llmRequestTimestamps: number[] = [];
-
-// Running totals for input and output characters.
 let totalInputChars = 0;
 let totalOutputChars = 0;
 
-// Global flag to enable/disable LLM requests.
 let llmEnabled = true;
 
-// Set up the OpenAI client using the API key from process.env.
+// We'll store an optional logger callback that can funnel logs into sharedState
+let logger: null | ((type: string, msg: string, meta?: any) => void) = null;
+
+/**
+ * Provide a logging function that we can call whenever we do an OpenAI request or response.
+ * For example:
+ *   setLLMLogger((role, content, metadata) => {
+ *     sharedState.logMessage("system", content, metadata);
+ *   });
+ */
+export function setLLMLogger(
+  logFn: (type: string, message: string, meta?: any) => void
+) {
+  logger = logFn;
+}
+
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-/**
- * actualLLMCall:
- * Uses the OpenAI API to generate a completion for the given prompt, returning plain text.
- * This is still used by callLLM() and leaves the formatting entirely up to the model's response.
- */
 async function actualLLMCall(prompt: string): Promise<string> {
-  const completion = await openai.chat.completions.create({
-    model: "gpt-4o-mini", // you may change to any supported model as needed.
-    messages: [{ role: "user", content: prompt }],
-  });
-  if (
-    completion.choices &&
-    completion.choices.length > 0 &&
-    completion.choices[0].message &&
-    completion.choices[0].message.content
-  ) {
-    const output = completion.choices[0].message.content;
-    if (output.length > MAX_LENGTH) {
-      throw new Error(
-        `LLM response length (${output.length}) exceeds maximum allowed (${MAX_LENGTH}).`
-      );
-    }
-    totalOutputChars += output.length;
-    return output;
+  // Log outgoing request (if logger is available)
+  if (logger) {
+    logger(
+      "system",
+      "OpenAI Request (callLLM)",
+      { endpoint: "chat.completions.create", prompt }
+    );
   }
-  throw new Error("No valid response from OpenAI API.");
+
+  let responseContent = "";
+  try {
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [{ role: "user", content: prompt }],
+    });
+
+    if (
+      completion.choices &&
+      completion.choices.length > 0 &&
+      completion.choices[0].message &&
+      completion.choices[0].message.content
+    ) {
+      responseContent = completion.choices[0].message.content;
+
+      // Log successful response
+      if (logger) {
+        logger("system", "OpenAI Response (callLLM)", {
+          endpoint: "chat.completions.create",
+          response: completion,
+        });
+      }
+
+      if (responseContent.length > MAX_LENGTH) {
+        throw new Error(
+          `LLM response length (${responseContent.length}) exceeds maximum allowed (${MAX_LENGTH}).`
+        );
+      }
+      totalOutputChars += responseContent.length;
+      return responseContent;
+    }
+    throw new Error("No valid response from OpenAI API.");
+  } catch (error) {
+    // Log the error
+    if (logger) {
+      logger("system", "OpenAI Error (callLLM)", {
+        endpoint: "chat.completions.create",
+        error: String(error),
+      });
+    }
+    throw error;
+  }
 }
 
-/**
- * actualLLMCallJsonSchema:
- * Uses the OpenAI API to generate a completion for the given system+user instructions,
- * but *attempts* to force the model to adhere to a JSON Schema. 
- * 
- */
 async function actualLLMCallJsonSchema(
   systemMsg: string,
   userMsg: string,
   jsonSchema: any
 ): Promise<{ parsed: any }> {
-  const completion = await openai.chat.completions.create({
-    model: "gpt-4o-mini",
-    messages: [
-      { role: "system", content: systemMsg },
-      { role: "user", content: userMsg },
-    ],
-    // This is a placeholder. In official OpenAI usage, you'd typically instruct
-    // the model to output valid JSON in the 'system' or 'user' message. 
-    // The "response_format" key here is not standard in the openai library.
-    response_format: {
-      type: "json_schema",
-      json_schema: jsonSchema,
-    },
-  });
-
-  if (!completion.choices || !completion.choices[0].message) {
-    throw new Error("No valid structured response from OpenAI API.");
+  // Log outgoing request
+  if (logger) {
+    logger("system", "OpenAI Request (callLLMJsonSchema)", {
+      endpoint: "chat.completions.create (json_schema)",
+      systemMsg,
+      userMsg,
+      schema: jsonSchema,
+    });
   }
 
-  const rawContent = completion.choices[0].message.content;
-  if (!rawContent) {
-    throw new Error("Model returned empty response.");
-  }
-
-  // FIX: Parse the string into JSON so that result.parsed will be an object.
-  let parsedObj: any;
+  let rawContent = "";
   try {
-    parsedObj = JSON.parse(rawContent);
-  } catch (err) {
-    throw new Error(
-      `Failed to parse the LLM JSON response. Raw output:\n${rawContent}\n\nError: ${err}`
-    );
-  }
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        { role: "system", content: systemMsg },
+        { role: "user", content: userMsg },
+      ],
+      response_format: {
+        type: "json_schema",
+        json_schema: jsonSchema,
+      },
+    });
 
-  // Return an object with a 'parsed' key.
-  return { parsed: parsedObj };
+    if (!completion.choices || !completion.choices[0].message.content) {
+      throw new Error("No valid structured response from OpenAI API.");
+    }
+
+    rawContent = completion.choices[0].message.content;
+    if (!rawContent) {
+      throw new Error("Model returned empty response.");
+    }
+
+    // Log successful response
+    if (logger) {
+      logger("system", "OpenAI Response (callLLMJsonSchema)", {
+        endpoint: "chat.completions.create (json_schema)",
+        response: completion,
+      });
+    }
+
+    let parsedObj: any;
+    try {
+      parsedObj = JSON.parse(rawContent);
+    } catch (err) {
+      throw new Error(
+        `Failed to parse the LLM JSON response. Raw output:\n${rawContent}\n\nError: ${err}`
+      );
+    }
+    return { parsed: parsedObj };
+  } catch (error) {
+    // Log error
+    if (logger) {
+      logger("system", "OpenAI Error (callLLMJsonSchema)", {
+        endpoint: "chat.completions.create (json_schema)",
+        error: String(error),
+      });
+    }
+    throw error;
+  }
 }
 
-/**
- * Queue-based approach for plain text calls.
- */
 setInterval(async () => {
   if (llmQueue.length > 0) {
     const request = llmQueue.shift();
@@ -127,11 +172,6 @@ setInterval(async () => {
   }
 }, RATE_LIMIT_INTERVAL);
 
-/**
- * callLLM:
- * A global function to wrap LLM API calls for *plain text* usage.
- * Enqueues the request and returns a promise once the API call is processed.
- */
 export async function callLLM(prompt: string): Promise<string> {
   if (!llmEnabled) {
     return Promise.reject(new Error("LLM requests are disabled."));
@@ -143,29 +183,14 @@ export async function callLLM(prompt: string): Promise<string> {
       )
     );
   }
-
   totalLLMRequests++;
   llmRequestTimestamps.push(Date.now());
   totalInputChars += prompt.length;
-
   return new Promise((resolve, reject) => {
     llmQueue.push({ prompt, resolve, reject });
   });
 }
 
-/**
- * callLLMJsonSchema:
- * For tasks where we *require* valid JSON adhering to a known schema.
- * This bypasses the queue-based approach so we can do a single call with response_format,
- * or more commonly (in official usage) uses a chain-of-thought prompt that 
- * instructs the model to produce valid JSON.
- *
- * If the model refuses or fails to produce valid JSON, we throw an error.
- *
- * Returns:
- *   { parsed: T | null } on success
- *   (Potentially add 'refusal' property if you want to handle refusal states.)
- */
 export async function callLLMJsonSchema<T>(
   systemMsg: string,
   userMsg: string,
@@ -174,7 +199,6 @@ export async function callLLMJsonSchema<T>(
   if (!llmEnabled) {
     return Promise.reject(new Error("LLM requests are disabled."));
   }
-
   const combined = systemMsg + "\n" + userMsg;
   if (combined.length > MAX_LENGTH) {
     return Promise.reject(
@@ -183,7 +207,6 @@ export async function callLLMJsonSchema<T>(
       )
     );
   }
-
   totalLLMRequests++;
   llmRequestTimestamps.push(Date.now());
   totalInputChars += combined.length;
@@ -196,15 +219,10 @@ export async function callLLMJsonSchema<T>(
     }
     return { parsed: parsed as T };
   } catch (err) {
-    // If the model's output can't be parsed or is invalid, we throw.
     throw err;
   }
 }
 
-/**
- * getLLMMetrics:
- * Returns an object containing LLM usage metrics.
- */
 export function getLLMMetrics(): {
   totalRequests: number;
   requestsLast10Min: number;
@@ -222,10 +240,6 @@ export function getLLMMetrics(): {
   };
 }
 
-/**
- * setLLMEnabled and toggleLLMEnabled:
- * Quick ways to enable/disable the LLM calls at runtime.
- */
 export function setLLMEnabled(enabled: boolean): void {
   llmEnabled = enabled;
 }

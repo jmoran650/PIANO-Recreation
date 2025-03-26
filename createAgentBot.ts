@@ -42,13 +42,17 @@ export async function createAgentBot(options: BotOptions): Promise<AgentBot> {
     port: options.port,
     username: options.username,
     version: options.version,
-    viewDistance: 127,
+    viewDistance: 100,
   });
   // 2. Wait for spawn.
   await new Promise<void>((resolve, reject) => {
     bot.once("spawn", () => resolve());
     bot.once("error", (err) => reject(err));
   });
+
+  bot.world.setMaxListeners(0);
+
+  bot.waitForChunksToLoad();
 
   // 3. Load plugins.
   bot.loadPlugin(pathfinder);
@@ -65,7 +69,7 @@ export async function createAgentBot(options: BotOptions): Promise<AgentBot> {
   const memory = new Memory(sharedState);
   const social = new Social(sharedState);
   const goals = new Goals(sharedState);
-  const observer = new Observer(bot, { radius: 2000 }, sharedState);
+  const observer = new Observer(bot, { radius: 100 }, sharedState);
   const navigation = new Navigation(bot);
   const actions = new Actions(bot, navigation, sharedState, observer);
   const cc = new CognitiveController(
