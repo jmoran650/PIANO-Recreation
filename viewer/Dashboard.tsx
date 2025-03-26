@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import io from "socket.io-client";
 import { Link } from "react-router-dom";
 import ChatLog from "./chatLog";
-
+import { LogEntry } from "../types/log.types";
 interface SharedState {
   visibleBlockTypes?: any;
   visibleMobs?: any;
@@ -17,7 +17,7 @@ interface SharedState {
   lockedInTask?: any;
   feelingsToOthers?: any;
   othersFeelingsTowardsSelf?: any;
-  conversationLog?: string[];
+  conversationLog?: LogEntry[];
   llmMetrics?: any;
   inventory?: any;
   botHealth?: number;

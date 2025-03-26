@@ -34,7 +34,7 @@ export class Observer {
     // Schedule periodic updates of the bot's inventory, health, and hunger.
     setInterval(() => {
       this.updateBotStats();
-    }, 8000);
+    }, 10000);
   }
 
   /**
@@ -80,7 +80,7 @@ export class Observer {
   public async getVisibleBlockTypes(): Promise<{
     BlockTypes: { [blockName: string]: { x: number; y: number; z: number } };
   }> {
-    await this.bot.waitForChunksToLoad();
+    //await this.bot.waitForChunksToLoad();
 
     const positions = this.bot.findBlocks({
       point: this.bot.entity.position,
@@ -136,8 +136,7 @@ export class Observer {
       const { pos } = closestByType[blockName];
       result.BlockTypes[blockName] = { x: pos.x, y: pos.y, z: pos.z };
     }
-    console.log(`[Observer] Final result includes types: ${Object.keys(result.BlockTypes).join(', ')}`);
-    this.sharedState.visibleBlockTypes = result;
+    //console.log(`[Observer] Final result includes types: ${Object.keys(result.BlockTypes).join(', ')}`);
     return result;
   }
 
@@ -188,7 +187,6 @@ export class Observer {
       }
     }
 
-    this.sharedState.visibleMobs = result;
     return result;
   }
 

@@ -1,4 +1,5 @@
 import { Vec3 } from "vec3";
+import { LogEntry } from "../types/log.types"; // Import the new interface
 
 export class SharedAgentState {
   private _visibleBlockTypes: {
@@ -25,10 +26,16 @@ export class SharedAgentState {
   private _currentShortTermGoal: string | null = null;
   private _pendingActions: string[] = [];
 
-  private _feelingsToOthers: Map<string, { sentiment: number; reasons: string[] }>;
-  private _othersFeelingsTowardsSelf: Map<string, { sentiment: number; reasons: string[] }>;
+  private _feelingsToOthers: Map<
+    string,
+    { sentiment: number; reasons: string[] }
+  >;
+  private _othersFeelingsTowardsSelf: Map<
+    string,
+    { sentiment: number; reasons: string[] }
+  >;
 
-  private _conversationLog: string[] = [];
+  private _conversationLog: LogEntry[] = [];
 
   private _lockedInTask: boolean = false;
   private _craftingTablePositions: Vec3[] = [];
@@ -40,7 +47,11 @@ export class SharedAgentState {
     offhand: string | null;
   } = { head: null, chest: null, legs: null, feet: null, offhand: null };
 
-  private _botPosition: { x: number; y: number; z: number } = { x: 0, y: 0, z: 0 };
+  private _botPosition: { x: number; y: number; z: number } = {
+    x: 0,
+    y: 0,
+    z: 0,
+  };
 
   constructor() {
     this._shortTermMemoryIndex = new Map();
@@ -55,7 +66,9 @@ export class SharedAgentState {
   }
 
   public set visibleBlockTypes(
-    data: { BlockTypes: { [blockName: string]: { x: number; y: number; z: number } } } | null
+    data: {
+      BlockTypes: { [blockName: string]: { x: number; y: number; z: number } };
+    } | null
   ) {
     this._visibleBlockTypes = data;
   }
@@ -64,7 +77,9 @@ export class SharedAgentState {
     return this._visibleMobs;
   }
 
-  public set visibleMobs(data: { Mobs: { name: string; distance: number }[] } | null) {
+  public set visibleMobs(
+    data: { Mobs: { name: string; distance: number }[] } | null
+  ) {
     this._visibleMobs = data;
   }
 
@@ -180,30 +195,44 @@ export class SharedAgentState {
     return this._othersFeelingsTowardsSelf;
   }
 
-  public get conversationLog(): string[] {
+  public get conversationLog(): LogEntry[] {
     return this._conversationLog;
   }
 
   public logMessage(
-    role: "user" | "assistant" | "function" | "system" | "memory",
+    role: LogEntry["role"], // Use the role type from LogEntry
     content: string,
-    metadata?: any
+    metadata?: any,
+    // Optional parameters for function calls
+    functionName?: string,
+    functionArgs?: any,
+    functionResult?: string
   ): void {
-    const entry = {
+    const entry: LogEntry = {
       timestamp: new Date().toISOString(),
       role,
       content,
-      metadata: metadata || {}
+      metadata: metadata || {},
+      ...(functionName && { functionName }), // Add if provided
+      ...(functionArgs && { arguments: functionArgs }), // Add if provided
+      ...(functionResult && { result: functionResult }), // Add if provided
     };
-    const jsonStr = JSON.stringify(entry);
-    this._conversationLog.push(jsonStr);
+    this._conversationLog.push(entry);
   }
 
-  public updateFeelingsTowards(person: string, sentiment: number, reasons: string[]): void {
+  public updateFeelingsTowards(
+    person: string,
+    sentiment: number,
+    reasons: string[]
+  ): void {
     this._feelingsToOthers.set(person, { sentiment, reasons });
   }
 
-  public updateOthersFeelingsTowardsSelf(person: string, sentiment: number, reasons: string[]): void {
+  public updateOthersFeelingsTowardsSelf(
+    person: string,
+    sentiment: number,
+    reasons: string[]
+  ): void {
     this._othersFeelingsTowardsSelf.set(person, { sentiment, reasons });
   }
 
@@ -227,15 +256,13 @@ export class SharedAgentState {
     return this._equippedItems;
   }
 
-  public set equippedItems(
-    value: {
-      head: string | null;
-      chest: string | null;
-      legs: string | null;
-      feet: string | null;
-      offhand: string | null;
-    }
-  ) {
+  public set equippedItems(value: {
+    head: string | null;
+    chest: string | null;
+    legs: string | null;
+    feet: string | null;
+    offhand: string | null;
+  }) {
     this._equippedItems = value;
   }
 
@@ -250,12 +277,14 @@ export class SharedAgentState {
         : "(nothing)";
     text += `Inventory: < ${invSummary} >`;
 
-    text += `Position: < x=${st.botPosition.x.toFixed(1)}, y=${st.botPosition.y.toFixed(
+    text += `Position: < x=${st.botPosition.x.toFixed(
       1
-    )}, z=${st.botPosition.z.toFixed(1)} >`;
+    )}, y=${st.botPosition.y.toFixed(1)}, z=${st.botPosition.z.toFixed(1)} >`;
 
     if (st.visibleMobs && st.visibleMobs.Mobs.length > 0) {
-      const sortedMobs = st.visibleMobs.Mobs.slice().sort((a, b) => a.distance - b.distance);
+      const sortedMobs = st.visibleMobs.Mobs.slice().sort(
+        (a, b) => a.distance - b.distance
+      );
       const topTenClosestMobs = sortedMobs.slice(0, 10);
       const mobSummary = topTenClosestMobs
         .map((m) => `${m.name} (~${m.distance.toFixed(1)}m away)`)
@@ -273,35 +302,56 @@ export class SharedAgentState {
       text += `Nearby Block Types: < ${blockSummary} >`;
     }
 
-    const playersNearby = st.playersNearby && st.playersNearby.length > 0
-      ? st.playersNearby.join(", ")
-      : "none";
+    const playersNearby =
+      st.playersNearby && st.playersNearby.length > 0
+        ? st.playersNearby.join(", ")
+        : "none";
     text += `Nearby Players: < ${playersNearby} >`;
 
     return text;
   }
 
-  // Convenience to log an outgoing OpenAI request
   public logOpenAIRequest(endpoint: string, payload: any): void {
-    this.logMessage("system", `OpenAI Request to ${endpoint}`, {
+    const entry: LogEntry = {
+      timestamp: new Date().toISOString(),
+      role: "api_request",
+      content: `Request to ${endpoint}`,
+      endpoint,
       payload,
-      timestamp: new Date().toISOString()
-    });
+      metadata: { store: payload.store }, // Keep the store flag if needed
+    };
+    this._conversationLog.push(entry);
   }
 
-  // Convenience to log an OpenAI response
   public logOpenAIResponse(endpoint: string, response: any): void {
-    this.logMessage("system", `OpenAI Response from ${endpoint}`, {
+    let content = `Response from ${endpoint}`;
+    if (response?.choices?.[0]?.message?.content) {
+      content += `: "${response.choices[0].message.content.substring(
+        0,
+        50
+      )}..."`; // Add snippet
+    } else if (response?.choices?.[0]?.message?.tool_calls) {
+      content += ` (Tool Call: ${response.choices[0].message.tool_calls[0]?.function?.name})`;
+    }
+
+    const entry: LogEntry = {
+      timestamp: new Date().toISOString(),
+      role: "api_response",
+      content,
+      endpoint,
       response,
-      timestamp: new Date().toISOString()
-    });
+    };
+    this._conversationLog.push(entry);
   }
 
-  // Convenience to log an OpenAI error
   public logOpenAIError(endpoint: string, error: any): void {
-    this.logMessage("system", `OpenAI Error from ${endpoint}`, {
-      error,
-      timestamp: new Date().toISOString()
-    });
+    const entry: LogEntry = {
+      timestamp: new Date().toISOString(),
+      role: "api_error",
+      content: `Error from ${endpoint}: ${String(error)}`,
+      endpoint,
+      error: String(error), // Store error message
+    };
+    this._conversationLog.push(entry);
   }
 }

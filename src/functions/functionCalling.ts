@@ -169,13 +169,13 @@ export class FunctionCaller {
           parsedArgs = JSON.parse(argsStr);
         } catch (err) {
           toolCallResult = `ERROR: Could not parse function arguments as JSON. Raw args = ${argsStr}`;
+          // Pass functionName and raw arguments to logMessage
           this.sharedState.logMessage(
-            "function",
-            `Function call parse error for "${fnName}"`,
-            {
-              rawArguments: argsStr,
-              error: String(err),
-            }
+            "function", // Role
+            `Function call parse error for "${fnName}"`, // Content
+            { rawArguments: argsStr, error: String(err) }, // Metadata
+            fnName, // functionName
+            argsStr // functionArgs (raw string here)
           );
           const partialErrorContent = `Function call parse error for "${fnName}": ${toolCallResult}`;
           allMessages.push({
@@ -294,10 +294,14 @@ export class FunctionCaller {
         }
 
         // 6. Log the tool call (function call) with arguments + result
-        this.sharedState.logMessage("function", `Tool call: ${fnName}`, {
-          arguments: parsedArgs,
-          result: toolCallResult,
-        });
+        this.sharedState.logMessage(
+          "function",
+          `Tool call executed: ${fnName}`, // More descriptive content
+          undefined, // No extra metadata needed here unless desired
+          fnName, // functionName
+          parsedArgs, // functionArgs (parsed)
+          toolCallResult // functionResult
+        );
 
         const updatedStateText = this.getSharedStateAsText();
         const combinedContent = `Updated Shared State:${updatedStateText} - Tool Call Result:${toolCallResult}`;
