@@ -1,12 +1,11 @@
-import { Actions } from "../actions";
-import { SharedAgentState } from "../sharedAgentState";
 import { OpenAI } from "openai";
-import { tools } from "./tools";
-import { minecraftItems, minecraftBlocks } from "../../data/minecraftItems";
-import { updateMemoryViaLLM } from "./memory/memoryModule";
+import { minecraftBlocks, minecraftItems } from "../../data/minecraftItems";
+import { Actions } from "../actions";
+import { Observer } from "../observer";
+import { SharedAgentState } from "../sharedAgentState";
 import { Memory } from "./memory/memory";
 import { Social } from "./social/social";
-import { Observer } from "../observer";
+import { tools } from "./tools";
 
 export class FunctionCaller {
   private lastDiffStateSnapshot: {
@@ -64,7 +63,9 @@ export class FunctionCaller {
     }
     for (const newMob of newMobs) {
       if (!oldNames.includes(newMob.name)) {
-        differences.push(`New mob visible: "${newMob.name}" at ~${newMob.distance}m`);
+        differences.push(
+          `New mob visible: "${newMob.name}" at ~${newMob.distance}m`
+        );
       }
     }
     for (const oldMob of oldMobs) {
@@ -108,7 +109,11 @@ export class FunctionCaller {
     let allMessages = [...messages];
 
     for (let loopCount = 0; loopCount < loopLimit; loopCount++) {
-      const { isUnderAttack, attacker, message: attackMsg } = this.observer.checkIfUnderAttack();
+      const {
+        isUnderAttack,
+        attacker,
+        message: attackMsg,
+      } = this.observer.checkIfUnderAttack();
       if (isUnderAttack) {
         const attackerName = attacker?.name ?? "unknown entity";
         const systemAlert = `[DANGER ALERT] You are under attack by "${attackerName}". ${attackMsg}`;
@@ -123,7 +128,7 @@ export class FunctionCaller {
         tools,
         tool_choice: "auto",
         parallel_tool_calls: false,
-        store: true
+        store: true,
       });
 
       let completion;
@@ -262,7 +267,9 @@ export class FunctionCaller {
             }
             case "chat": {
               const { speech } = parsedArgs;
-              const finalSpeech = await this.social.filterMessageForSpeech(speech);
+              const finalSpeech = await this.social.filterMessageForSpeech(
+                speech
+              );
               await this.actions.chat(finalSpeech);
               toolCallResult = `Chatted: ${finalSpeech}`;
               break;

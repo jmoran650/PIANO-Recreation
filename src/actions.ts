@@ -1,12 +1,12 @@
 // src/actions.ts
-import { Bot } from "mineflayer";
-import { Navigation } from "./navigation";
-import { Vec3 } from "vec3";
 import minecraftData from "minecraft-data";
+import { Bot } from "mineflayer";
 import { Block } from "prismarine-block";
-import { SharedAgentState } from "./sharedAgentState";
-import { Observer } from "./observer";
+import { Vec3 } from "vec3";
 import { blockDropMapping } from "../data/minecraftItems";
+import { Navigation } from "./navigation";
+import { Observer } from "./observer";
+import { SharedAgentState } from "./sharedAgentState";
 
 declare module "mineflayer" {
   interface BotEvents {
@@ -20,7 +20,7 @@ export class Actions {
   private mcData: any;
   private sharedState: SharedAgentState;
   private observer: Observer;
-
+  private readonly INTERACTION_RANGE = 4.5;
   constructor(
     bot: Bot,
     navigation: Navigation,
@@ -181,10 +181,13 @@ export class Actions {
       !goalItem.toLowerCase().includes("planks")
     ) {
       // (a) First, see if a placed table is already near us
-      await this.observer.getVisibleBlockTypes(); // refresh environment
+      //await this.observer.getVisibleBlockTypes(); // refresh environment
       const nearTable = this.findNearbyPlacedTable(40); // e.g. 40-block radius
       if (nearTable) {
         console.log("Agent found nearby table, plans to use that.");
+        console.log(
+          `Acquired crafting table at ${nearTable.position}. Moving closer...`
+        );
         tableBlock = nearTable;
       } else {
         // (b) If not found, place or craft one
@@ -194,6 +197,35 @@ export class Actions {
           console.log("Could not find/place a crafting table.");
           throw new Error("Failed to acquire crafting table.");
         }
+      }
+    }
+
+    if (tableBlock) {
+      const distance = this.bot.entity.position.distanceTo(tableBlock.position);
+      // Define interaction range (e.g., 2.5 blocks). Adjust as needed.
+
+      if (distance > this.INTERACTION_RANGE) {
+        console.log(
+          `Too far from crafting table (${distance.toFixed(
+            1
+          )} blocks). Moving closer...`
+        );
+        try {
+          // Use pathfinder to move within ~1.5 blocks of the table center
+          await this.navigation.moveToInteractRange(tableBlock);
+          console.log("Moved closer to the crafting table.");
+        } catch (err) {
+          console.error(`Failed to move to crafting table: ${err}`);
+          throw new Error(
+            `Pathfinding failed: Could not move to crafting table at ${tableBlock.position}`
+          );
+        }
+      } else {
+        console.log(
+          `Already close enough to crafting table (${distance.toFixed(
+            1
+          )} blocks).`
+        );
       }
     }
 
@@ -332,7 +364,7 @@ export class Actions {
     if (placedPos) {
       placedBlock = this.bot.blockAt(placedPos);
       if (placedBlock?.name === "crafting_table") {
-        await this.navigation.move(placedPos.x, placedPos.y, placedPos.z);
+        await this.navigation.move(placedPos.x - 1, placedPos.y, placedPos.z);
         return placedBlock;
       }
     }

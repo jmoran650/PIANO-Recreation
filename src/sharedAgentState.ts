@@ -1,16 +1,17 @@
 import { Vec3 } from "vec3";
 import { LogEntry } from "../types/log.types"; // Import the new interface
+import {
+  EquippedItems,
+ VisibleBlockTypes,
+ VisibleMobs,
+} from "../types/sharedAgentState.types"
+
 
 export class SharedAgentState {
-  private _visibleBlockTypes: {
-    BlockTypes: {
-      [blockName: string]: { x: number; y: number; z: number };
-    };
-  } | null = null;
 
-  private _visibleMobs: {
-    Mobs: { name: string; distance: number }[];
-  } | null = null;
+  private _visibleBlockTypes: VisibleBlockTypes | null = null
+  
+  private _visibleMobs: VisibleMobs | null = null;
 
   private _playersNearby: string[] = [];
   private _inventory: string[] = [];
@@ -39,13 +40,7 @@ export class SharedAgentState {
 
   private _lockedInTask: boolean = false;
   private _craftingTablePositions: Vec3[] = [];
-  private _equippedItems: {
-    head: string | null;
-    chest: string | null;
-    legs: string | null;
-    feet: string | null;
-    offhand: string | null;
-  } = { head: null, chest: null, legs: null, feet: null, offhand: null };
+  private _equippedItems: EquippedItems = { head: null, chest: null, legs: null, feet: null, offhand: null };
 
   private _botPosition: { x: number; y: number; z: number } = {
     x: 0,

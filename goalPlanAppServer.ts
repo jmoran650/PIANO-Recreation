@@ -1,98 +1,26 @@
-process.on("uncaughtException", (err, origin) => {
-  console.error("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
-  console.error("!!! UNCAUGHT EXCEPTION !!!");
-  console.error("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
-  console.error("Origin:", origin);
-  console.error("Error:", err);
-  console.error("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
-  process.exit(1); // You might exit here, or let it potentially continue if safe
-});
-
-process.on("unhandledRejection", (reason, promise) => {
-  console.error("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
-  console.error("!!! UNHANDLED REJECTION !!!");
-  console.error("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
-  console.error("Reason:", reason);
-  console.error("Promise:", promise);
-  console.error("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
-});
-
 // goalPlanAppServer.ts
-
+// ... other imports ...
 import express, { Request, Response } from "express";
 import http from "http";
 import path from "path";
 import { Server as SocketIOServer } from "socket.io";
-import fs from "fs"; // For writing conversation logs to file
-
+import fs from "fs";
+// Import AgentBot type if not already (might be implicitly available via main)
 import { main } from "./index";
 import { SharedAgentState } from "./src/sharedAgentState";
 import { getLLMMetrics, toggleLLMEnabled } from "./utils/llmWrapper";
 import { buildGoalTree, StepNode } from "./src/goalPlanner";
-
-// Helper functions to serialize data
-function mapToObj(map: Map<string, string>): Record<string, string> {
-  const obj: Record<string, string> = {};
-  for (const [key, value] of map.entries()) {
-    obj[key] = value;
-  }
-  return obj;
-}
-
-function mapToObjVec3(
-  map: Map<string, { x: number; y: number; z: number }>
-): Record<string, { x: number; y: number; z: number }> {
-  const obj: Record<string, { x: number; y: number; z: number }> = {};
-  for (const [key, value] of map.entries()) {
-    obj[key] = { x: value.x, y: value.y, z: value.z };
-  }
-  return obj;
-}
-
-function mapToObjSentiment(
-  map: Map<string, { sentiment: number; reasons: string[] }>
-): Record<string, { sentiment: number; reasons: string[] }> {
-  const obj: Record<string, { sentiment: number; reasons: string[] }> = {};
-  for (const [key, value] of map.entries()) {
-    obj[key] = { sentiment: value.sentiment, reasons: value.reasons };
-  }
-  return obj;
-}
-
-function serializeSharedState(sharedState: any): any {
-  return {
-    visibleBlockTypes: sharedState.visibleBlockTypes,
-    visibleMobs: sharedState.visibleMobs,
-    playersNearby: sharedState.playersNearby,
-    shortTermMemoryIndex: mapToObj(sharedState.shortTermMemoryIndex),
-    longTermMemoryIndex: mapToObj(sharedState.longTermMemoryIndex),
-    locationMemoryIndex: mapToObjVec3(sharedState.locationMemoryIndex),
-    longTermGoalQueue: sharedState.longTermGoalQueue,
-    currentLongTermGoal: sharedState.currentLongTermGoal,
-    currentShortTermGoal: sharedState.currentShortTermGoal,
-    pendingActions: sharedState.pendingActions,
-    lockedInTask: sharedState.lockedInTask,
-    feelingsToOthers: mapToObjSentiment(sharedState.feelingsToOthers),
-    othersFeelingsTowardsSelf: mapToObjSentiment(
-      sharedState.othersFeelingsTowardsSelf
-    ),
-    conversationLog: sharedState.conversationLog,
-    llmMetrics: getLLMMetrics(),
-    inventory: sharedState.inventory,
-    botHealth: sharedState.botHealth,
-    botHunger: sharedState.botHunger,
-    craftingTablePositions: sharedState.craftingTablePositions,
-    equippedItems: sharedState.equippedItems,
-  };
-}
+import {
+  serializeSharedState
+} from "./src/server/serverUtils"
 
 async function startServer() {
-  const agent = await main();
-  console.log("main() returned. Type of agent:", typeof agent);
-  console.log(
-    "main() returned. agent.sharedState exists:",
-    !!agent?.sharedState
-  );
+  // Get both agent instances
+  const agents = await main(); // Returns { agent: AgentBot, agent2: AgentBot }
+  const agentBot = agents.agent;
+  const daBiggestBird = agents.agent2;
+
+  console.log(`main() returned. Monitoring: ${agentBot.bot.username} and ${daBiggestBird.bot.username}`);
 
   const app = express();
   const server = http.createServer(app);
@@ -104,73 +32,96 @@ async function startServer() {
     res.sendFile(path.join(__dirname, "../public/index.html"));
   });
 
+  app.get("/goal-planner", (req: Request, res: Response) => { // Ensure goal planner route works
+    res.sendFile(path.join(__dirname, "../public/index.html"));
+  });
+
+
   app.post("/toggle-llm", (req: Request, res: Response) => {
     const newState = toggleLLMEnabled();
     const message = newState
       ? "LLM requests enabled."
       : "LLM requests disabled.";
-    res.send(message);
+    // Respond with JSON including the new state
+    res.json({ message: message, enabled: newState });
   });
 
-  // For storing conversation logs to a file, we keep track of the last index we've written
-  let lastLogIndex = 0;
-  const LOGFILE_PATH = path.join(__dirname, "../conversation.log");
+  let lastLogIndices: Record<string, number> = { // Track log index per bot
+      [agentBot.bot.username]: 0,
+      [daBiggestBird.bot.username]: 0,
+  };
+  const LOGFILE_PATH_PREFIX = path.join(__dirname, "../"); // Log files per bot
 
   io.on("connection", (socket) => {
     console.log("Browser connected via Socket.IO");
-    console.log("Inside connection handler. Type of agent:", typeof agent);
-    console.log(
-      "Inside connection handler. agent.sharedState exists:",
-      !!agent?.sharedState
-    );
+
     const intervalId = setInterval(() => {
       try {
-        // <--- ADD TRY HERE
+        // Serialize state for both bots
+        const stateAgentBot = serializeSharedState(agentBot.sharedState);
+        const stateDaBiggestBird = serializeSharedState(daBiggestBird.sharedState);
+        // console.log(`[Server Emit] ${agentBot.bot.username} Pos:`, stateAgentBot.botPosition);
+        // console.log(`[Server Emit] ${daBiggestBird.bot.username} Pos:`, stateDaBiggestBird.botPosition);
 
-        const stateObj = serializeSharedState(agent.sharedState);
+        // Prepare the combined state object
+        const allStates = {
+          [agentBot.bot.username]: stateAgentBot,
+          [daBiggestBird.bot.username]: stateDaBiggestBird,
+        };
 
-        socket.emit("sharedState", stateObj);
+        // Emit the combined state object under a new event name
+        socket.emit("allSharedStates", allStates);
 
-        // File writing part
-        const fullLog = agent.sharedState.conversationLog;
-        if (fullLog.length > lastLogIndex) {
-          const newLines = fullLog.slice(lastLogIndex).join("\n") + "\n";
-          fs.appendFileSync(LOGFILE_PATH, newLines, "utf8");
-          lastLogIndex = fullLog.length;
+        // --- Log Handling (Example: Separate files per bot) ---
+        for (const botInstance of [agentBot, daBiggestBird]) {
+            const botUsername = botInstance.bot.username;
+            const currentLog = botInstance.sharedState.conversationLog;
+            const lastIndex = lastLogIndices[botUsername] ?? 0;
+            const logFilePath = `${LOGFILE_PATH_PREFIX}${botUsername}_conversation.log`;
+
+            if (currentLog.length > lastIndex) {
+                const newEntries = currentLog.slice(lastIndex);
+                // Append new entries to the bot-specific log file
+                const linesToAppend = newEntries.map(entry => JSON.stringify(entry)).join('\n') + '\n';
+                fs.appendFileSync(logFilePath, linesToAppend, "utf8");
+                lastLogIndices[botUsername] = currentLog.length; // Update index for this bot
+            }
         }
-      } catch (error) {
-        console.error("!!! Error inside server's setInterval:", error); // Log any error that occurs
-      }
-    }, 1000);
+        // --- End Log Handling ---
 
-  
+      } catch (error) {
+        console.error("!!! Error inside server's setInterval:", error);
+      }
+    }, 1000); // Interval remains 1 second
+
     socket.on("disconnect", () => {
       clearInterval(intervalId);
       console.log("Browser disconnected");
     });
 
-    // 2) Listen for hierarchical goal planning requests
+    // Goal Planning - Decide which bot's context to use.
+    // Option 1: Always use AgentBot (simpler)
+    // Option 2: Add bot selection to the event data (more complex)
+    // Let's stick with Option 1 for now.
     socket.on(
       "startGoalPlan",
       async (data: { goal: string; mode?: "bfs" | "dfs" }) => {
         try {
           const goal = data.goal;
           const mode = data.mode || "bfs";
-          console.log(`Starting goal planning for: "${goal}" (mode: ${mode})`);
-
-          // Build the goal tree (flat array) while sending incremental updates
+          console.log(`Starting goal planning for: "${goal}" (mode: ${mode}, context: ${agentBot.bot.username})`);
           const tree: StepNode[] = await buildGoalTree(
             goal,
             mode,
             (updatedTree: StepNode[]) => {
               socket.emit("goalPlanProgress", updatedTree);
             },
-            agent.sharedState
+            agentBot.sharedState // Using primary AgentBot's state for context
           );
-          // Once done, emit the final tree
           socket.emit("goalPlanComplete", tree);
         } catch (err: any) {
-          socket.emit("goalPlanError", err.message);
+            console.error("Error during goal planning socket event:", err);
+            socket.emit("goalPlanError", err.message || "Unknown error during goal planning");
         }
       }
     );
@@ -179,6 +130,8 @@ async function startServer() {
   const PORT = 3000;
   server.listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}`);
+    console.log(`Dashboard: http://localhost:${PORT}`);
+    console.log(`Goal Planner: http://localhost:${PORT}/goal-planner`);
   });
 }
 

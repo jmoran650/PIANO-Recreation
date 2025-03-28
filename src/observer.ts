@@ -5,7 +5,7 @@ import { Block } from "prismarine-block";
 import { Vec3 } from "vec3";
 import minecraftData from "minecraft-data";
 import { SharedAgentState } from "./sharedAgentState";
-
+import { hostileMobNames } from "../data/mobs";
 export interface IObserverOptions {
   radius?: number;
 }
@@ -33,24 +33,30 @@ export class Observer {
 
     // Schedule periodic updates of the bot's inventory, health, and hunger.
     setInterval(() => {
-      this.updateBotStats();
-    }, 10000);
+      this.updateFastBotStats();
+    }, 1000);
+
+    setInterval(() => {
+      this.updateSlowBotStats();
+    }, 5000);
   }
 
   /**
    * New method to update the shared state with current bot stats.
    */
-  public async updateBotStats(): Promise<void> {
+  public async updateFastBotStats(): Promise<void> {
+    this.bot.waitForChunksToLoad();
 
     const inventory = this.getInventoryContents();
     //console.log("this is inventory: ", inventory);
     this.sharedState.inventory = inventory;
     //console.log("this is sharedstate inv: ", this.sharedState.inventory);
-    
+
     // Assumes mineflayer bot has properties "health" and "food"
     this.sharedState.botHealth = this.bot.health;
     this.sharedState.botHunger = this.bot.food;
     // Update bot position as well
+    //console.log(`[Observer] ${this.bot.username} Pos:`, this.bot.entity.position);
     this.sharedState.botPosition = {
       x: this.bot.entity.position.x,
       y: this.bot.entity.position.y,
@@ -64,79 +70,137 @@ export class Observer {
     const mobs = await this.getVisibleMobs();
     this.sharedState.visibleMobs = mobs;
 
-    // Update visible blocks
-    const blocks = await this.getVisibleBlockTypes();
-    this.sharedState.visibleBlockTypes = blocks;
-
+    const nearbyPlayers = this.getNearbyPlayers();
+    this.sharedState.playersNearby = nearbyPlayers;
   }
 
+  public async updateSlowBotStats(): Promise<void> {
+    //this.bot.waitForChunksToLoad();
 
+    const blocks = await this.getVisibleBlockTypes();
+    this.sharedState.visibleBlockTypes = blocks;
+  }
 
   /**
    * ------------------------------
    * 1) Visible Environment Methods
    * ------------------------------
    */
+
+  /**
+   * Finds the closest position for each unique visible block type within the configured radius.
+   *
+   * Optimization: Uses a single pass over the blocks found by `findBlocks`
+   * to determine the closest instance of each type, reducing computational steps
+   * and memory overhead compared to the original multi-pass approach.
+   *
+   * Constraints Adhered To:
+   * - Uses the observer's configured `radius`.
+   * - Uses a large `count` (999999) in `findBlocks` to find all matching blocks within the radius.
+   *
+   * Algorithmic Improvement:
+   * - Original post-findBlocks complexity: O(N) + O(N) + O(M)
+   * - Optimized post-findBlocks complexity: O(N) + O(M)
+   * (Where N = # blocks found, M = # unique block types)
+   * - Eliminates the O(N) intermediate `blockInfos` array storage.
+   */
   public async getVisibleBlockTypes(): Promise<{
     BlockTypes: { [blockName: string]: { x: number; y: number; z: number } };
   }> {
-    //await this.bot.waitForChunksToLoad();
+    const botPos = this.bot.entity.position;
+    const startTime = Date.now();
 
     const positions = this.bot.findBlocks({
-      point: this.bot.entity.position,
+      point: botPos,
       matching: (block: Block | null) => {
         if (!block) return false;
-        // Explicit check: if block's type is 265 (sugar cane), include it even if its name is "air"
         if (block.type === 265) return true;
         return block.name !== "air";
       },
       maxDistance: this.radius,
-      count: 999999
+      count: 999999, // Find all blocks in radius
     });
-    //console.log(`[Observer] findBlocks found ${positions.length} raw positions within ${this.radius} blocks.`);
-
-
-    interface BlockInfo {
-      blockName: string;
-      distance: number;
-      pos: Vec3Type;
-    }
-
-    const blockInfos: BlockInfo[] = [];
-    const botPos = this.bot.entity.position;
-
-    for (const pos of positions) {
-      const block = this.bot.blockAt(pos) as Block | null;
-      if (!block) continue;
-      const distance = botPos.distanceTo(pos);
-      blockInfos.push({
-        blockName: block.name,
-        distance,
-        pos,
-      });
-    }
+    const findBlocksTime = Date.now();
+    console.log(
+      `[Observer ${this.bot.username}] findBlocks found ${positions.length} raw positions within ${
+        this.radius
+      } blocks. (Took ${findBlocksTime - startTime}ms)`
+    );
 
     const closestByType: {
-      [key: string]: { distance: number; pos: Vec3Type };
+      [blockName: string]: { distanceSq: number; pos: Vec3Type };
     } = {};
-    for (const info of blockInfos) {
-      const existing = closestByType[info.blockName];
-      if (!existing || info.distance < existing.distance) {
-        closestByType[info.blockName] = {
-          distance: info.distance,
-          pos: info.pos,
-        };
-      }
-    }
 
+    // --- YIELDING LOGIC ADDED ---
+    let processedCount = 0;
+    // Adjust this interval as needed. Higher means less frequent yielding (potentially more blocking).
+    // Lower means more frequent yielding (less blocking, but slightly more overhead).
+    const yieldInterval = 10000; // Yield every 10,000 blocks processed
+
+    for (const pos of positions) {
+      const block = this.bot.blockAt(pos);
+      if (!block || (block.name === "air" && block.type !== 265)) {
+        continue;
+      }
+
+      const blockName = block.name;
+      const existing = closestByType[blockName];
+      let distanceSq: number;
+
+      if (!existing) {
+        distanceSq = botPos.distanceSquared(pos);
+        closestByType[blockName] = { distanceSq, pos };
+      } else {
+        distanceSq = botPos.distanceSquared(pos);
+        if (distanceSq < existing.distanceSq) {
+          closestByType[blockName] = { distanceSq, pos };
+        }
+      }
+
+      // --- Add the yield check ---
+      processedCount++;
+      if (processedCount % yieldInterval === 0) {
+        // Force a yield to the event loop
+        //console.log(`[Observer ${this.bot.username}] Yielding block processing at ${processedCount}...`); // Optional log
+        await new Promise(resolve => setImmediate(resolve));
+      }
+      // --- End yield check ---
+    }
+    // --- END YIELDING LOGIC ---
+    const processingTime = Date.now();
+    console.log(
+      `[Observer: ${this.bot.username}] Processed ${
+        positions.length
+      } positions to find closest types. (Took ${
+        processingTime - findBlocksTime
+      }ms)`
+    );
+
+    // Step 3: Format the result (O(M) complexity - negligible)
     const result: {
       BlockTypes: { [blockName: string]: { x: number; y: number; z: number } };
     } = { BlockTypes: {} };
-    for (const blockName of Object.keys(closestByType)) {
+
+    for (const blockName in closestByType) {
       const { pos } = closestByType[blockName];
       result.BlockTypes[blockName] = { x: pos.x, y: pos.y, z: pos.z };
     }
-    //console.log(`[Observer] Final result includes types: ${Object.keys(result.BlockTypes).join(', ')}`);
+
+    // Step 4: Final logging and return
+    const typeCount = Object.keys(result.BlockTypes).length;
+    if (typeCount < 10 && positions.length > 0) {
+      // This warning is less indicative of a problem now, as we searched everything in the radius
+      console.warn(
+        `[Observer] Warning: Found only ${typeCount} unique visible block types within radius ${this.radius}. World area might be sparse.`
+      );
+    }
+
+    const endTime = Date.now();
+    console.log(
+      `[Observer] Final result includes ${typeCount} types: ${Object.keys(
+        result.BlockTypes
+      ).join(", ")}. (Total time: ${endTime - startTime}ms)`
+    );
     return result;
   }
 
@@ -505,7 +569,7 @@ export class Observer {
       if (!this.isHostileMob(e)) continue;
 
       if (!e || e === this.bot.entity) continue;
-      
+
       // Skip players
       if ((e as any).username) continue;
       if (e.position) {
@@ -533,39 +597,28 @@ export class Observer {
     // Skip item entities
     if (entity.name === "item") return false;
 
-    // Whitelist of hostile mob names. Expand as needed for your version of MC.
-    const hostileMobNames = new Set([
-      "zombie",
-      "skeleton",
-      "creeper",
-      "spider",
-      "enderman",
-      "witch",
-      "blaze",
-      "ghast",
-      "slime",
-      "magma_cube",
-      "guardian",
-      "elder_guardian",
-      "vindicator",
-      "evoker",
-      "vex",
-      "pillager",
-      "ravager",
-      "phantom",
-      "drowned",
-      "piglin",
-      "hoglin",
-      "zombified_piglin",
-      "piglin_brute",
-      "warden",
-      "shulker",
-      "silverfish",
-      // Add more as needed
-    ]);
-
     // Compare against the set
     const entityName = entity.name?.toLowerCase() ?? "";
     return hostileMobNames.has(entityName);
   }
+
+    /**
+   * Returns a list of usernames of nearby players (excluding the bot itself).
+   * @returns {string[]} An array of player usernames.
+   */
+    public getNearbyPlayers(): string[] { // Added explicit return type
+      try { // Added try/catch
+          const players = Object.values(this.bot.players).filter(
+          (p) =>
+              p?.entity && // Check if player and entity exist
+              p.entity.type === "player" &&
+              p.username !== this.bot.username
+          );
+          return players.map((p) => p.username);
+      } catch (error) {
+          console.error(`[Observer] Error getting nearby players for ${this.bot.username}:`, error);
+          return []; // Return empty array on error
+      }
+    }
+
 }

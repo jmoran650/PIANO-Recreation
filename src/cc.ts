@@ -68,7 +68,6 @@ export class CognitiveController {
   private async fastReflexTick(): Promise<void> {
     // 1. Possibly check for hostile mobs or urgent situations
     //    This is a good place to do quick environment scans or short-latency tasks
-
     // 2. (Optional) Quickly handle any memory cleanup or ephemeral tasks
     // ...
   }

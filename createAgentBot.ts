@@ -4,7 +4,6 @@ import { Movements, pathfinder } from "mineflayer-pathfinder";
 import { plugin as pvp } from "mineflayer-pvp";
 import OpenAI from "openai";
 import { Actions } from "./src/actions";
-import { CognitiveController } from "./src/cc";
 import { Memory } from "./src/functions/memory/memory";
 import { Social } from "./src/functions/social/social";
 import { Goals } from "./src/goals";
@@ -30,12 +29,12 @@ export interface AgentBot {
   observer: Observer;
   navigation: Navigation;
   actions: Actions;
-  cc: CognitiveController;
+  // cc: CognitiveController;
   functionCaller: FunctionCaller;
 }
 
 export async function createAgentBot(options: BotOptions): Promise<AgentBot> {
-  console.log("attempting to create and connect bot! \n");
+  console.log(`attempting to create and connect bot: ${options.username}\n`);
   // 1. Create the bot.
   const bot: Bot = mineflayer.createBot({
     host: options.host,
@@ -50,7 +49,7 @@ export async function createAgentBot(options: BotOptions): Promise<AgentBot> {
     bot.once("error", (err) => reject(err));
   });
 
-  bot.world.setMaxListeners(0);
+  //bot.world.setMaxListeners(0);
 
   bot.waitForChunksToLoad();
 
@@ -69,18 +68,21 @@ export async function createAgentBot(options: BotOptions): Promise<AgentBot> {
   const memory = new Memory(sharedState);
   const social = new Social(sharedState);
   const goals = new Goals(sharedState);
-  const observer = new Observer(bot, { radius: 100 }, sharedState);
+
   const navigation = new Navigation(bot);
+
+  const observer = new Observer(bot, { radius: 80 }, sharedState);
+
   const actions = new Actions(bot, navigation, sharedState, observer);
-  const cc = new CognitiveController(
-    bot,
-    sharedState,
-    memory,
-    social,
-    goals,
-    observer,
-    actions
-  );
+  // const cc = new CognitiveController(
+  //   bot,
+  //   sharedState,
+  //   memory,
+  //   social,
+  //   goals,
+  //   observer,
+  //   actions
+  // );
 
   // 6. Create an OpenAI client and the FunctionCaller instance:
   const openai = new OpenAI({
@@ -96,7 +98,7 @@ export async function createAgentBot(options: BotOptions): Promise<AgentBot> {
     observer
   );
 
-  cc.startConcurrentLoops();
+  //cc.startConcurrentLoops();
 
   // 7. Return all the components.
   return {
@@ -108,7 +110,7 @@ export async function createAgentBot(options: BotOptions): Promise<AgentBot> {
     observer,
     navigation,
     actions,
-    cc,
+    //cc,
     functionCaller,
   };
 }
