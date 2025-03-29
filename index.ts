@@ -1,6 +1,5 @@
 // index.ts
-import dotenv from "dotenv";
-dotenv.config();
+
 // import { Bot } from "mineflayer"
 // import { mineflayer as mineflayerViewer } from "prismarine-viewer"
 // import { goals as pfGoals } from "mineflayer-pathfinder" // Renamed import for clarity.
@@ -147,12 +146,10 @@ function setupChatListener(listeningAgent: AgentBot, otherAgent: AgentBot) {
                     listeningBot.chat(`[${listeningBot.username}] Mobs: ${mobsStr || "None"}`);
                     break;
                 }
-                case "home":
-                    listeningBot.chat("/tp -124 62 28");
-                    break;
                 case "tome":
                     listeningBot.chat(`/tp ${username}`); // Teleport to the player who chatted
                     break;
+
                 case "wood": {
                     // Find and move to nearest wood (simplified example)
                      const visibleBlocksResult = await observer.getVisibleBlockTypes();

@@ -6,9 +6,13 @@ import { Vec3 } from "vec3";
 import minecraftData from "minecraft-data";
 import { SharedAgentState } from "./sharedAgentState";
 import { hostileMobNames } from "../data/mobs";
+import { strict as assert } from 'assert';
+
 export interface IObserverOptions {
   radius?: number;
 }
+
+type BlockResult = { BlockTypes: { [blockName: string]: { x: number; y: number; z: number } } };
 
 type Vec3Type = Vec3;
 
@@ -38,7 +42,14 @@ export class Observer {
 
     setInterval(() => {
       this.updateSlowBotStats();
-    }, 5000);
+    }, 40000);
+
+    // console.log(`[Observer ${this.bot.username}] Scheduling comparison test in 30 seconds.`);
+    // setTimeout(() => {
+    //   this.runComparisonTest().catch(err => {
+    //     console.error(`[Observer ${this.bot.username}] Error during comparison test:`, err);
+    //   });
+    // }, 40000); // 60,000 ms = 1 minute
   }
 
   /**
@@ -77,15 +88,299 @@ export class Observer {
   public async updateSlowBotStats(): Promise<void> {
     //this.bot.waitForChunksToLoad();
 
-    const blocks = await this.getVisibleBlockTypes();
+    const blocks = await this.getVisibleBlockTypesChunked();
     this.sharedState.visibleBlockTypes = blocks;
   }
+
+
+
+
+
+  private async runComparisonTest(): Promise<void> {
+    console.log(`\n--- [Observer ${this.bot.username}] STARTING BLOCK SCAN COMPARISON TEST (Radius: ${this.radius}) ---`);
+    let originalResult: BlockResult | null = null;
+    let chunkedResult: BlockResult | null = null;
+    let errorOccurred: boolean = false;
+    this.bot.waitForChunksToLoad();
+    // Run Original Scan
+    try {
+      originalResult = await this.getVisibleBlockTypes();
+    } catch (err) {
+      console.error(`[Observer ${this.bot.username}] Comparison Test: Error during ORIGINAL scan:`, err);
+      errorOccurred = true;
+    }
+
+    // Run Chunked Scan
+    try {
+      chunkedResult = await this.getVisibleBlockTypesChunked();
+    } catch (err) {
+      console.error(`[Observer ${this.bot.username}] Comparison Test: Error during CHUNKED scan:`, err);
+      errorOccurred = true;
+    }
+
+    // Compare Results
+    if (errorOccurred) {
+      console.log(`--- [Observer ${this.bot.username}] COMPARISON TEST FAILED due to error during scans. ---`);
+      return;
+    }
+
+    if (!originalResult || !chunkedResult) {
+       console.log(`--- [Observer ${this.bot.username}] COMPARISON TEST FAILED: One or both results are null/undefined. ---`);
+       return;
+    }
+
+    try {
+        // Use Node.js assert.deepStrictEqual for a robust comparison
+        // This compares keys, values, and structure recursively.
+        assert.deepStrictEqual(originalResult.BlockTypes, chunkedResult.BlockTypes, "BlockTypes objects do not match.");
+
+        // If assert doesn't throw, they are equal
+        console.log(`--- [Observer ${this.bot.username}] COMPARISON TEST PASSED: Results are identical. (${Object.keys(originalResult.BlockTypes).length} types found) ---`);
+
+    } catch (assertionError: any) {
+        // Assert threw an error, meaning they are different
+        console.error(`--- [Observer ${this.bot.username}] COMPARISON TEST FAILED: Results differ! ---`);
+        console.error("Assertion Error:", assertionError.message);
+
+        // Optional: Log detailed differences (more complex)
+        const originalKeys = Object.keys(originalResult.BlockTypes).sort();
+        const chunkedKeys = Object.keys(chunkedResult.BlockTypes).sort();
+        if (originalKeys.join(',') !== chunkedKeys.join(',')) {
+            console.error("Different block types found:");
+            console.error("  Original Only:", originalKeys.filter(k => !chunkedResult!.BlockTypes[k]));
+            console.error("  Chunked Only:", chunkedKeys.filter(k => !originalResult!.BlockTypes[k]));
+        } else {
+            console.log("Same block types found, checking positions...");
+            for (const key of originalKeys) {
+                const posO = originalResult.BlockTypes[key];
+                const posC = chunkedResult.BlockTypes[key];
+                if (posO.x !== posC.x || posO.y !== posC.y || posO.z !== posC.z) {
+                    console.error(`  Position mismatch for ${key}: Original=(${posO.x},${posO.y},${posO.z}), Chunked=(${posC.x},${posC.y},${posC.z})`);
+                }
+            }
+        }
+        console.log("----------------------------------------------------");
+
+    }
+    console.log(`--- [Observer ${this.bot.username}] COMPARISON TEST FINISHED ---`);
+  }
+
+
+  
 
   /**
    * ------------------------------
    * 1) Visible Environment Methods
    * ------------------------------
    */
+  /**
+   * Finds the closest position for each unique visible block type within the configured radius,
+   * by scanning the area in smaller chunks and yielding between chunks.
+   */
+  /**
+   * ------------------------------
+   * 1) Visible Environment Methods
+   * ------------------------------
+   */
+  /**
+   * Finds the closest position for each unique visible block type within the configured radius,
+   * by scanning the area in smaller chunks and yielding between chunks.
+   */
+  public async getVisibleBlockTypesChunked(
+    chunkSize: number = 32, // Using 64 based on previous test results showing good balance
+    internalCount: number = 999999 // Keep high count for accuracy
+  ): Promise<{
+    BlockTypes: { [blockName: string]: { x: number; y: number; z: number } };
+  }> {
+    const botPos = this.bot.entity.position;
+    if (!botPos) {
+      console.warn(
+        `[Observer: ${this.bot.username}] Cannot perform chunked scan: Bot position unknown.`
+      );
+      return { BlockTypes: {} };
+    }
+
+    // --- Performance Timers ---
+    const overallStartTime = Date.now();
+    let totalAABBCheckTime = 0;
+    let totalFindBlocksTime = 0;
+    let totalBlockProcessingTime = 0;
+    // --------------------------
+
+    const scanRadius = this.radius;
+    const scanRadiusSq = scanRadius * scanRadius;
+
+    const closestByType = new Map<
+      string,
+      { distanceSq: number; pos: Vec3Type }
+    >();
+    let totalPositionsFound = 0;
+    let chunksScanned = 0;
+    let skippedChunks = 0; // Track skipped chunks
+
+    const maxOffset = Math.ceil(scanRadius / chunkSize) * chunkSize;
+
+    console.log(
+      `[Observer: ${this.bot.username}] Chunked scan starting: Radius=${scanRadius}, ChunkSize=${chunkSize}, MaxOffset=${maxOffset}`
+    );
+
+    const loopStartTime = Date.now(); // Time before loops start
+
+    // Loop through chunks in 3D space around the bot
+    for (let dx = -maxOffset; dx < maxOffset; dx += chunkSize) {
+      for (let dy = -maxOffset; dy < maxOffset; dy += chunkSize) {
+        for (let dz = -maxOffset; dz < maxOffset; dz += chunkSize) {
+          const chunkCenterRel = new Vec3(
+            dx + chunkSize / 2,
+            dy + chunkSize / 2,
+            dz + chunkSize / 2
+          );
+
+          // --- Measure AABB Check ---
+          const aabbStartTime = Date.now();
+          let distSqToChunk = 0;
+          for (const axis of ["x", "y", "z"] as const) {
+            const botAxis = botPos[axis];
+            const chunkMin =
+              botPos[axis] + chunkCenterRel[axis] - chunkSize / 2;
+            const chunkMax =
+              botPos[axis] + chunkCenterRel[axis] + chunkSize / 2;
+            if (botAxis < chunkMin)
+              distSqToChunk += (chunkMin - botAxis) * (chunkMin - botAxis);
+            else if (botAxis > chunkMax)
+              distSqToChunk += (botAxis - chunkMax) * (botAxis - chunkMax);
+          }
+          totalAABBCheckTime += Date.now() - aabbStartTime;
+          // --------------------------
+
+          if (distSqToChunk > scanRadiusSq) {
+            skippedChunks++; // Increment skipped chunk count
+            continue; // This chunk is entirely outside the radius sphere
+          }
+
+          const searchPoint = botPos.plus(chunkCenterRel);
+          const searchDistance = (Math.sqrt(3) / 2) * chunkSize * 1.01;
+
+          let positionsInChunk: Vec3[] = [];
+          let findBlocksDuration = 0; // Timer for this specific call
+          try {
+
+            // --- Measure findBlocks ---
+            const findBlocksStartTime = Date.now();
+            positionsInChunk = this.bot.findBlocks({
+              point: searchPoint,
+              maxDistance: searchDistance,
+              matching: (block: Block | null): boolean => { // Check for null block
+                // Need to handle null block case potentially returned by matching fn
+                 if (!block) return false; // If block is null, it cannot match
+                 // Original logic: not air OR sugar cane (type 265)
+                 return block.name !== 'air' || block.type === 265;
+              },
+              count: internalCount,
+              useExtraInfo: false, // Kept false for potential minor perf gain
+            });
+            findBlocksDuration = Date.now() - findBlocksStartTime;
+            totalFindBlocksTime += findBlocksDuration;
+            // ------------------------
+
+          } catch (findBlocksError) {
+            console.error(
+              `[Observer: ${this.bot.username}] Error during findBlocks in chunk centered near ${searchPoint}:`,
+              findBlocksError
+            );
+            await new Promise((resolve) => setImmediate(resolve)); // Yield even on error
+            continue;
+          }
+
+          chunksScanned++;
+          totalPositionsFound += positionsInChunk.length;
+
+          // --- Measure Block Processing ---
+          const processingStartTime = Date.now();
+          for (const pos of positionsInChunk) {
+            const distSqFromBot = pos.distanceSquared(botPos);
+            if (distSqFromBot > scanRadiusSq) {
+              continue;
+            }
+
+            // Reduced blockAt calls by checking existing map first? - No, need name.
+            const block = this.bot.blockAt(pos);
+            // Added explicit check for null block before accessing name
+            if (!block || block.name === "air") continue;
+
+            const blockName = block.name;
+            const existing = closestByType.get(blockName);
+
+            if (!existing || distSqFromBot < existing.distanceSq) {
+              closestByType.set(blockName, { distanceSq: distSqFromBot, pos });
+            }
+          }
+          totalBlockProcessingTime += Date.now() - processingStartTime;
+          // ------------------------------
+
+          // Yield AFTER processing each chunk's results
+          await new Promise((resolve) => setImmediate(resolve));
+
+        } // End dz loop
+      } // End dy loop
+    } // End dx loop
+
+    const loopEndTime = Date.now(); // Time after loops finish
+
+    // --- Log Performance ---
+    const totalLoopTime = loopEndTime - loopStartTime;
+    const otherLoopTime = totalLoopTime - (totalAABBCheckTime + totalFindBlocksTime + totalBlockProcessingTime);
+    console.log(`[Observer: ${this.bot.username}] Chunk Scan Performance Breakdown:`);
+    console.log(`  - Total Loop Iteration Time: ${totalLoopTime}ms`);
+    console.log(`    - AABB Check Time:         ${totalAABBCheckTime}ms`);
+    console.log(`    - findBlocks Time:         ${totalFindBlocksTime}ms`);
+    console.log(`    - Block Processing Time:   ${totalBlockProcessingTime}ms`);
+    console.log(`    - Other (Loop/Yield/Etc):  ${otherLoopTime}ms`);
+    console.log(`  - Chunks Scanned: ${chunksScanned}, Chunks Skipped (AABB): ${skippedChunks}`);
+    console.log(`  - Total Block Positions Found: ${totalPositionsFound}`);
+    // ---------------------
+
+
+    // --- Measure Result Formatting ---
+    const formatStartTime = Date.now();
+    const result: BlockResult = { BlockTypes: {} };
+    for (const [blockName, { pos }] of closestByType.entries()) {
+      if (
+        pos &&
+        typeof pos.x === "number" &&
+        typeof pos.y === "number" &&
+        typeof pos.z === "number"
+      ) {
+        result.BlockTypes[blockName] = { x: pos.x, y: pos.y, z: pos.z };
+      } else {
+        console.warn(
+          `[Observer ${this.bot.username}] Invalid position data for block type ${blockName}`
+        );
+      }
+    }
+    const formatEndTime = Date.now();
+    const formatDuration = formatEndTime - formatStartTime;
+    // -----------------------------
+
+    const typeCount = Object.keys(result.BlockTypes).length;
+    const overallEndTime = Date.now();
+    const overallDuration = overallEndTime - overallStartTime;
+
+    console.log(
+      `[Observer: ${
+        this.bot.username
+      }] Final Result Formatting Time: ${formatDuration}ms`
+    );
+    console.log(
+      `[Observer ${
+        this.bot.username
+      }] Chunked scan final result includes ${typeCount} types. (Overall Time: ${overallDuration}ms)`
+    );
+    return result;
+  }
+
+  // ... (rest of the Observer class remains the same)
+
 
   /**
    * Finds the closest position for each unique visible block type within the configured radius.
@@ -122,9 +417,11 @@ export class Observer {
     });
     const findBlocksTime = Date.now();
     console.log(
-      `[Observer ${this.bot.username}] findBlocks found ${positions.length} raw positions within ${
-        this.radius
-      } blocks. (Took ${findBlocksTime - startTime}ms)`
+      `[Observer: ${this.bot.username}] findBlocks found ${
+        positions.length
+      } raw positions within ${this.radius} blocks. (Took ${
+        findBlocksTime - startTime
+      }ms)`
     );
 
     const closestByType: {
@@ -135,7 +432,7 @@ export class Observer {
     let processedCount = 0;
     // Adjust this interval as needed. Higher means less frequent yielding (potentially more blocking).
     // Lower means more frequent yielding (less blocking, but slightly more overhead).
-    const yieldInterval = 10000; // Yield every 10,000 blocks processed
+    const yieldInterval = 1000; // Yield every 1000 blocks processed
 
     for (const pos of positions) {
       const block = this.bot.blockAt(pos);
@@ -162,7 +459,7 @@ export class Observer {
       if (processedCount % yieldInterval === 0) {
         // Force a yield to the event loop
         //console.log(`[Observer ${this.bot.username}] Yielding block processing at ${processedCount}...`); // Optional log
-        await new Promise(resolve => setImmediate(resolve));
+        await new Promise((resolve) => setImmediate(resolve));
       }
       // --- End yield check ---
     }
@@ -191,15 +488,17 @@ export class Observer {
     if (typeCount < 10 && positions.length > 0) {
       // This warning is less indicative of a problem now, as we searched everything in the radius
       console.warn(
-        `[Observer] Warning: Found only ${typeCount} unique visible block types within radius ${this.radius}. World area might be sparse.`
+        `[Observer] Warning: Found only ${typeCount} unique visible block types within radius ${this.radius}.`
       );
     }
 
     const endTime = Date.now();
     console.log(
-      `[Observer] Final result includes ${typeCount} types: ${Object.keys(
+      `[Observer: ${
+        this.bot.username
+      }] Final result includes ${typeCount} types: ${Object.keys(
         result.BlockTypes
-      ).join(", ")}. (Total time: ${endTime - startTime}ms)`
+      ).join(", ")}. (Total time: ${endTime - startTime}ms) \n`
     );
     return result;
   }
@@ -602,23 +901,30 @@ export class Observer {
     return hostileMobNames.has(entityName);
   }
 
-    /**
+  /**
    * Returns a list of usernames of nearby players (excluding the bot itself).
    * @returns {string[]} An array of player usernames.
    */
-    public getNearbyPlayers(): string[] { // Added explicit return type
-      try { // Added try/catch
-          const players = Object.values(this.bot.players).filter(
-          (p) =>
-              p?.entity && // Check if player and entity exist
-              p.entity.type === "player" &&
-              p.username !== this.bot.username
-          );
-          return players.map((p) => p.username);
-      } catch (error) {
-          console.error(`[Observer] Error getting nearby players for ${this.bot.username}:`, error);
-          return []; // Return empty array on error
-      }
+  public getNearbyPlayers(): string[] {
+    // Added explicit return type
+    try {
+      // Added try/catch
+      const players = Object.values(this.bot.players).filter(
+        (p) =>
+          p?.entity && // Check if player and entity exist
+          p.entity.type === "player" &&
+          p.username !== this.bot.username
+      );
+      return players.map((p) => p.username);
+    } catch (error) {
+      console.error(
+        `[Observer] Error getting nearby players for ${this.bot.username}:`,
+        error
+      );
+      return []; // Return empty array on error
     }
+  }
 
+
+  
 }
