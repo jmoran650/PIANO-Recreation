@@ -31,8 +31,8 @@ export class Memory {
 
   public getShortTermMemory(name: string): string | undefined {
     const stm = this.sharedState.shortTermMemoryIndex;
-    if (!stm.has(name)) return undefined;
-    const info = stm.get(name)!;
+    const info = stm.get(name);
+    if (info === undefined) throw new Error("Error in getShortTermMemory: info is undefined");
     stm.delete(name);
     stm.set(name, info);
     return info;

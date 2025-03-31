@@ -1,12 +1,14 @@
 // src/actions.ts
+import dotenv from "dotenv";
 import minecraftData from "minecraft-data";
 import { Bot } from "mineflayer";
 import { Block } from "prismarine-block";
 import { Vec3 } from "vec3";
 import { blockDropMapping } from "../data/minecraftItems";
 import { Navigation } from "./navigation";
-import { Observer } from "./observer";
+import { Observer } from "./observer/observer";
 import { SharedAgentState } from "./sharedAgentState";
+dotenv.config();
 
 declare module "mineflayer" {
   interface BotEvents {
@@ -29,7 +31,10 @@ export class Actions {
   ) {
     this.bot = bot;
     this.navigation = navigation;
-    this.mcData = minecraftData("1.21.4");
+    if (process.env.MINECRAFT_VERSION == undefined) {
+      throw new Error("[ACTIONS] Minecraft Version Undefined");
+    }
+    this.mcData = minecraftData(process.env.MINECRAFT_VERSION);
     this.sharedState = sharedState;
     this.observer = observer;
   }

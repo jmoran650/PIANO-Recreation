@@ -1,18 +1,22 @@
 // src/observer.ts
-import { Bot } from "mineflayer";
-import type { Entity } from "prismarine-entity";
-import { Block } from "prismarine-block";
-import { Vec3 } from "vec3";
+import { strict as assert } from "assert";
+import dotenv from "dotenv";
 import minecraftData from "minecraft-data";
-import { SharedAgentState } from "./sharedAgentState";
-import { hostileMobNames } from "../data/mobs";
-import { strict as assert } from 'assert';
+import { Bot } from "mineflayer";
+import { Block } from "prismarine-block";
+import type { Entity } from "prismarine-entity";
+import { Vec3 } from "vec3";
+import { hostileMobNames } from "../../data/mobs";
+import { SharedAgentState } from "../sharedAgentState";
+dotenv.config(); // Ensure worker loads environment variables
 
 export interface IObserverOptions {
   radius?: number;
 }
 
-type BlockResult = { BlockTypes: { [blockName: string]: { x: number; y: number; z: number } } };
+type BlockResult = {
+  BlockTypes: { [blockName: string]: { x: number; y: number; z: number } };
+};
 
 type Vec3Type = Vec3;
 
@@ -23,7 +27,7 @@ export class Observer {
   private mcData: any;
   private _wasHurt: boolean = false;
   private _swingArmAttacker: Entity | null = null;
-
+  private recentChats: string[] = [];
   constructor(
     bot: Bot,
     options: IObserverOptions = {},
@@ -32,17 +36,20 @@ export class Observer {
     this.bot = bot;
     this.radius = options.radius ?? 2000;
     this.sharedState = sharedState;
-    // Initialize minecraft-data for version 1.21.4
-    this.mcData = minecraftData("1.21.4");
+
+    if (process.env.MINECRAFT_VERSION == undefined) {
+      throw new Error("Minecraft Version is Undefined");
+    }
+    this.mcData = minecraftData(process.env.MINECRAFT_VERSION);
 
     // Schedule periodic updates of the bot's inventory, health, and hunger.
     setInterval(() => {
       this.updateFastBotStats();
-    }, 1000);
+    }, 2000);
 
     setInterval(() => {
       this.updateSlowBotStats();
-    }, 40000);
+    }, 45000);
 
     // console.log(`[Observer ${this.bot.username}] Scheduling comparison test in 30 seconds.`);
     // setTimeout(() => {
@@ -50,14 +57,58 @@ export class Observer {
     //     console.error(`[Observer ${this.bot.username}] Error during comparison test:`, err);
     //   });
     // }, 40000); // 60,000 ms = 1 minute
+
+    // --- NEW: Chat Listener Logic ---
+    this.bot.on("chat", (username: string, message: string) => {
+      if (username === this.bot.username) return; // Ignore self
+
+      let commandMessage: string = message;
+      let isPrefixed = false;
+
+      // Basic prefix parsing (similar to botWorker's original logic)
+      // to isolate the actual message content for the 'test ' check.
+      if (message.toLowerCase().startsWith("ab:")) {
+        commandMessage = message.substring(3).trim();
+        isPrefixed = true;
+      } else if (message.toLowerCase().startsWith("dbb:")) {
+        commandMessage = message.substring(4).trim();
+        isPrefixed = true;
+      } else if (message.toLowerCase().startsWith("all:")) {
+        commandMessage = message.substring(4).trim();
+        isPrefixed = true;
+      }
+      // else: commandMessage remains the original message
+
+      // Ignore messages that are test commands (after handling prefix)
+      if (commandMessage.toLowerCase().startsWith("test ")) {
+        // console.log(`[Observer ${this.bot.username}] Ignoring test command chat: ${username}: ${message}`); // Optional debug log
+        return;
+      }
+
+      // Store the original, non-test message
+      const formattedMessage = `${username}: ${message}`;
+      this.recentChats.push(formattedMessage);
+      // Optional: Limit the size of recentChats array
+      // if (this.recentChats.length > 20) {
+      //     this.recentChats.shift(); // Remove oldest message
+      // }
+    });
+  }
+
+  // --- NEW: Method to get and clear chats ---
+  public getAndClearRecentChats(): string[] {
+    const chats = [...this.recentChats]; // Copy the array
+    this.recentChats = []; // Clear the original array
+    return chats;
   }
 
   /**
    * New method to update the shared state with current bot stats.
    */
   public async updateFastBotStats(): Promise<void> {
+    
+    let fastbotStatStartTime = Date.now();
     this.bot.waitForChunksToLoad();
-
     const inventory = this.getInventoryContents();
     //console.log("this is inventory: ", inventory);
     this.sharedState.inventory = inventory;
@@ -83,21 +134,25 @@ export class Observer {
 
     const nearbyPlayers = this.getNearbyPlayers();
     this.sharedState.playersNearby = nearbyPlayers;
+
+    let fastbotStatEndTime = Date.now();
+    //console.log("fastBotStat update time: ", fastbotStatEndTime - fastbotStatStartTime)
   }
 
   public async updateSlowBotStats(): Promise<void> {
-    //this.bot.waitForChunksToLoad();
-
-    const blocks = await this.getVisibleBlockTypesChunked();
+    const slowStart = Date.now()
+    await new Promise((resolve) => setImmediate(resolve, 100));
+    const blocks = await this.getVisibleBlockTypes();
     this.sharedState.visibleBlockTypes = blocks;
+    await new Promise((resolve) => setImmediate(resolve, 100));
+    const slowEnd = Date.now()
+    console.log("slowBotStat update time: ", slowEnd - slowStart);
   }
 
-
-
-
-
   private async runComparisonTest(): Promise<void> {
-    console.log(`\n--- [Observer ${this.bot.username}] STARTING BLOCK SCAN COMPARISON TEST (Radius: ${this.radius}) ---`);
+    console.log(
+      `\n--- [Observer ${this.bot.username}] STARTING BLOCK SCAN COMPARISON TEST (Radius: ${this.radius}) ---`
+    );
     let originalResult: BlockResult | null = null;
     let chunkedResult: BlockResult | null = null;
     let errorOccurred: boolean = false;
@@ -106,7 +161,10 @@ export class Observer {
     try {
       originalResult = await this.getVisibleBlockTypes();
     } catch (err) {
-      console.error(`[Observer ${this.bot.username}] Comparison Test: Error during ORIGINAL scan:`, err);
+      console.error(
+        `[Observer ${this.bot.username}] Comparison Test: Error during ORIGINAL scan:`,
+        err
+      );
       errorOccurred = true;
     }
 
@@ -114,60 +172,84 @@ export class Observer {
     try {
       chunkedResult = await this.getVisibleBlockTypesChunked();
     } catch (err) {
-      console.error(`[Observer ${this.bot.username}] Comparison Test: Error during CHUNKED scan:`, err);
+      console.error(
+        `[Observer ${this.bot.username}] Comparison Test: Error during CHUNKED scan:`,
+        err
+      );
       errorOccurred = true;
     }
 
     // Compare Results
     if (errorOccurred) {
-      console.log(`--- [Observer ${this.bot.username}] COMPARISON TEST FAILED due to error during scans. ---`);
+      console.log(
+        `--- [Observer ${this.bot.username}] COMPARISON TEST FAILED due to error during scans. ---`
+      );
       return;
     }
 
     if (!originalResult || !chunkedResult) {
-       console.log(`--- [Observer ${this.bot.username}] COMPARISON TEST FAILED: One or both results are null/undefined. ---`);
-       return;
+      console.log(
+        `--- [Observer ${this.bot.username}] COMPARISON TEST FAILED: One or both results are null/undefined. ---`
+      );
+      return;
     }
 
     try {
-        // Use Node.js assert.deepStrictEqual for a robust comparison
-        // This compares keys, values, and structure recursively.
-        assert.deepStrictEqual(originalResult.BlockTypes, chunkedResult.BlockTypes, "BlockTypes objects do not match.");
+      // Use Node.js assert.deepStrictEqual for a robust comparison
+      // This compares keys, values, and structure recursively.
+      assert.deepStrictEqual(
+        originalResult.BlockTypes,
+        chunkedResult.BlockTypes,
+        "BlockTypes objects do not match."
+      );
 
-        // If assert doesn't throw, they are equal
-        console.log(`--- [Observer ${this.bot.username}] COMPARISON TEST PASSED: Results are identical. (${Object.keys(originalResult.BlockTypes).length} types found) ---`);
-
+      // If assert doesn't throw, they are equal
+      console.log(
+        `--- [Observer ${
+          this.bot.username
+        }] COMPARISON TEST PASSED: Results are identical. (${
+          Object.keys(originalResult.BlockTypes).length
+        } types found) ---`
+      );
     } catch (assertionError: any) {
-        // Assert threw an error, meaning they are different
-        console.error(`--- [Observer ${this.bot.username}] COMPARISON TEST FAILED: Results differ! ---`);
-        console.error("Assertion Error:", assertionError.message);
+      // Assert threw an error, meaning they are different
+      console.error(
+        `--- [Observer ${this.bot.username}] COMPARISON TEST FAILED: Results differ! ---`
+      );
+      console.error("Assertion Error:", assertionError.message);
 
-        // Optional: Log detailed differences (more complex)
-        const originalKeys = Object.keys(originalResult.BlockTypes).sort();
-        const chunkedKeys = Object.keys(chunkedResult.BlockTypes).sort();
-        if (originalKeys.join(',') !== chunkedKeys.join(',')) {
-            console.error("Different block types found:");
-            console.error("  Original Only:", originalKeys.filter(k => !chunkedResult!.BlockTypes[k]));
-            console.error("  Chunked Only:", chunkedKeys.filter(k => !originalResult!.BlockTypes[k]));
-        } else {
-            console.log("Same block types found, checking positions...");
-            for (const key of originalKeys) {
-                const posO = originalResult.BlockTypes[key];
-                const posC = chunkedResult.BlockTypes[key];
-                if (posO.x !== posC.x || posO.y !== posC.y || posO.z !== posC.z) {
-                    console.error(`  Position mismatch for ${key}: Original=(${posO.x},${posO.y},${posO.z}), Chunked=(${posC.x},${posC.y},${posC.z})`);
-                }
-            }
+      // Optional: Log detailed differences (more complex)
+      const originalKeys = Object.keys(originalResult.BlockTypes).sort();
+      const chunkedKeys = Object.keys(chunkedResult.BlockTypes).sort();
+      if (originalKeys.join(",") !== chunkedKeys.join(",")) {
+        console.error("Different block types found:");
+        console.error(
+          "  Original Only:",
+          originalKeys.filter((k) => !chunkedResult!.BlockTypes[k])
+        );
+        console.error(
+          "  Chunked Only:",
+          chunkedKeys.filter((k) => !originalResult!.BlockTypes[k])
+        );
+      } else {
+        console.log("Same block types found, checking positions...");
+        for (const key of originalKeys) {
+          const posO = originalResult.BlockTypes[key];
+          const posC = chunkedResult.BlockTypes[key];
+          if (posO.x !== posC.x || posO.y !== posC.y || posO.z !== posC.z) {
+            console.error(
+              `  Position mismatch for ${key}: Original=(${posO.x},${posO.y},${posO.z}), Chunked=(${posC.x},${posC.y},${posC.z})`
+            );
+          }
         }
-        console.log("----------------------------------------------------");
-
+      }
+      console.log("----------------------------------------------------");
     }
-    console.log(`--- [Observer ${this.bot.username}] COMPARISON TEST FINISHED ---`);
+    console.log(
+      `--- [Observer ${this.bot.username}] COMPARISON TEST FINISHED ---`
+    );
   }
 
-
-  
-
   /**
    * ------------------------------
    * 1) Visible Environment Methods
@@ -186,7 +268,7 @@ export class Observer {
    * Finds the closest position for each unique visible block type within the configured radius,
    * by scanning the area in smaller chunks and yielding between chunks.
    */
-  public async getVisibleBlockTypesChunked(
+  private async getVisibleBlockTypesChunked(
     chunkSize: number = 32, // Using 64 based on previous test results showing good balance
     internalCount: number = 999999 // Keep high count for accuracy
   ): Promise<{
@@ -264,17 +346,17 @@ export class Observer {
           let positionsInChunk: Vec3[] = [];
           let findBlocksDuration = 0; // Timer for this specific call
           try {
-
             // --- Measure findBlocks ---
             const findBlocksStartTime = Date.now();
             positionsInChunk = this.bot.findBlocks({
               point: searchPoint,
               maxDistance: searchDistance,
-              matching: (block: Block | null): boolean => { // Check for null block
+              matching: (block: Block | null): boolean => {
+                // Check for null block
                 // Need to handle null block case potentially returned by matching fn
-                 if (!block) return false; // If block is null, it cannot match
-                 // Original logic: not air OR sugar cane (type 265)
-                 return block.name !== 'air' || block.type === 265;
+                if (!block) return false; // If block is null, it cannot match
+                // Original logic: not air OR sugar cane (type 265)
+                return block.name !== "air" || block.type === 265;
               },
               count: internalCount,
               useExtraInfo: false, // Kept false for potential minor perf gain
@@ -282,13 +364,12 @@ export class Observer {
             findBlocksDuration = Date.now() - findBlocksStartTime;
             totalFindBlocksTime += findBlocksDuration;
             // ------------------------
-
           } catch (findBlocksError) {
             console.error(
               `[Observer: ${this.bot.username}] Error during findBlocks in chunk centered near ${searchPoint}:`,
               findBlocksError
             );
-            await new Promise((resolve) => setImmediate(resolve)); // Yield even on error
+            await new Promise((resolve) => setImmediate(resolve, 100)); // Yield even on error
             continue;
           }
 
@@ -319,8 +400,7 @@ export class Observer {
           // ------------------------------
 
           // Yield AFTER processing each chunk's results
-          await new Promise((resolve) => setImmediate(resolve));
-
+          await new Promise((resolve) => setImmediate(resolve, 100));
         } // End dz loop
       } // End dy loop
     } // End dx loop
@@ -329,17 +409,22 @@ export class Observer {
 
     // --- Log Performance ---
     const totalLoopTime = loopEndTime - loopStartTime;
-    const otherLoopTime = totalLoopTime - (totalAABBCheckTime + totalFindBlocksTime + totalBlockProcessingTime);
-    console.log(`[Observer: ${this.bot.username}] Chunk Scan Performance Breakdown:`);
+    const otherLoopTime =
+      totalLoopTime -
+      (totalAABBCheckTime + totalFindBlocksTime + totalBlockProcessingTime);
+    console.log(
+      `[Observer: ${this.bot.username}] Chunk Scan Performance Breakdown:`
+    );
     console.log(`  - Total Loop Iteration Time: ${totalLoopTime}ms`);
     console.log(`    - AABB Check Time:         ${totalAABBCheckTime}ms`);
     console.log(`    - findBlocks Time:         ${totalFindBlocksTime}ms`);
     console.log(`    - Block Processing Time:   ${totalBlockProcessingTime}ms`);
     console.log(`    - Other (Loop/Yield/Etc):  ${otherLoopTime}ms`);
-    console.log(`  - Chunks Scanned: ${chunksScanned}, Chunks Skipped (AABB): ${skippedChunks}`);
+    console.log(
+      `  - Chunks Scanned: ${chunksScanned}, Chunks Skipped (AABB): ${skippedChunks}`
+    );
     console.log(`  - Total Block Positions Found: ${totalPositionsFound}`);
     // ---------------------
-
 
     // --- Measure Result Formatting ---
     const formatStartTime = Date.now();
@@ -367,20 +452,15 @@ export class Observer {
     const overallDuration = overallEndTime - overallStartTime;
 
     console.log(
-      `[Observer: ${
-        this.bot.username
-      }] Final Result Formatting Time: ${formatDuration}ms`
+      `[Observer: ${this.bot.username}] Final Result Formatting Time: ${formatDuration}ms`
     );
     console.log(
-      `[Observer ${
-        this.bot.username
-      }] Chunked scan final result includes ${typeCount} types. (Overall Time: ${overallDuration}ms)`
+      `[Observer ${this.bot.username}] Chunked scan final result includes ${typeCount} types. (Overall Time: ${overallDuration}ms)`
     );
     return result;
   }
 
   // ... (rest of the Observer class remains the same)
-
 
   /**
    * Finds the closest position for each unique visible block type within the configured radius.
@@ -404,7 +484,7 @@ export class Observer {
   }> {
     const botPos = this.bot.entity.position;
     const startTime = Date.now();
-
+    await new Promise((resolve) => setImmediate(resolve, 100));
     const positions = this.bot.findBlocks({
       point: botPos,
       matching: (block: Block | null) => {
@@ -432,7 +512,7 @@ export class Observer {
     let processedCount = 0;
     // Adjust this interval as needed. Higher means less frequent yielding (potentially more blocking).
     // Lower means more frequent yielding (less blocking, but slightly more overhead).
-    const yieldInterval = 1000; // Yield every 1000 blocks processed
+    const yieldInterval = 10000; // Yield every 1000 blocks processed
 
     for (const pos of positions) {
       const block = this.bot.blockAt(pos);
@@ -459,7 +539,7 @@ export class Observer {
       if (processedCount % yieldInterval === 0) {
         // Force a yield to the event loop
         //console.log(`[Observer ${this.bot.username}] Yielding block processing at ${processedCount}...`); // Optional log
-        await new Promise((resolve) => setImmediate(resolve));
+        await new Promise((resolve) => setImmediate(resolve, 100));
       }
       // --- End yield check ---
     }
@@ -924,7 +1004,4 @@ export class Observer {
       return []; // Return empty array on error
     }
   }
-
-
-  
 }

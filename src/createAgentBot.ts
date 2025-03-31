@@ -3,15 +3,15 @@ import mineflayer, { Bot } from "mineflayer";
 import { Movements, pathfinder } from "mineflayer-pathfinder";
 import { plugin as pvp } from "mineflayer-pvp";
 import OpenAI from "openai";
-import { Actions } from "./src/actions";
-import { Memory } from "./src/functions/memory/memory";
-import { Social } from "./src/functions/social/social";
-import { Goals } from "./src/goals";
-import { Navigation } from "./src/navigation";
-import { Observer } from "./src/observer";
-import { SharedAgentState } from "./src/sharedAgentState";
+import { Actions } from "./actions";
+import { Memory } from "./functions/memory/memory";
+import { Social } from "./functions/social/social";
+import { Goals } from "./goals";
+import { Navigation } from "./navigation";
+import { Observer } from "./observer/observer";
+import { SharedAgentState } from "./sharedAgentState";
 // NEW IMPORTS FOR FUNCTIONCALLER:
-import { FunctionCaller } from "./src/functions/functionCalling";
+import { FunctionCaller } from "./functions/functionCalling";
 
 export interface BotOptions {
   host: string;

@@ -4,7 +4,7 @@ import { Actions } from "./actions";
 import { Memory } from "./functions/memory/memory";
 import { Social } from "./functions/social/social";
 import { Goals } from "./goals";
-import { Observer } from "./observer";
+import { Observer } from "./observer/observer";
 import { SharedAgentState } from "./sharedAgentState";
 
 interface CognitiveControllerOptions {

@@ -13,10 +13,11 @@
   "include": [
     "src/**/*",
     "index.ts",
-    "createAgentBot.ts",
+    "src/createAgentBot.ts",
     "goalPlanAppServer.ts",
     "treeviewer/goal-planner-app/src/goalPlanner.ts",
-    "types/**/*"
+    "types/**/*",
+    "src/botWorker.ts"
   ],
   "exclude": ["node_modules", "dist", "**/*.test.ts"]
 }

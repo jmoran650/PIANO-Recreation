@@ -1,7 +1,7 @@
 import { OpenAI } from "openai";
 import { minecraftBlocks, minecraftItems } from "../../data/minecraftItems";
 import { Actions } from "../actions";
-import { Observer } from "../observer";
+import { Observer } from "../observer/observer";
 import { SharedAgentState } from "../sharedAgentState";
 import { Memory } from "./memory/memory";
 import { Social } from "./social/social";
@@ -120,7 +120,26 @@ export class FunctionCaller {
         console.log("under attack!");
         allMessages.push({ role: "user", content: systemAlert });
       }
+      // --- NEW: Prepare messages for THIS API call, including recent chats ---
+      let messagesForApiCall = [...allMessages]; // Copy current history
 
+      const recentChatMessages = this.observer.getAndClearRecentChats();
+      if (recentChatMessages.length > 0) {
+        const chatContextString = recentChatMessages.join("\n");
+        const chatContextMessage: { role: "user"; content: string } = {
+          role: "user", // Representing observed chat as user input for context
+          content: `--- Recent Chat History Observed ---\n${chatContextString}\n --- End Chat History ---`,
+        };
+        // Add context for this specific call
+        messagesForApiCall.push(chatContextMessage);
+        // Log that context was added (optional)
+        this.sharedState.logMessage(
+          "system",
+          "Injecting recent chat history for LLM context.",
+          { history_length: recentChatMessages.length }
+        );
+      }
+      // --- END NEW ---
       // --- LOG REQUEST ---
       this.sharedState.logOpenAIRequest("chat.completions.create", {
         model: "gpt-4o",
@@ -144,6 +163,7 @@ export class FunctionCaller {
       } catch (error) {
         // Log error
         this.sharedState.logOpenAIError("chat.completions.create", error);
+      
         break;
       }
 
@@ -154,7 +174,7 @@ export class FunctionCaller {
       const msg = choice.message;
 
       if (msg.content) {
-        this.sharedState.logMessage("assistant", msg.content);
+        this.sharedState.logMessage("assistant", msg.content, { note: "Assistant textual response" });
       }
 
       if (!msg.tool_calls || msg.tool_calls.length === 0) {
@@ -331,6 +351,7 @@ export class FunctionCaller {
       note: "Unfiltered assistant response.",
     });
 
+    console.log("FUNCTION CALLER LOOP HAS ENDED")
     return finalResponse;
   }
 }
