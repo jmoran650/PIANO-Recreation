@@ -9,6 +9,8 @@ import {
 
 export class SharedAgentState {
 
+  public readonly _botUsername: string;
+
   private _visibleBlockTypes: VisibleBlockTypes | null = null
   
   private _visibleMobs: VisibleMobs | null = null;
@@ -48,7 +50,8 @@ export class SharedAgentState {
     z: 0,
   };
 
-  constructor() {
+  constructor(username: string) {
+    this._botUsername = username;
     this._shortTermMemoryIndex = new Map();
     this._longTermMemoryIndex = new Map();
     this._locationMemoryIndex = new Map();

@@ -29,6 +29,53 @@ export const tools: ChatCompletionTool[] = [
   {
     type: "function",
     function: {
+      name: "gotoPlayer",
+      description: "Navigates the bot to the current location of the specified player.",
+      parameters: {
+        type: "object",
+        properties: {
+          playerName: {
+            type: "string",
+            description: "The username of the player to navigate to.",
+          },
+        },
+        required: ["playerName"], // playerName is strictly required
+        additionalProperties: false,
+      },
+      strict: true,
+    },
+  },
+
+  {
+    type: "function",
+    function: {
+      name: "gotoCoordinates",
+      description: "Navigates the bot to the specified x, y, z coordinates.",
+      parameters: {
+        type: "object",
+        properties: {
+          coordinates: {
+            type: "object",
+            description: "The exact {x, y, z} coordinates to navigate to.",
+            properties: {
+              x: { type: "number", description: "The target x-coordinate." },
+              y: { type: "number", description: "The target y-coordinate." },
+              z: { type: "number", description: "The target z-coordinate." },
+            },
+            required: ["x", "y", "z"], // x,y,z required within coordinates object
+            additionalProperties: false,
+          },
+        },
+        required: ["coordinates"], // coordinates object itself is required
+        additionalProperties: false,
+      },
+      strict: true,
+    },
+  },
+  
+  {
+    type: "function",
+    function: {
       name: "craft",
       description: "Crafts a goal item if a recipe is available.",
       parameters: {

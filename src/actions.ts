@@ -235,16 +235,23 @@ export class Actions {
     }
 
     // 3) Get all possible recipes
-    const possibleRecipesAll = this.bot.recipesAll(itemId, null, tableBlock);
+    const possibleRecipesAll = this.bot.recipesAll(itemId, null, tableBlock);  
     if (!possibleRecipesAll || possibleRecipesAll.length === 0) {
       console.log(`No recipe found for "${goalItem}".`);
       throw new Error(`No recipe for ${goalItem}`);
     }
 
-    // 4) Check which recipes we can actually craft with current inventory
+    const currentInventory = this.observer.getInventoryContents(); // Get fresh inventory list
+    console.log(`[DEBUG Craft] Inventory before recipesFor check: [${currentInventory.join(', ')}]`);
+    console.log(`[DEBUG Craft] Calling recipesFor(${itemId}, null, 1, ${tableBlock ? 'tableBlock' : 'null'})`);
+
+    // 4) Check which recipes we can actually craft with current inventor
+    // bvy
     const possibleRecipesFor = this.bot.recipesFor(itemId, null, 1, tableBlock);
     if (!possibleRecipesFor || possibleRecipesFor.length === 0) {
       console.log(`Missing ingredients to craft "${goalItem}".`);
+      const allRecipes = this.bot.recipesAll(itemId, null, tableBlock);
+      console.log(`[DEBUG Craft] recipesFor check failed. All possible recipes found: ${allRecipes.length}`);
       throw new Error(
         `Don't have enough/correct ingredients to craft ${goalItem}`
       );
@@ -984,6 +991,56 @@ export class Actions {
     return null;
   }
 
+  async gotoPlayer(playerName: string): Promise<void> {
+    if (!playerName || typeof playerName !== 'string' || playerName.trim() === '') {
+        throw new Error("Invalid arguments: 'playerName' must be a non-empty string.");
+    }
+
+    const targetDesc = `player ${playerName}`;
+    this.sharedState.addPendingAction(`Go to ${targetDesc}`);
+    console.log(`[Action] Attempting to navigate to ${targetDesc}`);
+
+    const targetPlayer = this.bot.players[playerName];
+
+    if (!targetPlayer || !targetPlayer.entity) {
+      if (this.sharedState.playersNearby.includes(playerName)) {
+        throw new Error(`Player '${playerName}' is nearby but entity data not loaded yet. Try again shortly.`);
+      } else {
+        throw new Error(`Cannot find player '${playerName}' nearby.`);
+      }
+    }
+
+    const destination = targetPlayer.entity.position;
+    console.log(`[Action] Found ${playerName} at ${destination.x.toFixed(1)}, ${destination.y.toFixed(1)}, ${destination.z.toFixed(1)}`);
+
+    try {
+      await this.navigation.move(destination.x, destination.y, destination.z);
+      console.log(`[Action] Successfully navigated to ${targetDesc}.`);
+    } catch (error: any) {
+      console.error(`[Action] Navigation failed when going to ${targetDesc}:`, error);
+      throw new Error(`Navigation failed: Could not reach ${targetDesc}. Reason: ${error.message || error}`);
+    }
+  }
+
+  // ---> ADDED: gotoCoordinates method <---
+  async gotoCoordinates(coordinates: { x: number; y: number; z: number }): Promise<void> {
+     if (!coordinates || typeof coordinates.x !== 'number' || typeof coordinates.y !== 'number' || typeof coordinates.z !== 'number') {
+         throw new Error("Invalid arguments: 'coordinates' must be an object with numeric x, y, and z properties.");
+     }
+
+     const targetDesc = `coordinates (${coordinates.x.toFixed(1)}, ${coordinates.y.toFixed(1)}, ${coordinates.z.toFixed(1)})`;
+     this.sharedState.addPendingAction(`Go to ${targetDesc}`);
+     console.log(`[Action] Attempting to navigate to ${targetDesc}`);
+
+     try {
+      await this.navigation.move(coordinates.x, coordinates.y, coordinates.z);
+      console.log(`[Action] Successfully navigated to ${targetDesc}.`);
+     } catch (error: any) {
+        console.error(`[Action] Navigation failed when going to ${targetDesc}:`, error);
+        throw new Error(`Navigation failed: Could not reach ${targetDesc}. Reason: ${error.message || error}`);
+     }
+  }
+
   private getRingPositions(distance: number): Vec3[] {
     const positions: Vec3[] = [];
     for (let dx = -distance; dx <= distance; dx++) {
@@ -996,10 +1053,6 @@ export class Actions {
     return positions;
   }
 
-  /**
-   * New public method for chatting raw text (skips personality filtering).
-   * For personality filtering, see the new "chat" tool in functionCalling.
-   */
   public async chat(message: string): Promise<void> {
     this.bot.chat(message);
   }

@@ -34,17 +34,77 @@ export class Navigation {
     this.bot.pathfinder.setMovements(this.movements);
   }
 
+  private sleep(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
   /**
-   * move(x, y, z): Uses GoalBlock to navigate to the specified coordinates.
+   * move(x, y, z): Uses GoalBlock to navigate to the specified coordinates. Retries after error twice before giving up.
    */
   public async move(x: number, y: number, z: number): Promise<void> {
     const goal = new GoalBlock(x, y, z);
-    try {
-      await this.bot.pathfinder.goto(goal);
-    } catch (err) {
-      console.error(`Pathfinder error (move GoalBlock): ${err}`);
-      throw err;
+    const maxRetries = 2; // Allow 2 retries after the initial attempt
+    const retryDelay = 1000; // Wait 1 seconds between retries
+
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        console.log(
+          `[Navigation.move attempt ${attempt + 1}/${
+            maxRetries + 1
+          }] Navigating to goal: (${x.toFixed(1)}, ${y.toFixed(1)}, ${z.toFixed(
+            1
+          )})`
+        );
+
+        if (!this.bot.pathfinder || !this.bot.pathfinder.goto) {
+          throw new Error("Pathfinder plugin or goto method not available.");
+        }
+
+        await this.bot.pathfinder.goto(goal);
+
+        console.log(
+          `[Navigation.move] Successfully reached goal on attempt ${
+            attempt + 1
+          }.`
+        );
+        return; // Exit successfully
+      } catch (err: any) {
+        const errorMessage = String(err.message || err);
+        console.error(
+          `[Navigation.move attempt ${attempt + 1}] Error: ${errorMessage}`
+        );
+
+        // Check if it's the last attempt
+        if (attempt >= maxRetries) {
+          console.error(
+            `[Navigation.move] Max retries reached. Failing navigation.`
+          );
+          throw err; // Re-throw the last error
+        }
+
+        // Check if it's a timeout error
+        if (
+          errorMessage.includes("Timeout") ||
+          errorMessage.includes("Took to long")
+        ) {
+          console.warn(
+            `[Navigation.move] Pathfinder timeout detected. Retrying in ${
+              retryDelay / 1000
+            }s...`
+          );
+          await this.sleep(retryDelay);
+          // Continue to the next iteration of the loop
+        } else {
+          // It's a different error, don't retry
+          console.error(
+            `[Navigation.move] Non-timeout error encountered. Failing navigation.`
+          );
+          throw err; // Re-throw immediately
+        }
+      }
     }
+    // Should not be reached if logic is correct, but acts as a fallback
+    throw new Error("[Navigation.move] Unexpected exit from retry loop.");
   }
 
   /**
@@ -129,25 +189,53 @@ export class Navigation {
     console.log("Target received:", target);
 
     // Type checking order matters less now that the signature is correct
-    if (target instanceof Vec3) {
-      targetPos = target;
-    } else if (target instanceof Block) {
-      targetPos = target.position;
-      // Check for plain object structure AFTER Vec3/Block instances
-    } else if (
+    // 1. Check if it looks like a Block (has name and position object with x,y,z)
+    if (
+      target &&
       typeof target === "object" &&
-      target !== null &&
-      "x" in target &&
-      "y" in target &&
-      "z" in target
+      typeof (target as any).name === "string" &&
+      (target as any).position &&
+      typeof (target as any).position.x === "number" &&
+      typeof (target as any).position.y === "number" &&
+      typeof (target as any).position.z === "number"
     ) {
-      // Now TypeScript knows 'target' here could be the {x,y,z} object, not 'never'
-      targetPos = new Vec3(target.x, target.y, target.z);
-    } else {
-      console.error("moveToInteractRange: Invalid target type provided.");
-      throw new Error("Invalid target type for moveToInteractRange");
+      console.log("[Navigation] Target detected as Block-like object.");
+      // Type assertion needed here as we bypass instanceof
+      targetPos = new Vec3(
+        (target as any).position.x,
+        (target as any).position.y,
+        (target as any).position.z
+      );
     }
-
+    // 2. Check if it looks like a Vec3 (has x,y,z but not name/position properties)
+    else if (
+      target &&
+      typeof target === "object" &&
+      typeof (target as any).x === "number" &&
+      typeof (target as any).y === "number" &&
+      typeof (target as any).z === "number" &&
+      !(target as any).position &&
+      !(target as any).name
+    ) {
+      // Check specifically for x, y, z properties *at the top level*
+      // This condition differentiates Vec3/plain coords from Block
+      console.log("[Navigation] Target detected as Vec3 or coordinate object.");
+      targetPos = new Vec3(
+        (target as any).x,
+        (target as any).y,
+        (target as any).z
+      );
+    }
+    // 3. If it's none of the above, it's an invalid type
+    else {
+      console.error(
+        "[Navigation] moveToInteractRange: Invalid or unrecognized target type provided.",
+        target
+      );
+      throw new Error(
+        `Invalid or unrecognized target type for moveToInteractRange: ${typeof target}`
+      );
+    }
     const goal = new GoalNear(targetPos.x, targetPos.y, targetPos.z, range);
     try {
       console.log(

@@ -6,6 +6,8 @@ import { SharedAgentState } from "../sharedAgentState";
 import { Memory } from "./memory/memory";
 import { Social } from "./social/social";
 import { tools } from "./tools";
+import fs from "fs/promises"; // Use promises API for async operations
+import path from "path";
 
 export class FunctionCaller {
   private lastDiffStateSnapshot: {
@@ -163,7 +165,7 @@ export class FunctionCaller {
       } catch (error) {
         // Log error
         this.sharedState.logOpenAIError("chat.completions.create", error);
-      
+
         break;
       }
 
@@ -174,7 +176,9 @@ export class FunctionCaller {
       const msg = choice.message;
 
       if (msg.content) {
-        this.sharedState.logMessage("assistant", msg.content, { note: "Assistant textual response" });
+        this.sharedState.logMessage("assistant", msg.content, {
+          note: "Assistant textual response",
+        });
       }
 
       if (!msg.tool_calls || msg.tool_calls.length === 0) {
@@ -294,6 +298,21 @@ export class FunctionCaller {
               toolCallResult = `Chatted: ${finalSpeech}`;
               break;
             }
+            case "gotoPlayer": {
+              const { playerName } = parsedArgs; // Extract playerName
+              await this.actions.gotoPlayer(playerName);
+              toolCallResult = `Successfully navigated to player ${playerName}.`;
+              break;
+            }
+            // ---> ADDED: gotoCoordinates case <---
+            case "gotoCoordinates": {
+              const { coordinates } = parsedArgs; // Extract coordinates object
+              await this.actions.gotoCoordinates(coordinates);
+              const targetDesc = `coordinates (${coordinates.x.toFixed(1)}, ${coordinates.y.toFixed(1)}, ${coordinates.z.toFixed(1)})`;
+              toolCallResult = `Successfully navigated to ${targetDesc}.`;
+              break;
+            }
+
             default:
               toolCallResult = `Function "${fnName}" not implemented.`;
               break;
@@ -351,7 +370,36 @@ export class FunctionCaller {
       note: "Unfiltered assistant response.",
     });
 
-    console.log("FUNCTION CALLER LOOP HAS ENDED")
+    console.log("FUNCTION CALLER LOOP HAS ENDED");
+
+    try {
+      const logDir = path.resolve(__dirname, "../../../logs"); // Create a 'logs' directory in the project root
+      const timestamp = new Date().toISOString().replace(/[:.]/g, "-"); // Filesystem-friendly timestamp
+      // Attempt to get bot username from shared state if available, otherwise use generic name
+      const botUsername = "agent"; // Assuming you add botUsername to SharedAgentState later, or fallback
+      const filename = `${botUsername}_conversation_${timestamp}.json`;
+      const filePath = path.join(logDir, filename);
+
+      // Ensure the logs directory exists
+      await fs.mkdir(logDir, { recursive: true });
+
+      // Get the conversation log data
+      const logData = this.sharedState.conversationLog;
+
+      // Format the log data as a pretty-printed JSON string
+      const jsonLogData = JSON.stringify(logData, null, 2); // null, 2 for pretty printing
+
+      // Write the data to the file
+      await fs.writeFile(filePath, jsonLogData, "utf8");
+      console.log(`[FunctionCaller] Conversation log saved to: ${filePath}`);
+    } catch (error) {
+      console.error(
+        `[FunctionCaller] Failed to write conversation log to file:`,
+        error
+      );
+      // Don't re-throw, allow the function to return the finalResponse
+    }
+
     return finalResponse;
   }
 }

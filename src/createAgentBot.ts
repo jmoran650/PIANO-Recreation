@@ -17,6 +17,7 @@ export interface BotOptions {
   host: string;
   port: number;
   username: string;
+  acronym?: string;
   version?: string;
 }
 
@@ -64,7 +65,7 @@ export async function createAgentBot(options: BotOptions): Promise<AgentBot> {
   bot.pathfinder.setMovements(defaultMovements);
 
   // 5. Set up shared state and modules.
-  const sharedState = new SharedAgentState();
+  const sharedState = new SharedAgentState(options.username);
   const memory = new Memory(sharedState);
   const social = new Social(sharedState);
   const goals = new Goals(sharedState);
