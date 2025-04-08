@@ -1,12 +1,16 @@
-import { OpenAI } from "openai";
+// src/functions/functionCalling.ts
+
+import OpenAI from "openai";
+import minecraftData from "minecraft-data"; // Import minecraft-data
+import { Bot } from "mineflayer"; // Import Bot type
+import { ActionServices } from "../../types/actionServices.types";
 import { minecraftBlocks, minecraftItems } from "../../data/minecraftItems";
-import { Actions } from "../actions";
 import { Observer } from "../observer/observer";
 import { SharedAgentState } from "../sharedAgentState";
 import { Memory } from "./memory/memory";
 import { Social } from "./social/social";
-import { tools } from "./tools";
-import fs from "fs/promises"; // Use promises API for async operations
+import { tools } from "./tools"; // Assuming tools definition is up-to-date
+import fs from "fs/promises";
 import path from "path";
 
 export class FunctionCaller {
@@ -15,102 +19,156 @@ export class FunctionCaller {
     hunger: number;
     visibleMobs: { name: string; distance: number }[];
   } | null = null;
+  private readonly MOB_DISTANCE_CHANGE_THRESHOLD = 0.15;
+  private mcData: any; // Add mcData instance variable
 
+  // Update constructor to accept individual services, Bot, and mcData
   constructor(
-    private actions: Actions,
+    private bot: Bot, // Add Bot
+    // private actions: Actions, // Remove old actions
     private sharedState: SharedAgentState,
     private openai: OpenAI,
     private memory: Memory,
     private social: Social,
-    private observer: Observer
-  ) {}
+    private observer: Observer,
+    private actionService: ActionServices
+  ) {
+    if (!this.bot.version) {
+      throw new Error(
+        "[FunctionCaller] Bot version is not available to initialize minecraft-data."
+      );
+    }
+    this.mcData = minecraftData(this.bot.version);
+    if (!this.mcData) {
+      throw new Error(
+        `[FunctionCaller] Failed to load minecraft-data for version ${this.bot.version}.`
+      );
+    }
+  }
 
+  // --- getSharedStateAsText and getSharedStateDiffAsText remain the same ---
   public getSharedStateAsText(): string {
     return this.sharedState.getSharedStateAsText();
   }
 
   public getSharedStateDiffAsText(): string {
-    const st = this.sharedState;
+    const currentState = this.sharedState;
     if (!this.lastDiffStateSnapshot) {
       this.lastDiffStateSnapshot = {
-        health: st.botHealth,
-        hunger: st.botHunger,
-        visibleMobs: st.visibleMobs ? [...st.visibleMobs.Mobs] : [],
+        health: currentState.botHealth,
+        hunger: currentState.botHunger,
+        visibleMobs: currentState.visibleMobs
+          ? [...currentState.visibleMobs.Mobs]
+          : [],
       };
       return "No previous snapshot to diff; capturing current state.";
     }
 
-    let differences: string[] = [];
+    const differences: string[] = [];
+    const previousSnapshot = this.lastDiffStateSnapshot;
 
-    if (st.botHealth !== this.lastDiffStateSnapshot.health) {
+    if (currentState.botHealth !== previousSnapshot.health) {
       differences.push(
-        `Health changed from ${this.lastDiffStateSnapshot.health} to ${st.botHealth}`
+        `Health changed from ${previousSnapshot.health} to ${currentState.botHealth}`
       );
     }
-    if (st.botHunger !== this.lastDiffStateSnapshot.hunger) {
+    if (currentState.botHunger !== previousSnapshot.hunger) {
       differences.push(
-        `Hunger changed from ${this.lastDiffStateSnapshot.hunger} to ${st.botHunger}`
+        `Hunger changed from ${previousSnapshot.hunger} to ${currentState.botHunger}`
       );
     }
 
-    const oldMobs = this.lastDiffStateSnapshot.visibleMobs;
-    const newMobs = st.visibleMobs ? [...st.visibleMobs.Mobs] : [];
-    const oldNames = oldMobs.map((m) => m.name);
-    const newNames = newMobs.map((m) => m.name);
+    const newMobs = currentState.visibleMobs
+      ? [...currentState.visibleMobs.Mobs]
+      : [];
+    const mobDifferences = this._calculateMobDifferences(
+      previousSnapshot.visibleMobs,
+      newMobs
+    );
+    differences.push(...mobDifferences);
 
-    for (const oldMob of oldMobs) {
-      if (!newNames.includes(oldMob.name)) {
-        differences.push(`Mob "${oldMob.name}" no longer visible`);
-      }
-    }
-    for (const newMob of newMobs) {
-      if (!oldNames.includes(newMob.name)) {
-        differences.push(
-          `New mob visible: "${newMob.name}" at ~${newMob.distance}m`
-        );
-      }
-    }
-    for (const oldMob of oldMobs) {
-      const matchingNew = newMobs.find((m) => m.name === oldMob.name);
-      if (matchingNew) {
-        const oldDist = oldMob.distance;
-        const newDist = matchingNew.distance;
-        if (oldDist !== 0 && Math.abs(newDist - oldDist) / oldDist >= 0.15) {
-          differences.push(
-            `Mob "${oldMob.name}" distance changed from ${oldDist.toFixed(
-              1
-            )}m to ${newDist.toFixed(1)}m`
-          );
-        }
-      }
-    }
-
+    // Update snapshot for the next diff
     this.lastDiffStateSnapshot = {
-      health: st.botHealth,
-      hunger: st.botHunger,
+      health: currentState.botHealth,
+      hunger: currentState.botHunger,
       visibleMobs: newMobs,
     };
 
     if (differences.length === 0) {
       return "No notable changes since last tick.";
     }
+
     return `State Diff: < ${differences.join(" | ")} >`;
   }
 
+  private _calculateMobDifferences(
+    oldMobs: { name: string; distance: number }[],
+    newMobs: { name: string; distance: number }[]
+  ): string[] {
+    const differences: string[] = [];
+    const oldMobMap = new Map(oldMobs.map((m) => [m.name, m]));
+    const newMobMap = new Map(newMobs.map((m) => [m.name, m]));
+
+    // Check for mobs that disappeared
+    for (const [name, oldMob] of oldMobMap) {
+      if (!newMobMap.has(name)) {
+        differences.push(`Mob "${name}" no longer visible`);
+      }
+    }
+
+    // Check for new mobs or significant distance changes
+    for (const [name, newMob] of newMobMap) {
+      const oldMob = oldMobMap.get(name);
+      if (!oldMob) {
+        // New mob appeared
+        differences.push(
+          `New mob visible: "${name}" at ~${newMob.distance.toFixed(1)}m`
+        );
+      } else {
+        // Mob still present, check distance change
+        const oldDist = oldMob.distance;
+        const newDist = newMob.distance;
+        const distChange = Math.abs(newDist - oldDist);
+
+        // Check for significant relative change or crossing a threshold (e.g., 1 block)
+        if (
+          (oldDist > 0 &&
+            distChange / oldDist >= this.MOB_DISTANCE_CHANGE_THRESHOLD) ||
+          distChange > 1.0
+        ) {
+          differences.push(
+            `Mob "${name}" distance changed from ${oldDist.toFixed(
+              1
+            )}m to ${newDist.toFixed(1)}m`
+          );
+        } else if (oldDist === 0 && newDist > 0) {
+          // Handle case where mob was right next to bot
+          differences.push(
+            `Mob "${name}" distance changed from very close to ${newDist.toFixed(
+              1
+            )}m`
+          );
+        }
+      }
+    }
+    return differences;
+  }
+  // --- End of diff logic ---
+
   public async callOpenAIWithTools(
-    messages: Array<{ role: "user"; content: string }>
+    messages: Array<{ role: "user" | "system"; content: string }> // Adjusted role types slightly
   ): Promise<string> {
     const loopLimit = 20;
     let finalResponse = "";
+    let allMessages: Array<any> = [...messages]; // Use 'any' for broader compatibility with OpenAI types
 
-    // 1. Log the initial user messages
+    // 1. Log initial user/system messages
     for (const msg of messages) {
-      this.sharedState.logMessage("user", msg.content);
+      this.sharedState.logMessage(msg.role, msg.content);
     }
 
-    let allMessages = [...messages];
-
     for (let loopCount = 0; loopCount < loopLimit; loopCount++) {
+      // --- Attack Check ---
       const {
         isUnderAttack,
         attacker,
@@ -119,287 +177,406 @@ export class FunctionCaller {
       if (isUnderAttack) {
         const attackerName = attacker?.name ?? "unknown entity";
         const systemAlert = `[DANGER ALERT] You are under attack by "${attackerName}". ${attackMsg}`;
-        console.log("under attack!");
+        console.warn("Attack detected:", systemAlert);
+        // Insert with higher priority? For now, just append.
         allMessages.push({ role: "user", content: systemAlert });
+        this.sharedState.logMessage("system", systemAlert, { alert: "attack" });
+        // Potentially force an attack action or defensive maneuver here?
+        // For now, let the LLM decide based on the alert.
       }
-      // --- NEW: Prepare messages for THIS API call, including recent chats ---
-      let messagesForApiCall = [...allMessages]; // Copy current history
 
+      // --- Inject Recent Chat ---
       const recentChatMessages = this.observer.getAndClearRecentChats();
+      let messagesForThisApiCall = [...allMessages];
       if (recentChatMessages.length > 0) {
         const chatContextString = recentChatMessages.join("\n");
-        const chatContextMessage: { role: "user"; content: string } = {
-          role: "user", // Representing observed chat as user input for context
+        const chatContextMessage = {
+          role: "user", // Treat chat history as user input for context
           content: `--- Recent Chat History Observed ---\n${chatContextString}\n --- End Chat History ---`,
         };
-        // Add context for this specific call
-        messagesForApiCall.push(chatContextMessage);
-        // Log that context was added (optional)
+        messagesForThisApiCall.push(chatContextMessage);
         this.sharedState.logMessage(
           "system",
           "Injecting recent chat history for LLM context.",
           { history_length: recentChatMessages.length }
         );
       }
-      // --- END NEW ---
-      // --- LOG REQUEST ---
+
+      // --- API Call ---
       this.sharedState.logOpenAIRequest("chat.completions.create", {
-        model: "gpt-4o",
-        messages: allMessages,
+        model: "gpt-4o", // Specify model
+        messages: messagesForThisApiCall,
         tools,
         tool_choice: "auto",
-        parallel_tool_calls: false,
-        store: true,
+        parallel_tool_calls: false, // Keep false for sequential processing
+        // store: true, // Assuming 'store' isn't a standard OpenAI param? Remove if so.
       });
 
       let completion;
       try {
         completion = await this.openai.chat.completions.create({
           model: "gpt-4o",
-          messages: allMessages,
+          messages: messagesForThisApiCall as any, // Cast needed due to broader type
           tools,
           tool_choice: "auto",
           parallel_tool_calls: false,
-          store: true,
         });
       } catch (error) {
-        // Log error
+        console.error("OpenAI API call failed:", error);
         this.sharedState.logOpenAIError("chat.completions.create", error);
-
-        break;
+        finalResponse = `Error communicating with OpenAI: ${
+          error instanceof Error ? error.message : String(error)
+        }`;
+        break; // Exit loop on API error
       }
 
-      // --- LOG RESPONSE ---
       this.sharedState.logOpenAIResponse("chat.completions.create", completion);
 
       const choice = completion.choices[0];
-      const msg = choice.message;
+      const responseMessage = choice.message;
 
-      if (msg.content) {
-        this.sharedState.logMessage("assistant", msg.content, {
+      // Add assistant's response (text and tool calls) to the history for the next iteration
+      if (responseMessage) {
+        allMessages.push(responseMessage);
+      }
+
+      // --- Handle Text Response ---
+      if (responseMessage?.content) {
+        this.sharedState.logMessage("assistant", responseMessage.content, {
           note: "Assistant textual response",
         });
+        // If *only* a text response is given (no tool calls), we are done.
+        if (
+          !responseMessage.tool_calls ||
+          responseMessage.tool_calls.length === 0
+        ) {
+          finalResponse = responseMessage.content;
+          console.log("Assistant provided text response, no tools called.");
+          break; // Exit loop
+        }
       }
 
-      if (!msg.tool_calls || msg.tool_calls.length === 0) {
-        finalResponse = msg.content ?? "";
-        console.log("No Message Content or No Tool Calls");
-        break;
+      // --- Handle No Response ---
+      if (
+        !responseMessage?.tool_calls ||
+        responseMessage.tool_calls.length === 0
+      ) {
+        // If there was also no text content, exit loop.
+        if (!responseMessage?.content) {
+          finalResponse =
+            "Assistant did not provide content or request tool use."; // Provide a default message
+          console.log("No text content and no tool calls from assistant.");
+          this.sharedState.logMessage("system", finalResponse, {
+            note: "Empty response",
+          });
+        } else {
+          // This case should have been caught above, but as a fallback:
+          finalResponse = responseMessage.content;
+        }
+        break; // Exit loop
       }
 
-      for (const toolCall of msg.tool_calls) {
-        const fnName = toolCall.function.name;
-        const argsStr = toolCall.function.arguments;
-        let toolCallResult = "";
-
-        // Attempt to parse arguments and run the corresponding action
-        let parsedArgs: any;
-        try {
-          parsedArgs = JSON.parse(argsStr);
-        } catch (err) {
-          toolCallResult = `ERROR: Could not parse function arguments as JSON. Raw args = ${argsStr}`;
-          // Pass functionName and raw arguments to logMessage
-          this.sharedState.logMessage(
-            "function", // Role
-            `Function call parse error for "${fnName}"`, // Content
-            { rawArguments: argsStr, error: String(err) }, // Metadata
-            fnName, // functionName
-            argsStr // functionArgs (raw string here)
-          );
-          const partialErrorContent = `Function call parse error for "${fnName}": ${toolCallResult}`;
-          allMessages.push({
-            role: "function",
-            name: fnName,
-            content: partialErrorContent,
-          } as any);
-          continue;
+      // --- Process Tool Calls ---
+      let processingErrorOccurred = false;
+      for (const toolCall of responseMessage.tool_calls) {
+        // _processToolCall now handles adding the result back to allMessages
+        const success = await this._processToolCall(toolCall, allMessages);
+        if (!success) {
+          processingErrorOccurred = true;
+          // If a tool fails, we might want the LLM to know and react.
+          // Continue the loop to send the error back to the LLM.
         }
+      }
 
-        try {
-          switch (fnName) {
-            case "mine": {
-              const { goalBlock, desiredCount } = parsedArgs;
-              await this.actions.mine(goalBlock, desiredCount);
-              toolCallResult = `Mined ${desiredCount} of ${goalBlock}.`;
-              break;
-            }
-            case "craft": {
-              const { goalItem } = parsedArgs;
-              await this.actions.craft(goalItem);
-              toolCallResult = `Crafted ${goalItem}.`;
-              break;
-            }
-            case "place": {
-              const { blockType } = parsedArgs;
-              await this.actions.place(blockType);
-              toolCallResult = `Placed ${blockType}.`;
-              break;
-            }
-            case "attack": {
-              const { mobType } = parsedArgs;
-              await this.actions.attack(mobType);
-              toolCallResult = `Attacked ${mobType}.`;
-              break;
-            }
-            case "smelt": {
-              const { inputItemName, quantity } = parsedArgs;
-              await this.actions.smelt(inputItemName, quantity);
-              toolCallResult = `Smelted ${quantity} of ${inputItemName}.`;
-              break;
-            }
-            case "plantCrop": {
-              const { cropName } = parsedArgs;
-              await this.actions.plantCrop(cropName);
-              toolCallResult = `Planted ${cropName}.`;
-              break;
-            }
-            case "harvestCrop": {
-              const { cropName, countOrAll } = parsedArgs;
-              if (countOrAll === "all") {
-                await this.actions.harvestCrop(cropName);
-                toolCallResult = `Harvested all of ${cropName} (one pass).`;
-              } else {
-                const howMany = parseInt(countOrAll, 10);
-                if (isNaN(howMany)) {
-                  await this.actions.harvestCrop(cropName);
-                  toolCallResult = `Harvested 1 of ${cropName} by default.`;
-                } else {
-                  for (let i = 0; i < howMany; i++) {
-                    await this.actions.harvestCrop(cropName);
-                  }
-                  toolCallResult = `Harvested ${howMany} of ${cropName}.`;
-                }
-              }
-              break;
-            }
-            case "placeChest": {
-              await this.actions.placeChest();
-              toolCallResult = `Placed chest.`;
-              break;
-            }
-            case "storeItemInChest": {
-              const { itemName, count } = parsedArgs;
-              await this.actions.storeItemInChest(itemName, count);
-              toolCallResult = `Stored ${count} of ${itemName} in chest.`;
-              break;
-            }
-            case "retrieveItemFromChest": {
-              const { itemName, count } = parsedArgs;
-              await this.actions.retrieveItemFromChest(itemName, count);
-              toolCallResult = `Retrieved ${count} of ${itemName} from chest.`;
-              break;
-            }
-            case "chat": {
-              const { speech } = parsedArgs;
-              const finalSpeech = await this.social.filterMessageForSpeech(
-                speech
-              );
-              await this.actions.chat(finalSpeech);
-              toolCallResult = `Chatted: ${finalSpeech}`;
-              break;
-            }
-            case "gotoPlayer": {
-              const { playerName } = parsedArgs; // Extract playerName
-              await this.actions.gotoPlayer(playerName);
-              toolCallResult = `Successfully navigated to player ${playerName}.`;
-              break;
-            }
-            // ---> ADDED: gotoCoordinates case <---
-            case "gotoCoordinates": {
-              const { coordinates } = parsedArgs; // Extract coordinates object
-              await this.actions.gotoCoordinates(coordinates);
-              const targetDesc = `coordinates (${coordinates.x.toFixed(1)}, ${coordinates.y.toFixed(1)}, ${coordinates.z.toFixed(1)})`;
-              toolCallResult = `Successfully navigated to ${targetDesc}.`;
-              break;
-            }
+      // Optional: Break immediately on tool error if preferred
+      // if (processingErrorOccurred) {
+      //     finalResponse = "An error occurred during tool execution.";
+      //     this.sharedState.logMessage("system", finalResponse, { error: "Tool execution failed" });
+      //     break;
+      // }
 
-            default:
-              toolCallResult = `Function "${fnName}" not implemented.`;
-              break;
-          }
-        } catch (err) {
-          console.error("Error calling function:", fnName, err);
-          toolCallResult = `ERROR calling function "${fnName}": ${String(err)}`;
-          if (
-            fnName === "craft" &&
-            String(err).includes("Don't have enough/correct ingredients")
-          ) {
-            try {
-              const craftArgs = parsedArgs;
-              const itemName = craftArgs.goalItem;
-              const infoFromItems = minecraftItems[itemName] || "";
-              const infoFromBlocks = minecraftBlocks[itemName] || "";
-              const acquisitionInfo = infoFromItems || infoFromBlocks;
-              if (acquisitionInfo) {
-                toolCallResult += ` Acquisition info: "${acquisitionInfo}"`;
-              }
-            } catch (jsonErr) {
-              // do nothing
-            }
-          }
-        }
-
-        // 6. Log the tool call (function call) with arguments + result
-        this.sharedState.logMessage(
-          "function",
-          `Tool call executed: ${fnName}`, // More descriptive content
-          undefined, // No extra metadata needed here unless desired
-          fnName, // functionName
-          parsedArgs, // functionArgs (parsed)
-          toolCallResult // functionResult
-        );
-
-        const updatedStateText = this.getSharedStateAsText();
-        const combinedContent = `Updated Shared State:${updatedStateText} - Tool Call Result:${toolCallResult}`;
-        this.sharedState.logMessage("function", "Updated Shared State", {
-          updatedState: updatedStateText,
+      // --- Loop Limit Check ---
+      if (loopCount === loopLimit - 1) {
+        finalResponse =
+          "Loop limit reached without a final textual response from the model.";
+        this.sharedState.logMessage("system", finalResponse, {
+          note: "Loop limit hit",
         });
-
-        allMessages.push({
-          role: "function",
-          name: fnName,
-          content: combinedContent,
-        } as any);
+        console.warn("[FunctionCaller] Loop limit reached.");
       }
+    } // End of loop
+
+    // Ensure finalResponse has a value if the loop ended without setting one explicitly
+    if (!finalResponse && allMessages.length > 0) {
+      const lastMessage = allMessages[allMessages.length - 1];
+      if (lastMessage.role === "assistant" && lastMessage.content) {
+        finalResponse = lastMessage.content;
+      } else if (lastMessage.role === "tool") {
+        finalResponse = `Finished processing tool call: ${lastMessage.name}.`; // Provide context
+      } else {
+        finalResponse = "Processing complete."; // Generic fallback
+      }
+    } else if (!finalResponse) {
+      finalResponse = "No response generated.";
     }
 
-    if (!finalResponse) {
-      finalResponse = "No final response from model after function calls.";
-    }
     this.sharedState.logMessage("assistant", finalResponse, {
-      note: "Unfiltered assistant response.",
+      note: "Final response after loop/tool execution.",
     });
+    console.log(
+      "FUNCTION CALLER LOOP HAS ENDED. Final Response:",
+      finalResponse
+    );
 
-    console.log("FUNCTION CALLER LOOP HAS ENDED");
+    // Save log after processing is complete
+    await this._saveConversationLog();
+
+    return finalResponse;
+  }
+
+  private async _processToolCall(
+    toolCall: OpenAI.Chat.Completions.ChatCompletionMessageToolCall,
+    allMessages: Array<any> // Pass allMessages to append the result
+  ): Promise<boolean> {
+    const fnName = toolCall.function.name;
+    const argsStr = toolCall.function.arguments;
+    let toolCallResult = "";
+    let parsedArgs: any;
+    let success = true; // Assume success initially
+    // --- Argument Parsing ---
+    const {
+      miningService,
+      craftingService,
+      buildingService,
+      combatService,
+      smeltingService,
+      farmingService,
+      inventoryService,
+      movementService,
+      talkService,
+      // Add any other services you might need here
+    } = this.actionService;
 
     try {
-      const logDir = path.resolve(__dirname, "../../../logs"); // Create a 'logs' directory in the project root
-      const timestamp = new Date().toISOString().replace(/[:.]/g, "-"); // Filesystem-friendly timestamp
-      // Attempt to get bot username from shared state if available, otherwise use generic name
-      const botUsername = "agent"; // Assuming you add botUsername to SharedAgentState later, or fallback
+      parsedArgs = JSON.parse(argsStr);
+    } catch (err) {
+      console.error(`Failed to parse arguments for ${fnName}: ${argsStr}`, err);
+      toolCallResult = `ERROR: Could not parse function arguments as JSON. Raw args: ${argsStr}. Error: ${String(
+        err
+      )}`;
+      this.sharedState.logMessage(
+        "function", // Log as function execution attempt
+        `Argument parse error for "${fnName}"`,
+        {
+          rawArguments: argsStr,
+          error: String(err),
+          tool_call_id: toolCall.id,
+        },
+        fnName,
+        argsStr // Log raw args
+      );
+      success = false;
+      // Append error result to messages for LLM context
+      allMessages.push({
+        tool_call_id: toolCall.id,
+        role: "tool",
+        name: fnName,
+        content: toolCallResult,
+      });
+      return success; // Return early as function cannot be called
+    }
+
+    // --- Function Execution ---
+    try {
+      console.log(`Attempting to call tool: ${fnName} with args:`, parsedArgs); // Log call attempt
+
+      switch (fnName) {
+        case "mine": {
+          const { goalBlock, desiredCount } = parsedArgs;
+          await miningService.mine(goalBlock, desiredCount); // Use MiningService
+          toolCallResult = `Successfully mined ${desiredCount} of ${goalBlock}.`;
+          break;
+        }
+        case "craft": {
+          const { goalItem } = parsedArgs;
+          await craftingService.craft(goalItem);
+          toolCallResult = `Successfully crafted ${goalItem}`;
+          break;
+        }
+        case "place": {
+          const { blockType } = parsedArgs;
+          await buildingService.placeBlock(blockType); // Use BuildingService
+          toolCallResult = `Successfully placed ${blockType}.`;
+          break;
+        }
+        case "placeChest": {
+          await buildingService.placeChest(); // Use BuildingService
+          toolCallResult = `Successfully placed a chest.`;
+          break;
+        }
+        case "placeFurnace": {
+
+          await buildingService.placeFurnace();
+          toolCallResult = `Successfully placed a furnace.`;
+          break;
+        }
+        case "attack": {
+          const { mobType } = parsedArgs;
+          await combatService.attack(mobType); // Use CombatService
+          toolCallResult = `Successfully initiated attack on ${mobType}.`;
+          break;
+        }
+        case "smelt": {
+          const { inputItemName, quantity } = parsedArgs;
+          await smeltingService.smelt(inputItemName, quantity); // Use SmeltingService
+          toolCallResult = `Successfully initiated smelting for ${quantity} of ${inputItemName}.`;
+          break;
+        }
+        case "plantCrop": {
+          const { cropName } = parsedArgs;
+          await farmingService.plantCrop(cropName); // Use FarmingService
+          toolCallResult = `Successfully attempted to plant ${cropName}.`;
+          break;
+        }
+        case "harvestCrop": {
+          const { cropName } = parsedArgs; // Simpler harvest - just harvest one mature plant
+          await farmingService.harvestCrop(cropName); // Use FarmingService
+          toolCallResult = `Successfully harvested one mature ${cropName}.`;
+          break;
+        }
+        case "storeItemInChest": {
+          const { itemName, count } = parsedArgs;
+          await inventoryService.storeItemInChest(itemName, count); // Use InventoryService
+          toolCallResult = `Successfully attempted to store ${count} of ${itemName} in a nearby chest.`;
+          break;
+        }
+        case "retrieveItemFromChest": {
+          const { itemName, count } = parsedArgs;
+          await inventoryService.retrieveItemFromChest(itemName, count); // Use InventoryService
+          toolCallResult = `Successfully attempted to retrieve ${count} of ${itemName} from a nearby chest.`;
+          break;
+        }
+        case "chat": {
+          const { speech } = parsedArgs;
+          const finalSpeech = await this.social.filterMessageForSpeech(speech); // Filter is in Social
+          await talkService.chat(finalSpeech); // Use TalkService
+          toolCallResult = `Sent chat message: "${finalSpeech}"`;
+          break;
+        }
+        case "gotoPlayer": {
+          const { playerName } = parsedArgs;
+          await movementService.gotoPlayer(playerName); // Use MovementService
+          toolCallResult = `Successfully navigated to player ${playerName}.`;
+          break;
+        }
+        case "gotoCoordinates": {
+          const { coordinates } = parsedArgs;
+          if (
+            coordinates &&
+            typeof coordinates.x === "number" &&
+            typeof coordinates.y === "number" &&
+            typeof coordinates.z === "number"
+          ) {
+            await movementService.gotoCoordinates(coordinates); // Use MovementService
+            const targetDesc = `coordinates (${coordinates.x.toFixed(
+              1
+            )}, ${coordinates.y.toFixed(1)}, ${coordinates.z.toFixed(1)})`;
+            toolCallResult = `Successfully navigated to ${targetDesc}.`;
+          } else {
+            toolCallResult = `ERROR: Invalid coordinates provided. Expected {x: number, y: number, z: number}. Received: ${JSON.stringify(
+              coordinates
+            )}`;
+            success = false;
+          }
+          break;
+        }
+        default:
+          toolCallResult = `ERROR: Function "${fnName}" is not implemented or recognized.`;
+          console.warn(`Unrecognized function call requested: ${fnName}`);
+          success = false;
+          break;
+      }
+    } catch (err) {
+      // Catch errors from the service calls themselves
+      console.error(
+        `Error executing function ${fnName} with args ${argsStr}:`,
+        err
+      );
+      toolCallResult = `ERROR executing function "${fnName}": ${String(err)}`;
+      success = false;
+
+      // Add specific error context if useful (like for crafting)
+      if (fnName === "craft" && String(err).includes("ingredient")) {
+        try {
+          const itemName = parsedArgs.goalItem;
+          const infoFromItems =
+            minecraftItems[itemName as keyof typeof minecraftItems] || "";
+          const infoFromBlocks =
+            minecraftBlocks[itemName as keyof typeof minecraftBlocks] || "";
+          const acquisitionInfo = infoFromItems || infoFromBlocks;
+          if (acquisitionInfo) {
+            toolCallResult += ` How to get ingredients: "${acquisitionInfo}"`;
+          }
+        } catch (lookupErr) {
+          console.warn(
+            "Could not retrieve acquisition info for failed craft:",
+            lookupErr
+          );
+        }
+      }
+    }
+
+    // --- Log Result and Append to Message History ---
+    this.sharedState.logMessage(
+      "function", // Log as function result
+      success ? `Executed: ${fnName}` : `Execution Error: ${fnName}`,
+      { tool_call_id: toolCall.id }, // Link to the request
+      fnName,
+      parsedArgs, // Log parsed args
+      toolCallResult // Log the string result
+    );
+
+    allMessages.push({
+      tool_call_id: toolCall.id,
+      role: "tool",
+      name: fnName,
+      content: toolCallResult, // Send result back to LLM
+    });
+
+    // Log state *after* the action
+    try {
+      const updatedStateText = this.getSharedStateAsText(); // Consider if diff is better here
+      this.sharedState.logMessage("system", `State after ${fnName}`, {
+        stateSnapshot: updatedStateText,
+      });
+    } catch (stateErr) {
+      console.error("Error getting state after action:", stateErr);
+    }
+
+    return success;
+  }
+
+  private async _saveConversationLog(): Promise<void> {
+    try {
+      // Ensure log directory exists relative to the compiled JS file location (dist/src/functions)
+      const logDir = path.resolve(__dirname, "../../../logs"); // Adjust relative path
+      const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+      const botUsername = this.sharedState.botUsername; // Assuming botUsername is available
       const filename = `${botUsername}_conversation_${timestamp}.json`;
       const filePath = path.join(logDir, filename);
 
-      // Ensure the logs directory exists
-      await fs.mkdir(logDir, { recursive: true });
+      await fs.mkdir(logDir, { recursive: true }); // Ensure directory exists
 
-      // Get the conversation log data
-      const logData = this.sharedState.conversationLog;
+      const logData = this.sharedState.conversationLog; // Get the log array
+      const jsonLogData = JSON.stringify(logData, null, 2); // Pretty print JSON
 
-      // Format the log data as a pretty-printed JSON string
-      const jsonLogData = JSON.stringify(logData, null, 2); // null, 2 for pretty printing
-
-      // Write the data to the file
       await fs.writeFile(filePath, jsonLogData, "utf8");
       console.log(`[FunctionCaller] Conversation log saved to: ${filePath}`);
     } catch (error) {
       console.error(
-        `[FunctionCaller] Failed to write conversation log to file:`,
+        "[FunctionCaller] Failed to write conversation log:",
         error
       );
-      // Don't re-throw, allow the function to return the finalResponse
     }
-
-    return finalResponse;
   }
 }

@@ -15,7 +15,7 @@ export async function updateMemoryViaLLM(
 You are a minecraft Agent's memory center with biological-like memory formation. Always speak in the first person, because the information you see is happening to you.
 Analyze the following recent events and conversation excerpt and decide what key details,
 actions, or context to store as memories. Things that may be useful for you to remember in the short term should be sent to the short term Memory.
-Use function calls to store relevant memories. Try not to store stats, instead store new things you have learned about the world you are in.
+Use function calls to store relevant memories. Try not to store statistics, instead store new things you have learned about the world you are in, new experiences, and new information.
 Here is the information:
 
 ${recentConversation}

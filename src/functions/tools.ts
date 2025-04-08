@@ -77,7 +77,7 @@ export const tools: ChatCompletionTool[] = [
     type: "function",
     function: {
       name: "craft",
-      description: "Crafts a goal item if a recipe is available.",
+      description: "Crafts a goal item or block.",
       parameters: {
         type: "object",
         properties: {

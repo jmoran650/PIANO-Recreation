@@ -1,4 +1,7 @@
 // src/actions.ts
+//!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+//THIS IS DEPRECATED, SEE ACTIONS FOLDER FOR REFACTORED VERSION OF THE ACTIONS CLASS
+//!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 import dotenv from "dotenv";
 import minecraftData from "minecraft-data";
 import { Bot } from "mineflayer";

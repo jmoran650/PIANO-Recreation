@@ -17,7 +17,7 @@ export async function handleTestGoal(bot: any, functionCaller: any, parts: strin
   Here is the information you have:
   ${functionCaller.getSharedStateAsText()}
   
-  Use a function call to complete the next step towards your goal. You MUST use function calls.
+  Use a function call to complete the next step towards your goal. You MUST use function calls in every response.
   `;
   
     // Now call the LLM with our function-enabled chat.
