@@ -32,7 +32,7 @@ Output:
   `;
 }
 
-export function quartermasterPrompt(step: string): string {
+export function quartermasterPrompt(): string {
   return `You are the Reality Checker for a Minecraft bot. Your responsibility is to validate that each step provided makes sense in vanilla Minecraft. You must:
 
 - Confirm the step is achievable in vanilla Minecraft.

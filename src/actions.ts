@@ -2,18 +2,18 @@
 //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 //THIS IS DEPRECATED, SEE ACTIONS FOLDER FOR REFACTORED VERSION OF THE ACTIONS CLASS
 //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-import dotenv from "dotenv";
-import minecraftData from "minecraft-data";
-import { Bot } from "mineflayer";
-import { Block } from "prismarine-block";
-import { Vec3 } from "vec3";
-import { blockDropMapping } from "../data/minecraftItems";
-import { Navigation } from "./navigation";
-import { Observer } from "./observer/observer";
-import { SharedAgentState } from "./sharedAgentState";
+import dotenv from 'dotenv';
+import minecraftData from 'minecraft-data';
+import { Bot } from 'mineflayer';
+import { Block } from 'prismarine-block';
+import { Vec3 } from 'vec3';
+import { blockDropMapping } from '../data/minecraftItems';
+import { Navigation } from './navigation';
+import { Observer } from './observer/observer';
+import { SharedAgentState } from './sharedAgentState';
 dotenv.config();
 
-declare module "mineflayer" {
+declare module 'mineflayer' {
   interface BotEvents {
     stoppedAttacking: () => void;
   }
@@ -35,7 +35,7 @@ export class Actions {
     this.bot = bot;
     this.navigation = navigation;
     if (process.env.MINECRAFT_VERSION == undefined) {
-      throw new Error("[ACTIONS] Minecraft Version Undefined");
+      throw new Error('[ACTIONS] Minecraft Version Undefined');
     }
     this.mcData = minecraftData(process.env.MINECRAFT_VERSION);
     this.sharedState = sharedState;
@@ -119,7 +119,7 @@ export class Actions {
    */
   async collectDroppedItems(origin: Vec3, goalBlock: string): Promise<void> {
     const collectionRadius = 20; // radius around the origin to search for drops
-    console.log("collectDroppedItems called.");
+    console.log('collectDroppedItems called.');
     // Look up the expected drop from the mapping.
     // Cast blockDropMapping to a record type to fix the index error.
     const expectedDrop = (blockDropMapping as Record<string, string>)[
@@ -134,9 +134,9 @@ export class Actions {
 
     // Filter entities to find dropped items matching the expected drop.
     const drops = Object.values(this.bot.entities).filter((entity: any) => {
-      if (entity.name !== "item") return false;
+      if (entity.name !== 'item') return false;
       if (entity.position.distanceTo(origin) > collectionRadius) return false;
-      if (!entity.getDroppedItem || typeof entity.getDroppedItem !== "function")
+      if (!entity.getDroppedItem || typeof entity.getDroppedItem !== 'function')
         return false;
       return entity.getDroppedItem().name === expectedDrop;
     });
@@ -185,14 +185,14 @@ export class Actions {
     // 2) If not crafting table or planks, ensure we have a table available
     let tableBlock: Block | null = null;
     if (
-      goalItem !== "crafting_table" &&
-      !goalItem.toLowerCase().includes("planks")
+      goalItem !== 'crafting_table' &&
+      !goalItem.toLowerCase().includes('planks')
     ) {
       // (a) First, see if a placed table is already near us
       //await this.observer.getVisibleBlockTypes(); // refresh environment
       const nearTable = this.findNearbyPlacedTable(40); // e.g. 40-block radius
       if (nearTable) {
-        console.log("Agent found nearby table, plans to use that.");
+        console.log('Agent found nearby table, plans to use that.');
         console.log(
           `Acquired crafting table at ${nearTable.position}. Moving closer...`
         );
@@ -202,8 +202,8 @@ export class Actions {
         tableBlock = await this.findOrPlaceCraftingTable();
         if (!tableBlock) {
           // Only throw if we truly cannot get a table
-          console.log("Could not find/place a crafting table.");
-          throw new Error("Failed to acquire crafting table.");
+          console.log('Could not find/place a crafting table.');
+          throw new Error('Failed to acquire crafting table.');
         }
       }
     }
@@ -221,7 +221,7 @@ export class Actions {
         try {
           // Use pathfinder to move within ~1.5 blocks of the table center
           await this.navigation.moveToInteractRange(tableBlock);
-          console.log("Moved closer to the crafting table.");
+          console.log('Moved closer to the crafting table.');
         } catch (err) {
           console.error(`Failed to move to crafting table: ${err}`);
           throw new Error(
@@ -267,7 +267,7 @@ export class Actions {
         await this.bot.craft(
           recipe,
           1,
-          goalItem !== "crafting_table" ? tableBlock ?? undefined : undefined
+          goalItem !== 'crafting_table' ? tableBlock ?? undefined : undefined
         );
         console.log(`Successfully crafted "${goalItem}".`);
         success = true;
@@ -290,7 +290,7 @@ export class Actions {
   private findNearbyPlacedTable(maxDistance: number): Block | null {
     const tablePositions = this.bot.findBlocks({
       point: this.bot.entity.position,
-      matching: (block) => block && block.name === "crafting_table",
+      matching: (block) => block && block.name === 'crafting_table',
       maxDistance,
       count: 1,
     });
@@ -305,8 +305,8 @@ export class Actions {
   private async findOrPlaceCraftingTable(): Promise<Block | null> {
     const visibleBlocks = await this.observer.getVisibleBlockTypes();
 
-    if (visibleBlocks.BlockTypes["crafting_table"]) {
-      const vPos = visibleBlocks.BlockTypes["crafting_table"];
+    if (visibleBlocks.BlockTypes['crafting_table']) {
+      const vPos = visibleBlocks.BlockTypes['crafting_table'];
       const knownAlready = this.sharedState.craftingTablePositions.some(
         (p) => p.x === vPos.x && p.y === vPos.y && p.z === vPos.z
       );
@@ -329,7 +329,7 @@ export class Actions {
 
     if (bestPos && bestDist <= 30) {
       const maybeTable = this.bot.blockAt(bestPos);
-      if (maybeTable && maybeTable.name === "crafting_table") {
+      if (maybeTable && maybeTable.name === 'crafting_table') {
         await this.navigation.moveToLookAt(bestPos.x, bestPos.y, bestPos.z);
         return maybeTable;
       } else {
@@ -339,23 +339,23 @@ export class Actions {
 
     // Otherwise place from inventory or craft a new one
     const tableItemInInventory = this.bot.inventory.findInventoryItem(
-      this.mcData.itemsByName["crafting_table"].id,
+      this.mcData.itemsByName['crafting_table'].id,
       null,
       false
     );
     if (!tableItemInInventory) {
-      console.log("No crafting table in inventory; attempting to craft one...");
+      console.log('No crafting table in inventory; attempting to craft one...');
       try {
-        await this.craft("crafting_table");
+        await this.craft('crafting_table');
       } catch (err) {
         console.log(`Failed to craft a crafting_table: ${err}`);
         const stillNoTable = this.bot.inventory.findInventoryItem(
-          this.mcData.itemsByName["crafting_table"].id,
+          this.mcData.itemsByName['crafting_table'].id,
           null,
           false
         );
         if (!stillNoTable) {
-          console.log("Still no crafting table after trying to craft.");
+          console.log('Still no crafting table after trying to craft.');
           return null;
         }
       }
@@ -378,7 +378,7 @@ export class Actions {
 
     if (placedPos) {
       placedBlock = this.bot.blockAt(placedPos);
-      if (placedBlock?.name === "crafting_table") {
+      if (placedBlock?.name === 'crafting_table') {
         await this.navigation.move(placedPos.x - 1, placedPos.y, placedPos.z);
         return placedBlock;
       }
@@ -398,7 +398,7 @@ export class Actions {
    * Places a crafting table from inventory, if possible.
    */
   async placeCraftingTable(): Promise<void> {
-    this.sharedState.addPendingAction("Place Crafting Table");
+    this.sharedState.addPendingAction('Place Crafting Table');
 
     const table = this.bot.inventory.findInventoryItem(
       this.mcData.itemsByName.crafting_table.id,
@@ -406,13 +406,13 @@ export class Actions {
       false
     );
     if (!table) {
-      console.log("I don't have a crafting table in my inventory!");
+      console.log('I don\'t have a crafting table in my inventory!');
       return;
     }
 
     const safePos = this.findSafePlacement();
     if (!safePos) {
-      console.log("No valid spot to place the crafting table!");
+      console.log('No valid spot to place the crafting table!');
       return;
     }
 
@@ -422,12 +422,12 @@ export class Actions {
         await this.bot.lookAt(safePos.offset(0.5, 0.5, 0.5));
         const referenceBlock = this.bot.blockAt(safePos.offset(0, -1, 0));
         if (!referenceBlock) {
-          console.log("No block beneath to place the crafting table on.");
+          console.log('No block beneath to place the crafting table on.');
           return;
         }
-        await this.bot.equip(table, "hand");
+        await this.bot.equip(table, 'hand');
         await this.bot.placeBlock(referenceBlock, new Vec3(0, 1, 0));
-        console.log("Crafting table placed!");
+        console.log('Crafting table placed!');
         const placedPos = referenceBlock.position.offset(0, 1, 0);
         this.sharedState.addCraftingTablePosition(placedPos);
         return;
@@ -438,7 +438,7 @@ export class Actions {
         if (attempt < maxRetries) {
           await this.sleep(1000);
         } else {
-          console.log("All attempts to place crafting table failed.");
+          console.log('All attempts to place crafting table failed.');
         }
       }
     }
@@ -463,7 +463,7 @@ export class Actions {
     }
 
     try {
-      await this.bot.equip(blockItem, "hand");
+      await this.bot.equip(blockItem, 'hand');
     } catch (err) {
       console.log(`Failed to equip ${blockType}: ${err}`);
       return;
@@ -472,7 +472,7 @@ export class Actions {
     const referencePos = this.bot.entity.position.offset(2, 0, 0);
     const maybeRefBlock = this.bot.blockAt(referencePos);
     if (!maybeRefBlock) {
-      console.log("No reference block below me to place onto.");
+      console.log('No reference block below me to place onto.');
       return;
     }
     const refBlock: Block = maybeRefBlock;
@@ -491,7 +491,7 @@ export class Actions {
     const pvp = (this.bot as any).pvp;
     if (!pvp) {
       const errorMsg =
-        "Error: mineflayer-pvp plugin not loaded. Attack action disabled.";
+        'Error: mineflayer-pvp plugin not loaded. Attack action disabled.';
       console.log(errorMsg);
       throw new Error(errorMsg);
     }
@@ -514,18 +514,18 @@ export class Actions {
 
     console.log(`Attacking the nearest ${mobType}...`);
     try {
-      if (typeof pvp.attack === "function") {
+      if (typeof pvp.attack === 'function') {
         pvp.attack(target);
-        this.bot.once("stoppedAttacking", () => {
+        this.bot.once('stoppedAttacking', () => {
           if (this.bot.entities[target.id]) {
-            console.log("Target still alive, attacking again!");
+            console.log('Target still alive, attacking again!');
             this.attack(mobType);
           } else {
-            console.log("Target has been killed!");
+            console.log('Target has been killed!');
           }
         });
       } else {
-        console.log("pvp.attack is not a function. Plugin mismatch?");
+        console.log('pvp.attack is not a function. Plugin mismatch?');
       }
     } catch (err: unknown) {
       const errMsg: string = err instanceof Error ? err.message : String(err);
@@ -534,30 +534,30 @@ export class Actions {
   }
 
   async useCraftingTable(): Promise<void> {
-    this.sharedState.addPendingAction("Use Crafting Table");
+    this.sharedState.addPendingAction('Use Crafting Table');
 
     const positions = this.bot.findBlocks({
       point: this.bot.entity.position,
-      matching: (block: any) => block && block.name === "crafting_table",
+      matching: (block: any) => block && block.name === 'crafting_table',
       maxDistance: 4.4,
       count: 1,
     });
     if (positions.length === 0) {
-      console.log("No crafting table nearby.");
+      console.log('No crafting table nearby.');
       return;
     }
     const pos = positions[0];
     const block = this.bot.blockAt(pos);
     if (!block) {
-      console.log("Crafting table block not found.");
+      console.log('Crafting table block not found.');
       return;
     }
     try {
       await this.bot.activateBlock(block);
-      console.log("Used the crafting table.");
+      console.log('Used the crafting table.');
     } catch (err) {
       console.log(
-        "Failed to use crafting table: " +
+        'Failed to use crafting table: ' +
           (err instanceof Error ? err.message : err)
       );
     }
@@ -568,25 +568,25 @@ export class Actions {
 
     let furnaceBlock = this.findNearbyFurnace(3);
     if (!furnaceBlock) {
-      console.log("No furnace nearby. Attempting to place one...");
+      console.log('No furnace nearby. Attempting to place one...');
       await this.placeFurnace();
       furnaceBlock = this.findNearbyFurnace(3);
       if (!furnaceBlock) {
-        console.log("Unable to place a furnace. Aborting smelt.");
+        console.log('Unable to place a furnace. Aborting smelt.');
         return;
       }
     }
 
     try {
       await this.bot.activateBlock(furnaceBlock);
-      console.log("Opened furnace...");
+      console.log('Opened furnace...');
     } catch (err) {
-      console.log("Failed to open furnace: " + err);
+      console.log('Failed to open furnace: ' + err);
       return;
     }
 
     if (!(await this.addFuelToFurnace())) {
-      console.log("Failed to add fuel to furnace. Aborting smelt.");
+      console.log('Failed to add fuel to furnace. Aborting smelt.');
       return;
     }
 
@@ -603,28 +603,28 @@ export class Actions {
       this.bot.closeWindow(this.bot.currentWindow);
     }
     console.log(
-      `Smelting process done or in progress. Check furnace/inventory!`
+      'Smelting process done or in progress. Check furnace/inventory!'
     );
   }
 
   private async placeFurnace(): Promise<void> {
     let furnaceItem = this.bot.inventory
       .items()
-      .find((item) => item.name === "furnace");
+      .find((item) => item.name === 'furnace');
     if (!furnaceItem) {
-      console.log("No furnace in inventory; trying to craft...");
-      await this.craft("furnace");
+      console.log('No furnace in inventory; trying to craft...');
+      await this.craft('furnace');
       furnaceItem = this.bot.inventory
         .items()
-        .find((item) => item.name === "furnace");
+        .find((item) => item.name === 'furnace');
       if (!furnaceItem) {
-        console.log("Unable to craft furnace!");
+        console.log('Unable to craft furnace!');
         return;
       }
     }
 
     try {
-      await this.bot.equip(furnaceItem, "hand");
+      await this.bot.equip(furnaceItem, 'hand');
     } catch (err) {
       console.log(`Failed to equip furnace: ${err}`);
       return;
@@ -633,12 +633,12 @@ export class Actions {
     const referencePos = this.bot.entity.position.offset(1, 0, 0);
     const refBlock = this.bot.blockAt(referencePos);
     if (!refBlock) {
-      console.log("No block next to me to place the furnace onto.");
+      console.log('No block next to me to place the furnace onto.');
       return;
     }
     try {
       await this.bot.placeBlock(refBlock, new Vec3(0, 1, 0));
-      console.log("Furnace placed.");
+      console.log('Furnace placed.');
     } catch (err) {
       console.log(`Error placing furnace: ${err}`);
     }
@@ -647,7 +647,7 @@ export class Actions {
   private findNearbyFurnace(maxDistance: number) {
     const furnacePositions = this.bot.findBlocks({
       point: this.bot.entity.position,
-      matching: (block) => block && block.name === "furnace",
+      matching: (block) => block && block.name === 'furnace',
       maxDistance,
       count: 1,
     });
@@ -659,17 +659,17 @@ export class Actions {
   private async addFuelToFurnace(): Promise<boolean> {
     const window = this.bot.currentWindow;
     if (!window) {
-      console.log("No furnace window open to add fuel.");
+      console.log('No furnace window open to add fuel.');
       return false;
     }
 
     const possibleFuels = [
-      "coal",
-      "charcoal",
-      "oak_log",
-      "spruce_log",
-      "birch_log",
-      "planks",
+      'coal',
+      'charcoal',
+      'oak_log',
+      'spruce_log',
+      'birch_log',
+      'planks',
     ];
     for (const fuelName of possibleFuels) {
       const fuelItem = this.bot.inventory
@@ -688,7 +688,7 @@ export class Actions {
         }
       }
     }
-    console.log("No valid fuel found in inventory.");
+    console.log('No valid fuel found in inventory.');
     return false;
   }
 
@@ -728,13 +728,13 @@ export class Actions {
 
     const referencePos = this.bot.entity.position.offset(0, -1, 1);
     const blockBeneath = this.bot.blockAt(referencePos);
-    if (!blockBeneath || blockBeneath.name !== "farmland") {
-      console.log("No farmland in front of me to plant seeds.");
+    if (!blockBeneath || blockBeneath.name !== 'farmland') {
+      console.log('No farmland in front of me to plant seeds.');
       return;
     }
 
     try {
-      await this.bot.equip(seedItem, "hand");
+      await this.bot.equip(seedItem, 'hand');
       await this.bot.placeBlock(blockBeneath, new Vec3(0, 1, 0));
       console.log(`${cropName} planted successfully!`);
     } catch (err) {
@@ -757,7 +757,7 @@ export class Actions {
     const pos = blockPositions[0];
     const block = this.bot.blockAt(pos);
     if (!block) {
-      console.log("Could not resolve crop block at found position.");
+      console.log('Could not resolve crop block at found position.');
       return;
     }
 
@@ -775,19 +775,19 @@ export class Actions {
    * Equips the best tool for the given block name.
    */
   async equipBestToolForBlock(blockName: string): Promise<void> {
-    let toolCategory: "pickaxe" | "axe" | "shovel" | "hoe" | null = null;
-    if (blockName.includes("ore") || blockName.includes("stone")) {
-      toolCategory = "pickaxe";
-    } else if (blockName.includes("log") || blockName.includes("wood")) {
-      toolCategory = "axe";
+    let toolCategory: 'pickaxe' | 'axe' | 'shovel' | 'hoe' | null = null;
+    if (blockName.includes('ore') || blockName.includes('stone')) {
+      toolCategory = 'pickaxe';
+    } else if (blockName.includes('log') || blockName.includes('wood')) {
+      toolCategory = 'axe';
     } else if (
-      blockName.includes("dirt") ||
-      blockName.includes("sand") ||
-      blockName.includes("gravel")
+      blockName.includes('dirt') ||
+      blockName.includes('sand') ||
+      blockName.includes('gravel')
     ) {
-      toolCategory = "shovel";
-    } else if (blockName.includes("crop") || blockName.includes("farm")) {
-      toolCategory = "hoe";
+      toolCategory = 'shovel';
+    } else if (blockName.includes('crop') || blockName.includes('farm')) {
+      toolCategory = 'hoe';
     }
 
     if (!toolCategory) return;
@@ -805,7 +805,7 @@ export class Actions {
         .find((it) => it.name.includes(toolName));
       if (toolItem) {
         try {
-          await this.bot.equip(toolItem, "hand");
+          await this.bot.equip(toolItem, 'hand');
           console.log(`Equipped ${toolItem.name} for ${blockName}`);
           return;
         } catch (err) {
@@ -819,7 +819,7 @@ export class Actions {
    * Basic inventory sort (example approach).
    */
   async sortInventory(): Promise<void> {
-    console.log("Sorting inventory...");
+    console.log('Sorting inventory...');
     const items = this.bot.inventory.items();
     const sorted = [...items].sort((a, b) => {
       if (a.name < b.name) return -1;
@@ -844,29 +844,29 @@ export class Actions {
         }
       }
     }
-    console.log("Finished sorting inventory.");
+    console.log('Finished sorting inventory.');
   }
 
   async placeChest(): Promise<void> {
-    this.sharedState.addPendingAction("Place Chest");
+    this.sharedState.addPendingAction('Place Chest');
 
     let chestItem = this.bot.inventory
       .items()
-      .find((it) => it.name.includes("chest"));
+      .find((it) => it.name.includes('chest'));
     if (!chestItem) {
-      console.log("No chest in inventory; trying to craft a chest...");
-      await this.craft("chest");
+      console.log('No chest in inventory; trying to craft a chest...');
+      await this.craft('chest');
       chestItem = this.bot.inventory
         .items()
-        .find((it) => it.name.includes("chest"));
+        .find((it) => it.name.includes('chest'));
       if (!chestItem) {
-        console.log("Unable to obtain a chest.");
+        console.log('Unable to obtain a chest.');
         return;
       }
     }
 
     try {
-      await this.bot.equip(chestItem, "hand");
+      await this.bot.equip(chestItem, 'hand');
     } catch (err) {
       console.log(`Failed to equip chest: ${err}`);
       return;
@@ -875,13 +875,13 @@ export class Actions {
     const referencePos = this.bot.entity.position.offset(1, 0, 0);
     const refBlock = this.bot.blockAt(referencePos);
     if (!refBlock) {
-      console.log("No reference block next to me to place the chest onto.");
+      console.log('No reference block next to me to place the chest onto.');
       return;
     }
 
     try {
       await this.bot.placeBlock(refBlock, new Vec3(0, 1, 0));
-      console.log("Chest placed.");
+      console.log('Chest placed.');
     } catch (err) {
       console.log(`Error placing chest: ${err}`);
     }
@@ -890,7 +890,7 @@ export class Actions {
   async storeItemInChest(itemName: string, count: number): Promise<void> {
     const chestBlock = this.findNearbyChest(3);
     if (!chestBlock) {
-      console.log("No chest found nearby to store items.");
+      console.log('No chest found nearby to store items.');
       return;
     }
 
@@ -917,7 +917,7 @@ export class Actions {
   async retrieveItemFromChest(itemName: string, count: number): Promise<void> {
     const chestBlock = this.findNearbyChest(3);
     if (!chestBlock) {
-      console.log("No chest found nearby to retrieve items.");
+      console.log('No chest found nearby to retrieve items.');
       return;
     }
 
@@ -944,7 +944,7 @@ export class Actions {
   private findNearbyChest(maxDistance: number) {
     const chestPositions = this.bot.findBlocks({
       point: this.bot.entity.position,
-      matching: (block) => block && block.name.includes("chest"),
+      matching: (block) => block && block.name.includes('chest'),
       maxDistance,
       count: 1,
     });
@@ -985,7 +985,7 @@ export class Actions {
           }
 
           const block = this.bot.blockAt(candidate);
-          if (block && block.name === "air" && this.bot.canSeeBlock(block)) {
+          if (block && block.name === 'air' && this.bot.canSeeBlock(block)) {
             return candidate;
           }
         }
@@ -996,7 +996,7 @@ export class Actions {
 
   async gotoPlayer(playerName: string): Promise<void> {
     if (!playerName || typeof playerName !== 'string' || playerName.trim() === '') {
-        throw new Error("Invalid arguments: 'playerName' must be a non-empty string.");
+        throw new Error('Invalid arguments: \'playerName\' must be a non-empty string.');
     }
 
     const targetDesc = `player ${playerName}`;
@@ -1028,7 +1028,7 @@ export class Actions {
   // ---> ADDED: gotoCoordinates method <---
   async gotoCoordinates(coordinates: { x: number; y: number; z: number }): Promise<void> {
      if (!coordinates || typeof coordinates.x !== 'number' || typeof coordinates.y !== 'number' || typeof coordinates.z !== 'number') {
-         throw new Error("Invalid arguments: 'coordinates' must be an object with numeric x, y, and z properties.");
+         throw new Error('Invalid arguments: \'coordinates\' must be an object with numeric x, y, and z properties.');
      }
 
      const targetDesc = `coordinates (${coordinates.x.toFixed(1)}, ${coordinates.y.toFixed(1)}, ${coordinates.z.toFixed(1)})`;

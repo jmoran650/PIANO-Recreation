@@ -1,12 +1,12 @@
 export async function handleTestGoal(bot: any, functionCaller: any, parts: string[]): Promise<void> {
     // Usage: "test goal: pickaxe"
 
-    const goal = parts.slice(2).join(" ");
+    const goal = parts.slice(2).join(' ');
     if (!goal) {
-      bot.chat("Usage: test goal: <goal description>");
+      bot.chat('Usage: test goal: <goal description>');
       return;
     }
-    bot.chat(`I'm alive!`);
+    bot.chat('I\'m alive!');
     const botName = bot.username;
     // Build a user prompt that includes the bot's current SharedAgentState:
     const systemPrompt = `
@@ -22,7 +22,7 @@ export async function handleTestGoal(bot: any, functionCaller: any, parts: strin
   
     // Now call the LLM with our function-enabled chat.
     const finalResponse = await functionCaller.callOpenAIWithTools([
-      { role: "system", content: systemPrompt }
+      { role: 'system', content: systemPrompt }
     ]);
   
     // Relay the final response in chat.

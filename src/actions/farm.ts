@@ -1,12 +1,12 @@
 // src/actions/farm.ts
-import dotenv from "dotenv";
-import minecraftData from "minecraft-data";
-import { Bot } from "mineflayer";
-import { Block } from "prismarine-block";
-import { Item } from "prismarine-item"; // Import Item type
-import { Vec3 } from "vec3";
-import { Navigation } from "../navigation";
-import { SharedAgentState } from "../sharedAgentState";
+import dotenv from 'dotenv';
+import minecraftData from 'minecraft-data';
+import { Bot } from 'mineflayer';
+import { Block } from 'prismarine-block';
+import { Item } from 'prismarine-item'; // Import Item type
+import { Vec3 } from 'vec3';
+import { Navigation } from '../navigation';
+import { SharedAgentState } from '../sharedAgentState';
 // Removed: equipBestToolForBlock import/local definition as it's replaced by equipHoe
 
 dotenv.config();
@@ -27,13 +27,13 @@ export class FarmingService {
     this.navigation = navigation;
     this.sharedState = sharedState;
     if (process.env.MINECRAFT_VERSION == undefined) {
-      throw new Error("[FarmingService] Minecraft Version Undefined");
+      throw new Error('[FarmingService] Minecraft Version Undefined');
     }
     this.mcData = minecraftData(process.env.MINECRAFT_VERSION);
   }
 
   async plantCrop(cropName: string): Promise<void> {
-    const seedItemName = cropName.includes("_seeds")
+    const seedItemName = cropName.includes('_seeds')
       ? cropName
       : `${cropName}_seeds`; // Ensure correct seed name
     console.log(`[FarmingService] Attempting to plant ${seedItemName}...`);
@@ -55,7 +55,7 @@ export class FarmingService {
     const targetPlantPos = this.bot.entity.position.floored().offset(0, 0, 1); // Adjust offset based on desired planting location relative to bot
     const blockBelowTarget = this.bot.blockAt(targetPlantPos.offset(0, -1, 0));
 
-    if (!blockBelowTarget || blockBelowTarget.name !== "farmland") {
+    if (!blockBelowTarget || blockBelowTarget.name !== 'farmland') {
       console.log(
         `[FarmingService] No farmland found at ${targetPlantPos
           .offset(0, -1, 0)
@@ -67,7 +67,7 @@ export class FarmingService {
 
     // Ensure the spot itself is air
     const blockAtTarget = this.bot.blockAt(targetPlantPos);
-    if (!blockAtTarget || blockAtTarget.name !== "air") {
+    if (!blockAtTarget || blockAtTarget.name !== 'air') {
       console.log(
         `[FarmingService] Target planting spot at ${targetPlantPos.toString()} is not air.`
       );
@@ -75,7 +75,7 @@ export class FarmingService {
     }
 
     try {
-      await this.bot.equip(seedItem, "hand");
+      await this.bot.equip(seedItem, 'hand');
       // Reference block is the farmland block, place seeds *onto* it (offset 0, 1, 0 relative to farmland)
       await this.bot.placeBlock(blockBelowTarget, new Vec3(0, 1, 0));
       console.log(`[FarmingService] ${seedItemName} planted successfully!`);
@@ -96,16 +96,16 @@ export class FarmingService {
         if (!block || !block.name.includes(cropName)) return false;
         // Add specific maturity checks if mcData provides them for the crop
         // Example for wheat (usually stage 7 is mature):
-        if (cropName === "wheat" && block.metadata !== 7) return false;
+        if (cropName === 'wheat' && block.metadata !== 7) return false;
         // Add checks for other crops (potatoes, carrots, beetroot often use age 7, nether wart uses age 3)
         if (
-          (cropName === "potatoes" ||
-            cropName === "carrots" ||
-            cropName === "beetroots") &&
+          (cropName === 'potatoes' ||
+            cropName === 'carrots' ||
+            cropName === 'beetroots') &&
           block.metadata !== 7
         )
           return false;
-        if (cropName === "nether_wart" && block.metadata !== 3) return false;
+        if (cropName === 'nether_wart' && block.metadata !== 3) return false;
         // Default assumption if no specific check: any block with the name is harvestable
         return true;
       },
@@ -126,7 +126,7 @@ export class FarmingService {
     const block = this.bot.blockAt(pos);
     if (!block) {
       console.log(
-        "[FarmingService] Could not resolve crop block at found position."
+        '[FarmingService] Could not resolve crop block at found position.'
       );
       return;
     }
@@ -160,12 +160,12 @@ export class FarmingService {
    */
   private async equipHoe(): Promise<void> {
     const hoeTiers: string[] = [
-      "netherite_hoe",
-      "diamond_hoe",
-      "golden_hoe",
-      "iron_hoe",
-      "stone_hoe",
-      "wooden_hoe",
+      'netherite_hoe',
+      'diamond_hoe',
+      'golden_hoe',
+      'iron_hoe',
+      'stone_hoe',
+      'wooden_hoe',
     ];
 
     let bestHoeFound: Item | null = null;
@@ -188,7 +188,7 @@ export class FarmingService {
       }
 
       try {
-        await this.bot.equip(bestHoeFound, "hand");
+        await this.bot.equip(bestHoeFound, 'hand');
         console.log(`[FarmingService] Equipped ${bestHoeFound.name}.`);
       } catch (err) {
         console.error(
@@ -196,7 +196,7 @@ export class FarmingService {
         );
       }
     } else {
-      console.log("[FarmingService] No hoe found in inventory.");
+      console.log('[FarmingService] No hoe found in inventory.');
     }
   }
 

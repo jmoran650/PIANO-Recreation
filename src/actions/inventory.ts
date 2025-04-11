@@ -1,10 +1,10 @@
 // src/actions/InventoryService.ts
-import dotenv from "dotenv";
-import minecraftData from "minecraft-data"; // Useful for item type lookups if needed
-import { Bot } from "mineflayer";
-import { Block } from "prismarine-block";
-import { Vec3 } from "vec3";
-import { SharedAgentState } from "../sharedAgentState"; // Included for consistency
+import dotenv from 'dotenv';
+import minecraftData from 'minecraft-data'; // Useful for item type lookups if needed
+import { Bot } from 'mineflayer';
+import { Block } from 'prismarine-block';
+import { Vec3 } from 'vec3';
+import { SharedAgentState } from '../sharedAgentState'; // Included for consistency
 
 dotenv.config();
 
@@ -23,7 +23,7 @@ export class InventoryService {
     this.bot = bot;
     this.sharedState = sharedState; // Store for consistency
     if (process.env.MINECRAFT_VERSION == undefined) {
-      throw new Error("[InventoryService] Minecraft Version Undefined");
+      throw new Error('[InventoryService] Minecraft Version Undefined');
     }
     this.mcData = minecraftData(process.env.MINECRAFT_VERSION); // Initialize for consistency
   }
@@ -34,7 +34,7 @@ export class InventoryService {
    * It might be inefficient or have issues with item stacking/NBT.
    */
   async sortInventory(): Promise<void> {
-    console.log("[InventoryService] Sorting inventory...");
+    console.log('[InventoryService] Sorting inventory...');
     // this.sharedState.addPendingAction("Sort Inventory"); // Add if desired
 
     const items = this.bot.inventory.items(); // Get current items
@@ -88,7 +88,7 @@ export class InventoryService {
         }
       }
     }
-    console.log("[InventoryService] Finished sorting attempt.");
+    console.log('[InventoryService] Finished sorting attempt.');
   }
 
   /**
@@ -98,7 +98,7 @@ export class InventoryService {
     // this.sharedState.addPendingAction(`Store ${itemName} x${count}`); // Add if desired
     const chestBlock = this.findNearbyChest(3); // Use internal helper
     if (!chestBlock) {
-      console.log("[InventoryService] No chest found nearby to store items.");
+      console.log('[InventoryService] No chest found nearby to store items.');
       return;
     }
 
@@ -132,7 +132,7 @@ export class InventoryService {
       }
 
       // Deposit items up to the specified count
-      let totalDeposited = 0;
+      const totalDeposited = 0;
       const depositPromises = [];
 
        // Use chest.deposit which handles finding space. Deposit from each stack.
@@ -171,7 +171,7 @@ export class InventoryService {
         if (chest) {
             try {
                 await chest.close();
-                console.log("[InventoryService] Chest closed.");
+                console.log('[InventoryService] Chest closed.');
             } catch (closeErr) {
                 console.warn(`[InventoryService] Error closing chest: ${closeErr}`);
             }
@@ -186,7 +186,7 @@ export class InventoryService {
      // this.sharedState.addPendingAction(`Retrieve ${itemName} x${count}`); // Add if desired
     const chestBlock = this.findNearbyChest(3); // Use internal helper
     if (!chestBlock) {
-      console.log("[InventoryService] No chest found nearby to retrieve items.");
+      console.log('[InventoryService] No chest found nearby to retrieve items.');
       return;
     }
 
@@ -244,7 +244,7 @@ export class InventoryService {
         if (chest) {
             try {
                 await chest.close();
-                console.log("[InventoryService] Chest closed.");
+                console.log('[InventoryService] Chest closed.');
             } catch (closeErr) {
                 console.warn(`[InventoryService] Error closing chest: ${closeErr}`);
             }
@@ -259,7 +259,7 @@ export class InventoryService {
     const chestPositions = this.bot.findBlocks({
       point: this.bot.entity.position,
       // Original used includes("chest") - find specific block name 'chest' or 'trapped_chest'
-      matching: (block) => block && (block.name === "chest" || block.name === "trapped_chest"),
+      matching: (block) => block && (block.name === 'chest' || block.name === 'trapped_chest'),
       maxDistance,
       count: 1, // Find the first one
     });

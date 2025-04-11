@@ -1,6 +1,6 @@
 // src/memory.ts
-import { Vec3 } from "vec3";
-import { SharedAgentState } from "../../sharedAgentState";
+import { Vec3 } from 'vec3';
+import { SharedAgentState } from '../../sharedAgentState';
 
 export class Memory {
   private sharedState: SharedAgentState;
@@ -32,7 +32,7 @@ export class Memory {
   public getShortTermMemory(name: string): string | undefined {
     const stm = this.sharedState.shortTermMemoryIndex;
     const info = stm.get(name);
-    if (info === undefined) throw new Error("Error in getShortTermMemory: info is undefined");
+    if (info === undefined) throw new Error('Error in getShortTermMemory: info is undefined');
     stm.delete(name);
     stm.set(name, info);
     return info;

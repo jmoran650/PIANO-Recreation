@@ -1,17 +1,17 @@
 // ==================================================
 // File: src/actions/build.ts (Modified)
 // ==================================================
-import dotenv from "dotenv";
-import minecraftData from "minecraft-data";
-import { Bot } from "mineflayer";
-import { Block } from "prismarine-block";
-import { Vec3 } from "vec3";
-import { SharedAgentState } from "../sharedAgentState";
+import dotenv from 'dotenv';
+import minecraftData from 'minecraft-data';
+import { Bot } from 'mineflayer';
+import { Block } from 'prismarine-block';
+import { Vec3 } from 'vec3';
+import { SharedAgentState } from '../sharedAgentState';
 import {
   checkPlacementPossible,
   findSafePlacement,
   sleep,
-} from "./helpers/helpers"; // Keep sleep if used by other methods
+} from './helpers/helpers'; // Keep sleep if used by other methods
 
 dotenv.config();
 
@@ -31,7 +31,7 @@ export class BuildingService {
     const version = process.env.MINECRAFT_VERSION || bot.version;
     if (!version) {
       throw new Error(
-        "[BuildingService] Minecraft Version Undefined and not available from bot"
+        '[BuildingService] Minecraft Version Undefined and not available from bot'
       );
     }
     this.mcData = minecraftData(version);
@@ -43,8 +43,8 @@ export class BuildingService {
   }
 
   async placeFurnace(): Promise<Block> {
-    this.sharedState.addPendingAction("Place Furnace");
-    console.log("[BuildingService] Attempting to place furnace.");
+    this.sharedState.addPendingAction('Place Furnace');
+    console.log('[BuildingService] Attempting to place furnace.');
     const furnaceItem = this.bot.inventory.findInventoryItem(
       this.mcData.itemsByName.furnace.id,
       null,
@@ -53,13 +53,13 @@ export class BuildingService {
 
     if (!furnaceItem) {
       throw new Error(
-        "[BuildingService] Furnace not found in inventory. Caller must ensure it is crafted first."
+        '[BuildingService] Furnace not found in inventory. Caller must ensure it is crafted first.'
       );
     }
 
     try {
-      await this.bot.equip(furnaceItem, "hand");
-      console.log("[BuildingService] Equipped furnace.");
+      await this.bot.equip(furnaceItem, 'hand');
+      console.log('[BuildingService] Equipped furnace.');
     } catch (err: any) {
       throw new Error(
         `[BuildingService] Failed to equip furnace: ${err.message || err}`
@@ -69,7 +69,7 @@ export class BuildingService {
     const safePos = findSafePlacement(this.bot);
     if (!safePos) {
       throw new Error(
-        "[BuildingService] No suitable safe position found to place the furnace."
+        '[BuildingService] No suitable safe position found to place the furnace.'
       );
     }
 
@@ -80,7 +80,7 @@ export class BuildingService {
       !checkPlacementPossible(this.bot, this.mcData, safePos, referenceBlock)
     ) {
       const reason = !referenceBlock
-        ? "Reference block missing"
+        ? 'Reference block missing'
         : `Placement check failed on ref block '${referenceBlock.name}'`;
       throw new Error(
         `[BuildingService] Cannot place furnace at ${safePos}: ${reason}.`
@@ -97,7 +97,7 @@ export class BuildingService {
       await sleep(100); // Brief wait for block update consistency
 
       const placedBlock = this.bot.blockAt(safePos);
-      if (placedBlock?.name === "furnace") {
+      if (placedBlock?.name === 'furnace') {
         console.log(
           `[BuildingService] Furnace placed successfully at ${safePos}.`
         );
@@ -118,8 +118,8 @@ export class BuildingService {
   }
 
   async placeChest(): Promise<Block> {
-    this.sharedState.addPendingAction("Place Chest");
-    console.log("[BuildingService] Attempting to place chest.");
+    this.sharedState.addPendingAction('Place Chest');
+    console.log('[BuildingService] Attempting to place chest.');
     const chestItem = this.bot.inventory.findInventoryItem(
       this.mcData.itemsByName.chest.id,
       null,
@@ -128,13 +128,13 @@ export class BuildingService {
 
     if (!chestItem) {
       throw new Error(
-        "[BuildingService] Chest not found in inventory. Caller must ensure it is crafted first."
+        '[BuildingService] Chest not found in inventory. Caller must ensure it is crafted first.'
       );
     }
 
     try {
-      await this.bot.equip(chestItem, "hand");
-      console.log("[BuildingService] Equipped chest.");
+      await this.bot.equip(chestItem, 'hand');
+      console.log('[BuildingService] Equipped chest.');
     } catch (err: any) {
       throw new Error(
         `[BuildingService] Failed to equip chest: ${err.message || err}`
@@ -144,7 +144,7 @@ export class BuildingService {
     const safePos = findSafePlacement(this.bot);
     if (!safePos) {
       throw new Error(
-        "[BuildingService] No suitable safe position found to place the chest."
+        '[BuildingService] No suitable safe position found to place the chest.'
       );
     }
 
@@ -154,7 +154,7 @@ export class BuildingService {
       !checkPlacementPossible(this.bot, this.mcData, safePos, referenceBlock)
     ) {
       const reason = !referenceBlock
-        ? "Reference block missing"
+        ? 'Reference block missing'
         : `Placement check failed on ref block '${referenceBlock.name}'`;
       throw new Error(
         `[BuildingService] Cannot place chest at ${safePos}: ${reason}.`
@@ -172,8 +172,8 @@ export class BuildingService {
 
       const placedBlock = this.bot.blockAt(safePos);
       if (
-        placedBlock?.name === "chest" ||
-        placedBlock?.name === "trapped_chest"
+        placedBlock?.name === 'chest' ||
+        placedBlock?.name === 'trapped_chest'
       ) {
         // Account for trapped chests if applicable
         console.log(
@@ -218,7 +218,7 @@ export class BuildingService {
     }
 
     try {
-      await this.bot.equip(blockItem, "hand");
+      await this.bot.equip(blockItem, 'hand');
       console.log(`[BuildingService] Equipped ${blockType}.`);
     } catch (err: any) {
       throw new Error(
@@ -239,7 +239,7 @@ export class BuildingService {
       !checkPlacementPossible(this.bot, this.mcData, safePos, referenceBlock)
     ) {
       const reason = !referenceBlock
-        ? "Reference block missing"
+        ? 'Reference block missing'
         : `Placement check failed on ref block '${referenceBlock.name}'`;
       throw new Error(
         `[BuildingService] Cannot place ${blockType} at ${safePos}: ${reason}.`
@@ -267,7 +267,7 @@ export class BuildingService {
           console.log(
             `[BuildingService] Placed ${blockType} successfully at ${safePos}.`
           );
-          if (placedBlock?.name === "crafting_table") {
+          if (placedBlock?.name === 'crafting_table') {
             console.log(`[BuildingService] Internal placement: BuildingService placeBlock was used to place a crafting table at ${safePos}!`);
             this.sharedState.addCraftingTablePosition(safePos);
           }

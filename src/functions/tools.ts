@@ -1,45 +1,45 @@
 // src/functions/tools.ts
-import { ChatCompletionTool } from "openai/resources/chat/completions";
+import { ChatCompletionTool } from 'openai/resources/chat/completions';
 
 export const tools: ChatCompletionTool[] = [
   {
-    type: "function",
+    type: 'function',
     function: {
-      name: "mine",
+      name: 'mine',
       description:
-        "Mines a specified block type until the desired number of blocks has been mined.",
+        'Mines a specified block type until the desired number of blocks has been mined.',
       parameters: {
-        type: "object",
+        type: 'object',
         properties: {
           goalBlock: {
-            type: "string",
-            description: "Type of block to mine (e.g. 'oak_log', 'stone', 'coal_ore')",
+            type: 'string',
+            description: 'Type of block to mine (e.g. \'oak_log\', \'stone\', \'coal_ore\')',
           },
           desiredCount: {
-            type: "number",
-            description: "How many blocks to mine",
+            type: 'number',
+            description: 'How many blocks to mine',
           },
         },
-        required: ["goalBlock", "desiredCount"],
+        required: ['goalBlock', 'desiredCount'],
         additionalProperties: false,
       },
       strict: true,
     },
   },
   {
-    type: "function",
+    type: 'function',
     function: {
-      name: "gotoPlayer",
-      description: "Navigates the bot to the current location of the specified player.",
+      name: 'gotoPlayer',
+      description: 'Navigates the bot to the current location of the specified player.',
       parameters: {
-        type: "object",
+        type: 'object',
         properties: {
           playerName: {
-            type: "string",
-            description: "The username of the player to navigate to.",
+            type: 'string',
+            description: 'The username of the player to navigate to.',
           },
         },
-        required: ["playerName"], // playerName is strictly required
+        required: ['playerName'], // playerName is strictly required
         additionalProperties: false,
       },
       strict: true,
@@ -47,26 +47,26 @@ export const tools: ChatCompletionTool[] = [
   },
 
   {
-    type: "function",
+    type: 'function',
     function: {
-      name: "gotoCoordinates",
-      description: "Navigates the bot to the specified x, y, z coordinates.",
+      name: 'gotoCoordinates',
+      description: 'Navigates the bot to the specified x, y, z coordinates.',
       parameters: {
-        type: "object",
+        type: 'object',
         properties: {
           coordinates: {
-            type: "object",
-            description: "The exact {x, y, z} coordinates to navigate to.",
+            type: 'object',
+            description: 'The exact {x, y, z} coordinates to navigate to.',
             properties: {
-              x: { type: "number", description: "The target x-coordinate." },
-              y: { type: "number", description: "The target y-coordinate." },
-              z: { type: "number", description: "The target z-coordinate." },
+              x: { type: 'number', description: 'The target x-coordinate.' },
+              y: { type: 'number', description: 'The target y-coordinate.' },
+              z: { type: 'number', description: 'The target z-coordinate.' },
             },
-            required: ["x", "y", "z"], // x,y,z required within coordinates object
+            required: ['x', 'y', 'z'], // x,y,z required within coordinates object
             additionalProperties: false,
           },
         },
-        required: ["coordinates"], // coordinates object itself is required
+        required: ['coordinates'], // coordinates object itself is required
         additionalProperties: false,
       },
       strict: true,
@@ -74,80 +74,80 @@ export const tools: ChatCompletionTool[] = [
   },
   
   {
-    type: "function",
+    type: 'function',
     function: {
-      name: "craft",
-      description: "Crafts a goal item or block.",
+      name: 'craft',
+      description: 'Crafts a goal item or block.',
       parameters: {
-        type: "object",
+        type: 'object',
         properties: {
           goalItem: {
-            type: "string",
-            description: "Name of the item to craft (e.g. 'chest', 'furnace')",
+            type: 'string',
+            description: 'Name of the item to craft (e.g. \'chest\', \'furnace\')',
           },
         },
-        required: ["goalItem"],
+        required: ['goalItem'],
         additionalProperties: false,
       },
       strict: true,
     },
   },
   {
-    type: "function",
+    type: 'function',
     function: {
-      name: "place",
-      description: "Places a block down in the world (e.g. furnace or crafting table).",
+      name: 'place',
+      description: 'Places a block down in the world (e.g. furnace or crafting table).',
       parameters: {
-        type: "object",
+        type: 'object',
         properties: {
           blockType: {
-            type: "string",
-            description: "Name of the block to place from inventory",
+            type: 'string',
+            description: 'Name of the block to place from inventory',
           },
         },
-        required: ["blockType"],
+        required: ['blockType'],
         additionalProperties: false,
       },
       strict: true,
     },
   },
   {
-    type: "function",
+    type: 'function',
     function: {
-      name: "attack",
-      description: "Attacks the nearest specified mob until it is defeated.",
+      name: 'attack',
+      description: 'Attacks the nearest specified mob or player until it is defeated.',
       parameters: {
-        type: "object",
+        type: 'object',
         properties: {
           mobType: {
-            type: "string",
-            description: "Mob name (e.g. 'zombie', 'skeleton')",
+            type: 'string',
+            description: 'Mob name (e.g. \'zombie\', \'skeleton\') or player name.'
           },
         },
-        required: ["mobType"],
+        required: ['mobType'],
         additionalProperties: false,
       },
       strict: true,
     },
   },
   {
-    type: "function",
+    type: 'function',
     function: {
-      name: "smelt",
-      description: "Smelts the specified item using a furnace.",
+      name: 'smelt',
+      description: 'Smelts the specified item using a furnace.',
       parameters: {
-        type: "object",
+        type: 'object',
         properties: {
           inputItemName: {
-            type: "string",
-            description: "Name of item to smelt (e.g. 'iron_ore', 'sand')",
+            type: 'string',
+            description: 'Name of item to smelt (e.g. \'iron_ore\', \'sand\')',
           },
           quantity: {
-            type: "number",
-            description: "How many items to smelt",
+            type: 'number',
+            description: 'How many items to smelt',
           },
         },
-        required: ["inputItemName", "quantity"],
+        required: ['inputItemName', 'quantity'],
         additionalProperties: false,
       },
       strict: true,
@@ -194,12 +194,12 @@ export const tools: ChatCompletionTool[] = [
   //   },
   // },
   {
-    type: "function",
+    type: 'function',
     function: {
-      name: "placeChest",
-      description: "Places a chest block into the world from inventory.",
+      name: 'placeChest',
+      description: 'Places a chest block into the world from inventory.',
       parameters: {
-        type: "object",
+        type: 'object',
         properties: {},
         required: [],
         additionalProperties: false,
@@ -208,66 +208,66 @@ export const tools: ChatCompletionTool[] = [
     },
   },
   {
-    type: "function",
+    type: 'function',
     function: {
-      name: "storeItemInChest",
-      description: "Stores a specified quantity of an item in an available chest.",
+      name: 'storeItemInChest',
+      description: 'Stores a specified quantity of an item in an available chest.',
       parameters: {
-        type: "object",
+        type: 'object',
         properties: {
           itemName: {
-            type: "string",
-            description: "Name of the item to store (e.g. 'dirt', 'cobblestone')",
+            type: 'string',
+            description: 'Name of the item to store (e.g. \'dirt\', \'cobblestone\')',
           },
           count: {
-            type: "number",
-            description: "How many items to store",
+            type: 'number',
+            description: 'How many items to store',
           },
         },
-        required: ["itemName", "count"],
+        required: ['itemName', 'count'],
         additionalProperties: false,
       },
       strict: true,
     },
   },
   {
-    type: "function",
+    type: 'function',
     function: {
-      name: "retrieveItemFromChest",
-      description: "Retrieves a specified quantity of an item from a nearby chest.",
+      name: 'retrieveItemFromChest',
+      description: 'Retrieves a specified quantity of an item from a nearby chest.',
       parameters: {
-        type: "object",
+        type: 'object',
         properties: {
           itemName: {
-            type: "string",
-            description: "Name of the item to retrieve (e.g. 'stone', 'apple')",
+            type: 'string',
+            description: 'Name of the item to retrieve (e.g. \'stone\', \'apple\')',
           },
           count: {
-            type: "number",
-            description: "How many items to retrieve",
+            type: 'number',
+            description: 'How many items to retrieve',
           },
         },
-        required: ["itemName", "count"],
+        required: ['itemName', 'count'],
         additionalProperties: false,
       },
       strict: true,
     },
   },
   {
-    type: "function",
+    type: 'function',
     function: {
-      name: "chat",
+      name: 'chat',
       description:
-        "Make the bot say the provided text out loud in Minecraft. Use this to communicate with other players and characters.",
+        'Make the bot say the provided text out loud in Minecraft. Use this to communicate with other players and characters.',
       parameters: {
-        type: "object",
+        type: 'object',
         properties: {
           speech: {
-            type: "string",
-            description: "The text the bot should chat",
+            type: 'string',
+            description: 'The text the bot should chat',
           },
         },
-        required: ["speech"],
+        required: ['speech'],
         additionalProperties: false,
       },
       strict: true,

@@ -5,7 +5,7 @@
  * @returns The lowercase acronym or an empty string.
  */
 export function generateAcronym(username: string): string {
-    if (!username) return "";
+    if (!username) return '';
     const capitals = username.match(/[A-Z]/g); // Find all capital letters using regex
-    return capitals ? capitals.join("").toLowerCase() : ""; // Join found capitals and convert to lowercase
+    return capitals ? capitals.join('').toLowerCase() : ''; // Join found capitals and convert to lowercase
   }

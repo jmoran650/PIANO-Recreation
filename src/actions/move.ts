@@ -1,11 +1,11 @@
 // src/actions/MovementService.ts
-import dotenv from "dotenv";
-import minecraftData from "minecraft-data"; // Included for consistency
-import { Bot } from "mineflayer";
-import { Block } from "prismarine-block"; // Included for consistency
-import { Vec3 } from "vec3"; // Included for consistency
-import { Navigation } from "../navigation"; // Essential dependency
-import { SharedAgentState } from "../sharedAgentState";
+import dotenv from 'dotenv';
+import minecraftData from 'minecraft-data'; // Included for consistency
+import { Bot } from 'mineflayer';
+import { Block } from 'prismarine-block'; // Included for consistency
+import { Vec3 } from 'vec3'; // Included for consistency
+import { Navigation } from '../navigation'; // Essential dependency
+import { SharedAgentState } from '../sharedAgentState';
 
 dotenv.config();
 
@@ -26,7 +26,7 @@ export class MovementService {
     this.navigation = navigation;
     this.sharedState = sharedState;
     if (process.env.MINECRAFT_VERSION == undefined) {
-      throw new Error("[MovementService] Minecraft Version Undefined");
+      throw new Error('[MovementService] Minecraft Version Undefined');
     }
     this.mcData = minecraftData(process.env.MINECRAFT_VERSION); // Init for consistency
   }
@@ -37,7 +37,7 @@ export class MovementService {
   async gotoPlayer(playerName: string): Promise<void> {
     // Input validation (from original)
     if (!playerName || typeof playerName !== 'string' || playerName.trim() === '') {
-        throw new Error("[MovementService] Invalid arguments: 'playerName' must be a non-empty string.");
+        throw new Error('[MovementService] Invalid arguments: \'playerName\' must be a non-empty string.');
     }
 
     const targetDesc = `player ${playerName}`;
@@ -82,7 +82,7 @@ export class MovementService {
   async gotoCoordinates(coordinates: { x: number; y: number; z: number }): Promise<void> {
       // Input validation (from original)
      if (!coordinates || typeof coordinates.x !== 'number' || typeof coordinates.y !== 'number' || typeof coordinates.z !== 'number') {
-         throw new Error("[MovementService] Invalid arguments: 'coordinates' must be an object with numeric x, y, and z properties.");
+         throw new Error('[MovementService] Invalid arguments: \'coordinates\' must be an object with numeric x, y, and z properties.');
      }
 
      // Use Vec3 for easier handling? Original used object directly. Keep object.

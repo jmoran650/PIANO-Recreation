@@ -1,18 +1,18 @@
 // index.ts
 
 if (process.env.OPENAI_API_KEY) {
-  console.log("api key found");
+  console.log('api key found');
 } else {
-  console.log("api key NOT FOUND");
+  console.log('api key NOT FOUND');
 }
 
 if (process.env.MINECRAFT_VERSION) {
-  console.log("minecraft version found");
+  console.log('minecraft version found');
 } else {
-  console.log("MINECRAFT VERSION NOT FOUND");
+  console.log('MINECRAFT VERSION NOT FOUND');
 }
 
-import { AgentBot, createAgentBot } from "./src/createAgentBot";
+import { AgentBot, createAgentBot } from './src/createAgentBot';
 
 // Store agent references globally or pass them appropriately
 let agent: AgentBot;
@@ -24,21 +24,21 @@ export async function main(): Promise<{ agent: AgentBot; agent2: AgentBot }> {
     // Create both bots
     // Ensure createAgentBot returns the full AgentBot structure
     agent2 = await createAgentBot({
-      host: "10.0.0.51",
+      host: '10.0.0.51',
       port: 25565,
-      username: "DaBiggestBird",
+      username: 'DaBiggestBird',
       version: process.env.MINECRAFT_VERSION,
     });
     agent = await createAgentBot({
-      host: "10.0.0.51",
+      host: '10.0.0.51',
       port: 25565,
-      username: "AgentBot",
+      username: 'AgentBot',
       version: process.env.MINECRAFT_VERSION,
     });
 
     return { agent, agent2 }; // Return both if needed externally
   } catch (err) {
-    console.error("Failed to create AgentBots:", err);
+    console.error('Failed to create AgentBots:', err);
     throw err;
   }
 }

@@ -1,8 +1,8 @@
 //src/prompts/GoalBreakdown.ts
-import { formatInventory } from "./helpers/helpers";
-import { SharedAgentState } from "../sharedAgentState";
+import { formatInventory } from './helpers/helpers';
+import { SharedAgentState } from '../sharedAgentState';
 
-export const goalBreakdownPrompt: string = `Break down a task in Minecraft for my bot to complete and output the steps in JSON format.
+export const goalBreakdownPrompt = `Break down a task in Minecraft for my bot to complete and output the steps in JSON format.
 
 # How To Breakdown Steps
 
@@ -68,26 +68,26 @@ export function breakdownContextPrompt(
   const inventoryEntries = formatInventory(inventory);
   const invString = inventoryEntries.length
     ? `At this time, your inventory includes: ${inventoryEntries}.`
-    : ``;
+    : '';
 
-  let environmentDetails = "";
+  let environmentDetails = '';
   if (sharedState) {
     const { playersNearby, visibleBlockTypes, visibleMobs, botHealth, botHunger } = sharedState;
 
     // Basic example of adding environment data:
     if (playersNearby && playersNearby.length > 0) {
-      environmentDetails += `\nPlayers nearby: ${playersNearby.join(", ")}.`;
+      environmentDetails += `\nPlayers nearby: ${playersNearby.join(', ')}.`;
     }
     if (visibleBlockTypes) {
       const blockList = Object.keys(visibleBlockTypes.BlockTypes || {});
       if (blockList.length > 0) {
-        environmentDetails += `\nVisible block types include: ${blockList.join(", ")}.`;
+        environmentDetails += `\nVisible block types include: ${blockList.join(', ')}.`;
       }
     }
     if (visibleMobs) {
       const mobList = visibleMobs.Mobs.map((m) => m.name);
       if (mobList.length > 0) {
-        environmentDetails += `\nVisible mobs include: ${mobList.join(", ")}.`;
+        environmentDetails += `\nVisible mobs include: ${mobList.join(', ')}.`;
       }
     }
 

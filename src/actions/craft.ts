@@ -1,20 +1,20 @@
 // ==================================================
 // File: src/actions/craft.ts (Modified)
 // ==================================================
-import dotenv from "dotenv";
-import minecraftData from "minecraft-data";
-import { Bot } from "mineflayer";
-import { Block } from "prismarine-block";
-import { Vec3 } from "vec3";
-import { Navigation } from "../navigation";
-import { Observer } from "../observer/observer";
-import { SharedAgentState } from "../sharedAgentState";
+import dotenv from 'dotenv';
+import minecraftData from 'minecraft-data';
+import { Bot } from 'mineflayer';
+import { Block } from 'prismarine-block';
+import { Vec3 } from 'vec3';
+import { Navigation } from '../navigation';
+import { Observer } from '../observer/observer';
+import { SharedAgentState } from '../sharedAgentState';
 import {
   findNearbyPlacedTable,
   findSafePlacement,
   checkPlacementPossible,
   sleep, // Assuming sleep is imported or available
-} from "./helpers/helpers"; // Ensure sleep is available here or import from utils/sleep
+} from './helpers/helpers'; // Ensure sleep is available here or import from utils/sleep
 
 dotenv.config();
 
@@ -41,7 +41,7 @@ export class CraftingService {
     const version = process.env.MINECRAFT_VERSION || bot.version; // Get version safely
     if (!version) {
       throw new Error(
-        "[CraftingService] Minecraft Version Undefined and not available from bot"
+        '[CraftingService] Minecraft Version Undefined and not available from bot'
       );
     }
     this.mcData = minecraftData(version);
@@ -70,9 +70,9 @@ export class CraftingService {
 
     // Heuristic: Check if a table might be needed (exclude planks and crafting table itself)
     const potentiallyNeedsTable: boolean =
-      !goalItem.endsWith("_planks") &&
-      goalItem !== "crafting_table" &&
-      goalItem !== "stick";
+      !goalItem.endsWith('_planks') &&
+      goalItem !== 'crafting_table' &&
+      goalItem !== 'stick';
     if (potentiallyNeedsTable) {
       console.log(
         `[CraftingService] Item "${goalItem}" might require a crafting table. Searching/placing...`
@@ -113,7 +113,7 @@ export class CraftingService {
     // Recipe Check & Crafting Attempt (Uses the tableReference if found/placed)
     console.log(
       `[DEBUG Craft] Calling recipesFor(${itemId}, null, 1, ${
-        tableReference ? "tableReference" : "null"
+        tableReference ? 'tableReference' : 'null'
       })`
     );
     // *** Use the potentially acquired tableReference here ***
@@ -146,7 +146,7 @@ export class CraftingService {
               (d: { id: number; count: number }) =>
                 `${this.mcData.items[d.id]?.name} x ${-d.count}`
             )
-            .join(", ");
+            .join(', ');
           reason += ` Needs: [${needed}]`;
         }
       } else if (this.mcData.items[itemId]) {
@@ -162,14 +162,14 @@ export class CraftingService {
 
       reason += `${
         tableReference
-          ? " (using table at " + tableReference.position + ")"
-          : " (no table used)"
+          ? ' (using table at ' + tableReference.position + ')'
+          : ' (no table used)'
       }.`;
       console.error(`[CraftingService] ${reason}`);
       console.log(
         `[DEBUG Craft] Inventory: [${this.observer
           .getInventoryContents()
-          .join(", ")}]`
+          .join(', ')}]`
       );
       throw new Error(reason);
     }
@@ -200,13 +200,13 @@ export class CraftingService {
               (d: { id: number; count: number }) =>
                 `${this.mcData.items[d.id]?.name} x ${-d.count}`
             )
-            .join(", ")}`
+            .join(', ')}`
         );
       }
       console.log(
         `[DEBUG Craft] Inventory: [${this.observer
           .getInventoryContents()
-          .join(", ")}]`
+          .join(', ')}]`
       );
       throw new Error(`Failed to craft ${goalItem}: ${err.message || err}`);
     }
@@ -218,7 +218,7 @@ export class CraftingService {
    * Returns the Block object if found/placed, otherwise null.
    */
   private async findCraftingTable(): Promise<Block | null> {
-    console.log("[CraftingService] Searching for usable crafting table...");
+    console.log('[CraftingService] Searching for usable crafting table...');
 
     // 1. Check nearby (within interaction range first, then wider search)
     let tableBlock = findNearbyPlacedTable(this.bot, this.INTERACTION_RANGE);
@@ -235,7 +235,7 @@ export class CraftingService {
       );
       try {
         await this.navigation.moveToInteractRange(tableBlock);
-        console.log("[CraftingService] Moved to nearby crafting table.");
+        console.log('[CraftingService] Moved to nearby crafting table.');
         return tableBlock; // Return the block now that we're close
       } catch (err: any) {
         console.error(
@@ -248,7 +248,7 @@ export class CraftingService {
     }
 
     // 2. Check Shared State Cache
-    console.log("[CraftingService] Checking cached table positions...");
+    console.log('[CraftingService] Checking cached table positions...');
     const cachedPositions = this.sharedState.craftingTablePositions;
     // Optional: Sort by distance to check closer cached tables first
     cachedPositions.sort(
@@ -259,13 +259,13 @@ export class CraftingService {
 
     for (const pos of cachedPositions) {
       const block = this.bot.blockAt(pos);
-      if (block && block.name === "crafting_table") {
+      if (block && block.name === 'crafting_table') {
         console.log(
           `[CraftingService] Found valid cached crafting table at ${pos}. Moving closer...`
         );
         try {
           await this.navigation.moveToInteractRange(block);
-          console.log("[CraftingService] Moved to cached crafting table.");
+          console.log('[CraftingService] Moved to cached crafting table.');
           return block; // Found a valid cached table and moved to it
         } catch (navErr: any) {
           console.warn(
@@ -286,7 +286,7 @@ export class CraftingService {
 
     // 3. Check Inventory and Place
     console.log(
-      "[CraftingService] No usable table found nearby or in cache. Checking inventory..."
+      '[CraftingService] No usable table found nearby or in cache. Checking inventory...'
     );
     const tableItemInInventory = this.bot.inventory.findInventoryItem(
       this.mcData.itemsByName.crafting_table.id,
@@ -296,7 +296,7 @@ export class CraftingService {
 
     if (tableItemInInventory) {
       console.log(
-        "[CraftingService] Found crafting table in inventory. Attempting to place..."
+        '[CraftingService] Found crafting table in inventory. Attempting to place...'
       );
       try {
         const placedTable = await this.placeCraftingTable(); // Use internal placement
@@ -305,7 +305,7 @@ export class CraftingService {
         );
         // Need to navigate to the newly placed table
         await this.navigation.moveToInteractRange(placedTable);
-        console.log("[CraftingService] Moved to newly placed crafting table.");
+        console.log('[CraftingService] Moved to newly placed crafting table.');
         return placedTable; // Return the newly placed and navigated-to table
       } catch (placeOrNavErr: any) {
         console.error(
@@ -320,7 +320,7 @@ export class CraftingService {
 
     // 4. No Table Found
     console.log(
-      "[CraftingService] No crafting table found nearby, in cache, or in inventory."
+      '[CraftingService] No crafting table found nearby, in cache, or in inventory.'
     );
     return null;
   }
@@ -330,9 +330,9 @@ export class CraftingService {
    */
   private async placeCraftingTable(): Promise<Block> {
     console.log(
-      "[CraftingService] Attempting to place crafting table from inventory."
+      '[CraftingService] Attempting to place crafting table from inventory.'
     );
-    this.sharedState.addPendingAction("Place Crafting Table (Internal)"); // Indicate internal action
+    this.sharedState.addPendingAction('Place Crafting Table (Internal)'); // Indicate internal action
 
     const tableItem = this.bot.inventory.findInventoryItem(
       this.mcData.itemsByName.crafting_table.id,
@@ -341,14 +341,14 @@ export class CraftingService {
     );
     if (!tableItem) {
       throw new Error(
-        "[CraftingService] Crafting table item not found in inventory."
+        '[CraftingService] Crafting table item not found in inventory.'
       );
     }
 
     const safePos = findSafePlacement(this.bot);
     if (!safePos) {
       throw new Error(
-        "[CraftingService] No valid spot found nearby to place the crafting table!"
+        '[CraftingService] No valid spot found nearby to place the crafting table!'
       );
     }
 
@@ -358,7 +358,7 @@ export class CraftingService {
       !checkPlacementPossible(this.bot, this.mcData, safePos, referenceBlock)
     ) {
       const reason = !referenceBlock
-        ? "Reference block missing"
+        ? 'Reference block missing'
         : `Placement check failed on ref block '${referenceBlock.name}'`;
       throw new Error(
         `[CraftingService] Cannot place crafting table at ${safePos}: ${reason}.`
@@ -372,13 +372,13 @@ export class CraftingService {
     const maxRetries = 3;
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
-        await this.bot.equip(tableItem, "hand"); // Equip before placing
+        await this.bot.equip(tableItem, 'hand'); // Equip before placing
         await this.bot.lookAt(safePos.offset(0.5, 0.5, 0.5), true);
         await this.bot.placeBlock(referenceBlock, new Vec3(0, 1, 0));
         await sleep(100); // Wait briefly for block update
 
         const placedBlock = this.bot.blockAt(safePos);
-        if (placedBlock?.name === "crafting_table") {
+        if (placedBlock?.name === 'crafting_table') {
           console.log(
             `[CraftingService] Internal placement: Crafting table placed successfully at ${safePos}!`
           );
@@ -410,14 +410,14 @@ export class CraftingService {
     }
     // Should not be reachable if loop logic is correct, but satisfies TypeScript
     throw new Error(
-      "[CraftingService] Placing crafting table failed after exhausting retries (unexpected exit)."
+      '[CraftingService] Placing crafting table failed after exhausting retries (unexpected exit).'
     );
   }
 
   // Keep the useCraftingTable method if it's used elsewhere or for direct interaction testing
   public async useCraftingTable(): Promise<void> {
     // ... (existing useCraftingTable logic remains unchanged) ...
-    this.sharedState.addPendingAction("Use Crafting Table");
+    this.sharedState.addPendingAction('Use Crafting Table');
     const positions = this.bot.findBlocks({
       point: this.bot.entity.position,
       matching: this.mcData.blocksByName.crafting_table.id,
@@ -426,7 +426,7 @@ export class CraftingService {
     });
 
     if (positions.length === 0) {
-      throw new Error("[CraftingService] No crafting table nearby to use.");
+      throw new Error('[CraftingService] No crafting table nearby to use.');
     }
 
     const pos = positions[0];
@@ -434,7 +434,7 @@ export class CraftingService {
 
     if (!block) {
       throw new Error(
-        "[CraftingService] Crafting table block not found at expected position after findBlocks."
+        '[CraftingService] Crafting table block not found at expected position after findBlocks.'
       );
     }
 
@@ -451,10 +451,10 @@ export class CraftingService {
           )} > ${this.INTERACTION_RANGE}). Moving closer...`
         );
         await this.navigation.moveToInteractRange(block);
-        console.log("[CraftingService - useTable] Moved closer.");
+        console.log('[CraftingService - useTable] Moved closer.');
       }
       await this.bot.activateBlock(block);
-      console.log("[CraftingService] Used the crafting table.");
+      console.log('[CraftingService] Used the crafting table.');
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       console.error(

@@ -32,9 +32,7 @@ interface SingleBotState {
 }
 
 // Define the structure for holding states of all bots
-interface AllBotStates {
-  [botUsername: string]: SingleBotState;
-}
+type AllBotStates = Record<string, SingleBotState>;
 
 const socket = io();
 

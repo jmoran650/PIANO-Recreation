@@ -1,24 +1,24 @@
-import { Vec3 } from "vec3";
-import { LogEntry } from "../types/log.types"; // Import the new interface
+import { Vec3 } from 'vec3';
+import { LogEntry } from '../types/log.types'; // Import the new interface
 import {
   EquippedItems,
  VisibleBlockTypes,
  VisibleMobs,
-} from "../types/sharedAgentState.types"
+} from '../types/sharedAgentState.types';
 
 
 export class SharedAgentState {
 
   public readonly botUsername: string;
 
-  private _visibleBlockTypes: VisibleBlockTypes | null = null
+  private _visibleBlockTypes: VisibleBlockTypes | null = null;
   
   private _visibleMobs: VisibleMobs | null = null;
 
   private _playersNearby: string[] = [];
   private _inventory: string[] = [];
-  private _botHealth: number = 20;
-  private _botHunger: number = 20;
+  private _botHealth = 20;
+  private _botHunger = 20;
 
   private _shortTermMemoryIndex: Map<string, string>;
   private _longTermMemoryIndex: Map<string, string>;
@@ -40,7 +40,7 @@ export class SharedAgentState {
 
   private _conversationLog: LogEntry[] = [];
 
-  private _lockedInTask: boolean = false;
+  private _lockedInTask = false;
   private _craftingTablePositions: Vec3[] = [];
   private _equippedItems: EquippedItems = { head: null, chest: null, legs: null, feet: null, offhand: null };
 
@@ -65,7 +65,7 @@ export class SharedAgentState {
 
   public set visibleBlockTypes(
     data: {
-      BlockTypes: { [blockName: string]: { x: number; y: number; z: number } };
+      BlockTypes: Record<string, { x: number; y: number; z: number }>;
     } | null
   ) {
     this._visibleBlockTypes = data;
@@ -198,7 +198,7 @@ export class SharedAgentState {
   }
 
   public logMessage(
-    role: LogEntry["role"], // Use the role type from LogEntry
+    role: LogEntry['role'], // Use the role type from LogEntry
     content: string,
     metadata?: any,
     // Optional parameters for function calls
@@ -266,13 +266,13 @@ export class SharedAgentState {
 
   public getSharedStateAsText(): string {
     const st = this;
-    let text = "";
+    let text = '';
     text += `Bot Status: < Health: ${st.botHealth}, Hunger: ${st.botHunger} >`;
 
     const invSummary =
       st.inventory && st.inventory.length > 0
-        ? st.inventory.join(", ")
-        : "(nothing)";
+        ? st.inventory.join(', ')
+        : '(nothing)';
     text += `Inventory: < ${invSummary} >`;
 
     text += `Position: < x=${st.botPosition.x.toFixed(
@@ -286,24 +286,24 @@ export class SharedAgentState {
       const topTenClosestMobs = sortedMobs.slice(0, 10);
       const mobSummary = topTenClosestMobs
         .map((m) => `${m.name} (~${m.distance.toFixed(1)}m away)`)
-        .join(", ");
+        .join(', ');
       text += `Mobs: < ${mobSummary} >`;
     } else {
-      text += "Mobs: < none >";
+      text += 'Mobs: < none >';
     }
 
     if (st.visibleBlockTypes && st.visibleBlockTypes.BlockTypes) {
       const blocks = st.visibleBlockTypes.BlockTypes;
       const blockSummary = Object.entries(blocks)
         .map(([name, pos]) => `${name} (x=${pos.x}, y=${pos.y}, z=${pos.z})`)
-        .join(", ");
+        .join(', ');
       text += `Nearby Block Types: < ${blockSummary} >`;
     }
 
     const playersNearby =
       st.playersNearby && st.playersNearby.length > 0
-        ? st.playersNearby.join(", ")
-        : "none";
+        ? st.playersNearby.join(', ')
+        : 'none';
     text += `Nearby Players: < ${playersNearby} >`;
 
     return text;
@@ -312,7 +312,7 @@ export class SharedAgentState {
   public logOpenAIRequest(endpoint: string, payload: any): void {
     const entry: LogEntry = {
       timestamp: new Date().toISOString(),
-      role: "api_request",
+      role: 'api_request',
       content: `Request to ${endpoint}`,
       endpoint,
       payload,
@@ -334,7 +334,7 @@ export class SharedAgentState {
 
     const entry: LogEntry = {
       timestamp: new Date().toISOString(),
-      role: "api_response",
+      role: 'api_response',
       content,
       endpoint,
       response,
@@ -345,7 +345,7 @@ export class SharedAgentState {
   public logOpenAIError(endpoint: string, error: any): void {
     const entry: LogEntry = {
       timestamp: new Date().toISOString(),
-      role: "api_error",
+      role: 'api_error',
       content: `Error from ${endpoint}: ${String(error)}`,
       endpoint,
       error: String(error), // Store error message

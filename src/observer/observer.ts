@@ -1,22 +1,22 @@
 // src/observer.ts
-import { strict as assert } from "assert";
-import dotenv from "dotenv";
-import minecraftData from "minecraft-data";
-import { Bot } from "mineflayer";
-import { Block } from "prismarine-block";
-import type { Entity } from "prismarine-entity";
-import { Vec3 } from "vec3";
-import { hostileMobNames } from "../../data/mobs";
-import { SharedAgentState } from "../sharedAgentState";
+import { strict as assert } from 'assert';
+import dotenv from 'dotenv';
+import minecraftData from 'minecraft-data';
+import { Bot } from 'mineflayer';
+import { Block } from 'prismarine-block';
+import type { Entity } from 'prismarine-entity';
+import { Vec3 } from 'vec3';
+import { hostileMobNames } from '../../data/mobs';
+import { SharedAgentState } from '../sharedAgentState';
 dotenv.config(); // Ensure worker loads environment variables
 
 export interface IObserverOptions {
   radius?: number;
 }
 
-type BlockResult = {
-  BlockTypes: { [blockName: string]: { x: number; y: number; z: number } };
-};
+interface BlockResult {
+  BlockTypes: Record<string, { x: number; y: number; z: number }>;
+}
 
 type Vec3Type = Vec3;
 
@@ -25,9 +25,9 @@ export class Observer {
   private radius: number;
   private sharedState: SharedAgentState;
   private mcData: any;
-  private _wasHurt: boolean = false;
+  private _wasHurt = false;
   private _swingArmAttacker: Entity | null = null;
-  private recentChats: string[] = [];
+  public recentChats: string[] = [];
   constructor(
     bot: Bot,
     options: IObserverOptions = {},
@@ -38,7 +38,7 @@ export class Observer {
     this.sharedState = sharedState;
 
     if (process.env.MINECRAFT_VERSION == undefined) {
-      throw new Error("Minecraft Version is Undefined");
+      throw new Error('Minecraft Version is Undefined');
     }
     this.mcData = minecraftData(process.env.MINECRAFT_VERSION);
 
@@ -59,7 +59,7 @@ export class Observer {
     // }, 40000); // 60,000 ms = 1 minute
 
     // --- NEW: Chat Listener Logic ---
-    this.bot.on("chat", (username: string, message: string) => {
+    this.bot.on('chat', (username: string, message: string) => {
       if (username === this.bot.username) return; // Ignore self
 
       let commandMessage: string = message;
@@ -67,20 +67,20 @@ export class Observer {
 
       // Basic prefix parsing (similar to botWorker's original logic)
       // to isolate the actual message content for the 'test ' check.
-      if (message.toLowerCase().startsWith("ab:")) {
+      if (message.toLowerCase().startsWith('ab:')) {
         commandMessage = message.substring(3).trim();
         isPrefixed = true;
-      } else if (message.toLowerCase().startsWith("dbb:")) {
+      } else if (message.toLowerCase().startsWith('dbb:')) {
         commandMessage = message.substring(4).trim();
         isPrefixed = true;
-      } else if (message.toLowerCase().startsWith("all:")) {
+      } else if (message.toLowerCase().startsWith('all:')) {
         commandMessage = message.substring(4).trim();
         isPrefixed = true;
       }
       // else: commandMessage remains the original message
 
       // Ignore messages that are test commands (after handling prefix)
-      if (commandMessage.toLowerCase().startsWith("test ")) {
+      if (commandMessage.toLowerCase().startsWith('test ')) {
         // console.log(`[Observer ${this.bot.username}] Ignoring test command chat: ${username}: ${message}`); // Optional debug log
         return;
       }
@@ -107,7 +107,7 @@ export class Observer {
    */
   public async updateFastBotStats(): Promise<void> {
     
-    let fastbotStatStartTime = Date.now();
+    const fastbotStatStartTime = Date.now();
     this.bot.waitForChunksToLoad();
     const inventory = this.getInventoryContents();
     //console.log("this is inventory: ", inventory);
@@ -135,19 +135,19 @@ export class Observer {
     const nearbyPlayers = this.getNearbyPlayers();
     this.sharedState.playersNearby = nearbyPlayers;
 
-    let fastbotStatEndTime = Date.now();
+    const fastbotStatEndTime = Date.now();
     //console.log("fastBotStat update time: ", fastbotStatEndTime - fastbotStatStartTime)
   }
 
   public async updateSlowBotStats(): Promise<void> {
-    const slowStart = Date.now()
-    console.log("slowBotStat started")
+  //   const slowStart = Date.now()
+  //   console.log("slowBotStat started")
     await new Promise((resolve) => setImmediate(resolve, 100));
     const blocks = await this.getVisibleBlockTypes();
     this.sharedState.visibleBlockTypes = blocks;
     await new Promise((resolve) => setImmediate(resolve, 100));
-    const slowEnd = Date.now()
-   console.log("slowBotStat update time: ", slowEnd - slowStart);
+  //   const slowEnd = Date.now()
+  //  console.log("slowBotStat update time: ", slowEnd - slowStart);
   }
 
   // private async runComparisonTest(): Promise<void> {
@@ -467,7 +467,7 @@ export class Observer {
    * Finds the closest position for each unique visible block type within the configured radius.
    */
   public async getVisibleBlockTypes(): Promise<{
-    BlockTypes: { [blockName: string]: { x: number; y: number; z: number } };
+    BlockTypes: Record<string, { x: number; y: number; z: number }>;
   }> {
     const botPos = this.bot.entity.position;
     const startTime = Date.now();
@@ -477,7 +477,7 @@ export class Observer {
       matching: (block: Block | null) => {
         if (!block) return false;
         if (block.type === 265) return true;
-        return block.name !== "air";
+        return block.name !== 'air';
       },
       maxDistance: this.radius,
       count: 999999, // Find all blocks in radius
@@ -491,9 +491,7 @@ export class Observer {
     //   }ms)`
     // );
 
-    const closestByType: {
-      [blockName: string]: { distanceSq: number; pos: Vec3Type };
-    } = {};
+    const closestByType: Record<string, { distanceSq: number; pos: Vec3Type }> = {};
 
     // --- YIELDING LOGIC ADDED ---
     let processedCount = 0;
@@ -503,7 +501,7 @@ export class Observer {
 
     for (const pos of positions) {
       const block = this.bot.blockAt(pos);
-      if (!block || (block.name === "air" && block.type !== 265)) {
+      if (!block || (block.name === 'air' && block.type !== 265)) {
         continue;
       }
 
@@ -542,7 +540,7 @@ export class Observer {
 
     // Step 3: Format the result (O(M) complexity - negligible)
     const result: {
-      BlockTypes: { [blockName: string]: { x: number; y: number; z: number } };
+      BlockTypes: Record<string, { x: number; y: number; z: number }>;
     } = { BlockTypes: {} };
 
     for (const blockName in closestByType) {
@@ -582,17 +580,17 @@ export class Observer {
     const result = { Mobs: [] as { name: string; distance: number }[] };
 
     for (const id in this.bot.entities) {
-      const entity = this.bot.entities[id] as Entity;
+      const entity = this.bot.entities[id];
       if (!entity || entity === this.bot.entity || (entity as any).username)
         continue;
       const dist = center.distanceTo(entity.position);
       if (dist <= this.radius) {
         // Default to entity.name or "unknown_mob"
-        let mobName = entity.name ?? "unknown_mob";
+        let mobName = entity.name ?? 'unknown_mob';
 
         // If the entity is a dropped item, try to extract the actual item name.
         if (
-          mobName === "item" &&
+          mobName === 'item' &&
           (entity as any).metadata &&
           (entity as any).metadata[7]
         ) {
@@ -600,7 +598,7 @@ export class Observer {
           // Check if itemMeta is an object with an id property
           if (
             itemMeta &&
-            typeof itemMeta === "object" &&
+            typeof itemMeta === 'object' &&
             itemMeta.id !== undefined
           ) {
             const itemData = this.mcData.items[itemMeta.id];
@@ -650,11 +648,11 @@ export class Observer {
     feet: string | null;
     offhand: string | null;
   } {
-    const headSlot = this.bot.getEquipmentDestSlot("head");
-    const chestSlot = this.bot.getEquipmentDestSlot("torso"); // Chestplate
-    const legsSlot = this.bot.getEquipmentDestSlot("legs");
-    const feetSlot = this.bot.getEquipmentDestSlot("feet");
-    const offhandSlot = this.bot.getEquipmentDestSlot("off-hand");
+    const headSlot = this.bot.getEquipmentDestSlot('head');
+    const chestSlot = this.bot.getEquipmentDestSlot('torso'); // Chestplate
+    const legsSlot = this.bot.getEquipmentDestSlot('legs');
+    const feetSlot = this.bot.getEquipmentDestSlot('feet');
+    const offhandSlot = this.bot.getEquipmentDestSlot('off-hand');
 
     const head = this.bot.inventory.slots[headSlot]
       ? `${this.bot.inventory.slots[headSlot].name}:${this.bot.inventory.slots[headSlot].count}`
@@ -705,7 +703,7 @@ export class Observer {
         !Array.isArray(ingredients) ||
         ingredients.length === 0
       ) {
-        output += "    (No ingredients available)\n";
+        output += '    (No ingredients available)\n';
       } else {
         const needed = new Map<number, number>();
         for (const ing of ingredients) {
@@ -834,7 +832,7 @@ export class Observer {
    * Returns a list of every block (including air) within the specified radius.
    */
   public async getAllBlocksInRadius(
-    radius: number = 10
+    radius = 10
   ): Promise<{ name: string; x: number; y: number; z: number }[]> {
     await this.bot.waitForChunksToLoad();
 
@@ -842,7 +840,7 @@ export class Observer {
     // We pick a large count to ensure we collect all blocks in a 10-block radius.
     const blockPositions = this.bot.findBlocks({
       point: center,
-      matching: (b) => b && b.name !== "air", // includes only non-air blocks
+      matching: (b) => b && b.name !== 'air', // includes only non-air blocks
       maxDistance: radius,
       count: 9999,
     });
@@ -852,7 +850,7 @@ export class Observer {
     for (const pos of blockPositions) {
       const block = this.bot.blockAt(pos);
       // block can be null if chunk is not loaded, but we waited above
-      const blockName = block ? block.name : "unknown";
+      const blockName = block ? block.name : 'unknown';
       results.push({
         name: blockName,
         x: pos.x,
@@ -882,7 +880,7 @@ export class Observer {
   } {
     let attacker: Entity | null = null;
     let isUnderAttack = false;
-    let message = "";
+    let message = '';
 
     // If the bot was hurt, mark it as under attack
     if (this._wasHurt) {
@@ -890,7 +888,7 @@ export class Observer {
       // We’ll guess the attacker by checking the nearest mob within 4 blocks
       attacker = this.findClosestMobWithinDistance(4);
       message = `The bot has taken damage. Likely attacked by ${
-        attacker?.name ?? "unknown entity"
+        attacker?.name ?? 'unknown entity'
       }.`;
     }
 
@@ -913,7 +911,7 @@ export class Observer {
 
     // If none of the above triggered, the bot isn’t under attack
     if (!isUnderAttack) {
-      message = "The bot is not currently under attack.";
+      message = 'The bot is not currently under attack.';
     }
 
     // Reset flags so we only report once per check
@@ -961,10 +959,10 @@ export class Observer {
     if ((entity as any).username) return false;
 
     // Skip item entities
-    if (entity.name === "item") return false;
+    if (entity.name === 'item') return false;
 
     // Compare against the set
-    const entityName = entity.name?.toLowerCase() ?? "";
+    const entityName = entity.name?.toLowerCase() ?? '';
     return hostileMobNames.has(entityName);
   }
 
@@ -979,7 +977,7 @@ export class Observer {
       const players = Object.values(this.bot.players).filter(
         (p) =>
           p?.entity && // Check if player and entity exist
-          p.entity.type === "player" &&
+          p.entity.type === 'player' &&
           p.username !== this.bot.username
       );
       return players.map((p) => p.username);

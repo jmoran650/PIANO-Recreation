@@ -1,11 +1,11 @@
 // src/cc.ts
-import { Bot } from "mineflayer";
-import { Actions } from "./actions";
-import { Memory } from "./functions/memory/memory";
-import { Social } from "./functions/social/social";
-import { Goals } from "./goals";
-import { Observer } from "./observer/observer";
-import { SharedAgentState } from "./sharedAgentState";
+import { Bot } from 'mineflayer';
+import { Actions } from './actions';
+import { Memory } from './functions/memory/memory';
+import { Social } from './functions/social/social';
+import { Goals } from './goals';
+import { Observer } from './observer/observer';
+import { SharedAgentState } from './sharedAgentState';
 
 interface CognitiveControllerOptions {
   // configuration parameters if needed
@@ -50,14 +50,14 @@ export class CognitiveController {
     // Fast loop every 1 second (quick checks, e.g. immediate threats)
     this.fastLoopIntervalId = setInterval(() => {
       this.fastReflexTick().catch((err) => {
-        console.error("[CC-FastReflex] Error:", err);
+        console.error('[CC-FastReflex] Error:', err);
       });
     }, 1000);
 
     // Slow loop every 5 seconds (heavy planning, existing logic)
     this.slowLoopIntervalId = setInterval(() => {
       this.slowPlanningTick().catch((err) => {
-        console.error("[CC-SlowPlan] Error:", err);
+        console.error('[CC-SlowPlan] Error:', err);
       });
     }, 5000);
   }
@@ -84,7 +84,7 @@ export class CognitiveController {
     const playersNearby = Object.values(this.bot.players).filter(
       (p) =>
         p.entity &&
-        p.entity.type === "player" &&
+        p.entity.type === 'player' &&
         p.username !== this.bot.username
     );
     this.sharedState.playersNearby = playersNearby.map((p) => p.username);
@@ -92,11 +92,11 @@ export class CognitiveController {
     // Social alignment check
     if (playersNearby.length > 0) {
       const isBehaviorAligned = this.social.analyzeBehavior({
-        alignment: "aligned",
+        alignment: 'aligned',
       });
       if (!isBehaviorAligned) {
         this.bot.chat(
-          "[CC] Not aligned with others, reconsidering approach..."
+          '[CC] Not aligned with others, reconsidering approach...'
         );
       }
     }
@@ -110,7 +110,7 @@ export class CognitiveController {
       const done = await this.isCurrentTaskDone(currentShortTermGoal);
       if (done) {
         this.sharedState.lockedInTask = false;
-        this.bot.chat("[CC] Finished locked-in task. Unlocking...");
+        this.bot.chat('[CC] Finished locked-in task. Unlocking...');
       } else {
         return; // skip further planning this cycle
       }
@@ -132,10 +132,10 @@ export class CognitiveController {
     // Check if we have a short-term goal, maybe do something
     if (currentShortTermGoal) {
       // Example check:
-      if (currentShortTermGoal.includes("mine iron")) {
+      if (currentShortTermGoal.includes('mine iron')) {
         this.sharedState.lockedInTask = true;
         this.bot.chat(
-          "[CC] Locking in to subtask: mine iron. Starting action sequence..."
+          '[CC] Locking in to subtask: mine iron. Starting action sequence...'
         );
         // Potentially call an action immediately or rely on the next loop
         // await this.actions.mine("iron_ore", 3);
@@ -150,10 +150,10 @@ export class CognitiveController {
     shortTermGoal: string | null
   ): Promise<boolean> {
     if (!shortTermGoal) return true;
-    if (shortTermGoal.includes("mine iron ore")) {
+    if (shortTermGoal.includes('mine iron ore')) {
       const ironCount = this.bot.inventory
         .items()
-        .filter((i) => i.name.includes("iron_ore")).length;
+        .filter((i) => i.name.includes('iron_ore')).length;
       return ironCount >= 3;
     }
     return false;
@@ -163,7 +163,7 @@ export class CognitiveController {
    * Simple method to see if a mob is in the hostile list.
    */
   private isHostile(mobName: string): boolean {
-    const hostiles = ["zombie", "skeleton", "spider", "creeper"];
+    const hostiles = ['zombie', 'skeleton', 'spider', 'creeper'];
     return hostiles.includes(mobName.toLowerCase());
   }
 
@@ -179,6 +179,6 @@ export class CognitiveController {
       clearInterval(this.slowLoopIntervalId);
       this.slowLoopIntervalId = null;
     }
-    this.bot.chat("[CC] Concurrency loops stopped.");
+    this.bot.chat('[CC] Concurrency loops stopped.');
   }
 }

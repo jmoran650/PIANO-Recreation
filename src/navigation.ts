@@ -1,24 +1,24 @@
-import { Bot } from "mineflayer";
-import { Movements, goals } from "mineflayer-pathfinder";
-import { Vec3 } from "vec3";
-import { Block } from "prismarine-block"; // Assuming prismarine-block v1 is used
+import { Bot } from 'mineflayer';
+import { Movements, goals } from 'mineflayer-pathfinder';
+import { Vec3 } from 'vec3';
+import { Block } from 'prismarine-block'; // Assuming prismarine-block v1 is used
 
 // Define the allowed facing directions for GoalPlaceBlockOptions
-type FacingDirection = "north" | "east" | "south" | "west" | "up" | "down";
+//type FacingDirection = 'north' | 'east' | 'south' | 'west' | 'up' | 'down';
 
 // Destructure the goal classes we need from the goals object.
 const { GoalBlock, GoalLookAtBlock, GoalPlaceBlock, GoalNear } = goals;
 
 // Define the options type for GoalPlaceBlock explicitly if not imported
 // (Based on typical mineflayer-pathfinder definitions)
-interface GoalPlaceBlockOptions {
-  range?: number;
-  faces?: Vec3[];
-  facing?: FacingDirection; // Use the specific type alias
-  facing3D?: boolean;
-  half?: "top" | "bottom";
-  LOS?: boolean;
-}
+// interface GoalPlaceBlockOptions {
+//   range?: number;
+//   faces?: Vec3[];
+//   facing?: FacingDirection; // Use the specific type alias
+//   facing3D?: boolean;
+//   half?: 'top' | 'bottom';
+//   LOS?: boolean;
+// }
 
 /**
  * A simple Navigation class that uses mineflayer-pathfinder to move the bot
@@ -57,7 +57,7 @@ export class Navigation {
         );
 
         if (!this.bot.pathfinder || !this.bot.pathfinder.goto) {
-          throw new Error("Pathfinder plugin or goto method not available.");
+          throw new Error('Pathfinder plugin or goto method not available.');
         }
 
         await this.bot.pathfinder.goto(goal);
@@ -68,7 +68,7 @@ export class Navigation {
           }.`
         );
         return; // Exit successfully
-      } catch (err: any) {
+      } catch (err: unknown) {
         const errorMessage = String(err.message || err);
         console.error(
           `[Navigation.move attempt ${attempt + 1}] Error: ${errorMessage}`
@@ -77,15 +77,15 @@ export class Navigation {
         // Check if it's the last attempt
         if (attempt >= maxRetries) {
           console.error(
-            `[Navigation.move] Max retries reached. Failing navigation.`
+            '[Navigation.move] Max retries reached. Failing navigation.'
           );
           throw err; // Re-throw the last error
         }
 
         // Check if it's a timeout error
         if (
-          errorMessage.includes("Timeout") ||
-          errorMessage.includes("Took to long")
+          errorMessage.includes('Timeout') ||
+          errorMessage.includes('Took to long')
         ) {
           console.warn(
             `[Navigation.move] Pathfinder timeout detected. Retrying in ${
@@ -97,14 +97,14 @@ export class Navigation {
         } else {
           // It's a different error, don't retry
           console.error(
-            `[Navigation.move] Non-timeout error encountered. Failing navigation.`
+            '[Navigation.move] Non-timeout error encountered. Failing navigation.'
           );
           throw err; // Re-throw immediately
         }
       }
     }
     // Should not be reached if logic is correct, but acts as a fallback
-    throw new Error("[Navigation.move] Unexpected exit from retry loop.");
+    throw new Error('[Navigation.move] Unexpected exit from retry loop.');
   }
 
   /**
@@ -115,7 +115,7 @@ export class Navigation {
     x: number,
     y: number,
     z: number,
-    reach: number = 4.5
+    reach = 4.5
   ): Promise<void> {
     const pos = new Vec3(x, y, z);
     // *** FIX 1: Use 'reach' instead of 'range' for GoalLookAtBlock options ***
@@ -153,7 +153,7 @@ export class Navigation {
     const goal = new GoalPlaceBlock(pos, this.bot.world, {
       range: 4.5, // Maximum distance from the face; default is 5.
       faces: [new Vec3(0, 1, 0)], // Only allow clicking the top face (i.e. placing on top).
-      facing: "down", // Require the bot to face down (adjust as needed).
+      facing: 'down', // Require the bot to face down (adjust as needed).
       //facing3D: false,                    // Only consider horizontal orientation.
       //half: "top",                        // Click on the top half of the target block.
       LOS: true, // Ensure the bot has line of sight to the placement face.
@@ -178,58 +178,53 @@ export class Navigation {
    */
   public async moveToInteractRange(
     // *** FIX 3: Explicitly allow plain object type in signature ***
-    target: Vec3 | Block | { x: number; y: number; z: number },
-    range: number = 2.0
+    target: Vec3 | Block,
+    range = 2.0
   ): Promise<void> {
-    let targetPos: Vec3;
 
-    console.log("Debugging moveToInteractRange:");
-    console.log("Value of Vec3:", Vec3);
-    console.log("Value of Block:", Block);
-    console.log("Target received:", target);
 
     // Type checking order matters less now that the signature is correct
     // 1. Check if it looks like a Block (has name and position object with x,y,z)
     if (
       target &&
-      typeof target === "object" &&
-      typeof (target as any).name === "string" &&
-      (target as any).position &&
-      typeof (target as any).position.x === "number" &&
-      typeof (target as any).position.y === "number" &&
-      typeof (target as any).position.z === "number"
+      typeof target === 'object' &&
+      typeof (target).name === 'string' &&
+      (target).position &&
+      typeof (target).position.x === 'number' &&
+      typeof (target).position.y === 'number' &&
+      typeof (target).position.z === 'number'
     ) {
-      console.log("[Navigation] Target detected as Block-like object.");
+      console.log('[Navigation] Target detected as Block-like object.');
       // Type assertion needed here as we bypass instanceof
       targetPos = new Vec3(
-        (target as any).position.x,
-        (target as any).position.y,
-        (target as any).position.z
+        (target).position.x,
+        (target).position.y,
+        (target).position.z
       );
     }
     // 2. Check if it looks like a Vec3 (has x,y,z but not name/position properties)
     else if (
       target &&
-      typeof target === "object" &&
-      typeof (target as any).x === "number" &&
-      typeof (target as any).y === "number" &&
-      typeof (target as any).z === "number" &&
-      !(target as any).position &&
-      !(target as any).name
+      typeof target === 'object' &&
+      typeof (target).x === 'number' &&
+      typeof (target).y === 'number' &&
+      typeof (target).z === 'number' &&
+      !(target).position &&
+      !(target).name
     ) {
       // Check specifically for x, y, z properties *at the top level*
       // This condition differentiates Vec3/plain coords from Block
-      console.log("[Navigation] Target detected as Vec3 or coordinate object.");
+      console.log('[Navigation] Target detected as Vec3 or coordinate object.');
       targetPos = new Vec3(
-        (target as any).x,
-        (target as any).y,
-        (target as any).z
+        (target).x,
+        (target).y,
+        (target).z
       );
     }
     // 3. If it's none of the above, it's an invalid type
     else {
       console.error(
-        "[Navigation] moveToInteractRange: Invalid or unrecognized target type provided.",
+        '[Navigation] moveToInteractRange: Invalid or unrecognized target type provided.',
         target
       );
       throw new Error(

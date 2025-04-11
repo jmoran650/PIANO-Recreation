@@ -1,29 +1,29 @@
 // src/createAgentBot.ts
 
-import mineflayer, { Bot } from "mineflayer";
-import { Movements, pathfinder } from "mineflayer-pathfinder";
-import { plugin as pvp } from "mineflayer-pvp";
-import OpenAI from "openai";
+import mineflayer, { Bot } from 'mineflayer';
+import { Movements, pathfinder } from 'mineflayer-pathfinder';
+import { plugin as pvp } from 'mineflayer-pvp';
+import OpenAI from 'openai';
 // import { Actions } from "./actions"; // Remove the old import
 
 // Import the new individual action services
-import { BuildingService } from "./actions/build";
-import { CombatService } from "./actions/combat";
-import { CraftingService } from "./actions/craft";
-import { FarmingService } from "./actions/farm";
-import { InventoryService } from "./actions/inventory";
-import { MiningService } from "./actions/mine";
-import { MovementService } from "./actions/move";
-import { SmeltingService } from "./actions/smelt";
-import { TalkService } from "./actions/talk";
-import { ActionServices } from "../types/actionServices.types";
-import { Memory } from "./functions/memory/memory";
-import { Social } from "./functions/social/social";
-import { Goals } from "./goals";
-import { Navigation } from "./navigation";
-import { Observer } from "./observer/observer";
-import { SharedAgentState } from "./sharedAgentState";
-import { FunctionCaller } from "./functions/functionCalling";
+import { BuildingService } from './actions/build';
+import { CombatService } from './actions/combat';
+import { CraftingService } from './actions/craft';
+import { FarmingService } from './actions/farm';
+import { InventoryService } from './actions/inventory';
+import { MiningService } from './actions/mine';
+import { MovementService } from './actions/move';
+import { SmeltingService } from './actions/smelt';
+import { TalkService } from './actions/talk';
+import { ActionServices } from '../types/actionServices.types';
+import { Memory } from './functions/memory/memory';
+import { Social } from './functions/social/social';
+import { Goals } from './goals';
+import { Navigation } from './navigation';
+import { Observer } from './observer/observer';
+import { SharedAgentState } from './sharedAgentState';
+import { FunctionCaller } from './functions/functionCalling';
 
 export interface BotOptions {
   host: string;
@@ -59,8 +59,8 @@ export async function createAgentBot(options: BotOptions): Promise<AgentBot> {
   });
 
   await new Promise<void>((resolve, reject) => {
-    bot.once("spawn", () => resolve());
-    bot.once("error", (err) => reject(err));
+    bot.once('spawn', () => resolve());
+    bot.once('error', (err) => reject(err));
   });
 
   bot.waitForChunksToLoad();

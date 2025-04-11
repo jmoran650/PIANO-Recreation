@@ -1,27 +1,27 @@
 // goalPlanAppServer.ts
-import dotenv from "dotenv";
-import express, { Request, Response } from "express";
-import fs from "fs";
-import http from "http";
-import path from "path";
-import { Server as SocketIOServer } from "socket.io";
-import { generateAcronym } from "./utils/acronyms";
+import dotenv from 'dotenv';
+import express, { Request, Response } from 'express';
+import fs from 'fs';
+import http from 'http';
+import path from 'path';
+import { Server as SocketIOServer } from 'socket.io';
+import { generateAcronym } from './utils/acronyms';
 
 dotenv.config();
 // Remove direct main import from index if logic moved here
 // import { main } from "./index"; // No longer needed if main logic is here
-import { Worker } from "worker_threads";
-import { BotOptions } from "./src/createAgentBot"; // Import BotOptions type
+import { Worker } from 'worker_threads';
+import { BotOptions } from './src/createAgentBot'; // Import BotOptions type
 import {
   callLLMJsonSchema,
   getLLMMetrics,
   setLLMLogger,
   toggleLLMEnabled,
-} from "./utils/llmWrapper"; // Import LLM utils for main thread use
+} from './utils/llmWrapper'; // Import LLM utils for main thread use
 
-import OpenAI from "openai"; // Import OpenAI for main thread proxy calls
+import OpenAI from 'openai'; // Import OpenAI for main thread proxy calls
 
-const LOGFILE_PATH_PREFIX = path.join(__dirname, "../"); // Log path prefix
+const LOGFILE_PATH_PREFIX = path.join(__dirname, '../'); // Log path prefix
 
 // Ensure log directory exists (optional)
 // if (!fs.existsSync(LOGFILE_PATH_PREFIX)) {
@@ -33,11 +33,11 @@ const server = http.createServer(app);
 const io = new SocketIOServer(server);
 
 if (process.env.MC_HOST == undefined) {
-  throw new Error("MC_HOST not loaded");
+  throw new Error('MC_HOST not loaded');
 }
 
 if (process.env.MC_PORT == undefined) {
-  throw new Error("MC_PORT not loaded");
+  throw new Error('MC_PORT not loaded');
 }
 
 // --- Centralized State and Worker Management ---
@@ -50,13 +50,13 @@ const botOptionsList: BotOptions[] = [
   {
     host: process.env.MC_HOST, // Use env var or default
     port: parseInt(process.env.MC_PORT, 10),
-    username: "AgentBot",
+    username: 'AgentBot',
     version: process.env.MINECRAFT_VERSION,
   },
   {
     host: process.env.MC_HOST,
     port: parseInt(process.env.MC_PORT, 10),
-    username: "DaBiggestBird",
+    username: 'DaBiggestBird',
     version: process.env.MINECRAFT_VERSION,
   },
 ];
@@ -64,23 +64,23 @@ const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY }); // OpenAI ins
 
 // Setup LLM Logger (using console for simplicity, adapt as needed)
 setLLMLogger((type, message, meta) => {
-  console.log(`[LLMLog-${type}] ${message}`, meta ? JSON.stringify(meta) : "");
+  console.log(`[LLMLog-${type}] ${message}`, meta ? JSON.stringify(meta) : '');
   // Could also emit this via socket.io if needed
 });
 
 // --- Worker Initialization ---
 // --- Worker Initialization ---
 function initializeWorkers() {
-  console.log("Initializing workers...");
+  console.log('Initializing workers...');
 
   const acronymMap = new Map<string, string>(); // To detect duplicates
   const validatedBotOptions: BotOptions[] = []; // Store options with acronyms after validation
 
   // --- Step 1: Generate Acronyms and Validate ---
-  console.log("[Main] Generating and validating bot acronyms...");
+  console.log('[Main] Generating and validating bot acronyms...');
   for (const options of botOptionsList) {
     if (!options.username) {
-      console.error("Bot username is missing in options:", options);
+      console.error('Bot username is missing in options:', options);
       // Skip this bot configuration if username is missing
       continue;
     }
@@ -107,7 +107,7 @@ function initializeWorkers() {
     }
 
     // --- Conflict Check: Reserved "all" ---
-    if (acronym.toLowerCase() === "all") {
+    if (acronym.toLowerCase() === 'all') {
       throw new Error(
           `[Main] Acronym conflict! Bot '${workerUsername}' generates the reserved acronym 'all'. Please change the username.`
       );
@@ -127,20 +127,20 @@ function initializeWorkers() {
         acronymMap.set(acronym, workerUsername);
     }
     console.log(
-      `[Main] Acronym '${acronym || "(empty)"}' validated for bot '${workerUsername}'.`
+      `[Main] Acronym '${acronym || '(empty)'}' validated for bot '${workerUsername}'.`
     );
     validatedBotOptions.push({ ...options, acronym }); // Add acronym to options
   }
-  console.log("[Main] Acronym validation complete.");
+  console.log('[Main] Acronym validation complete.');
 
   // --- Step 2: Create Workers with Validated Options ---
-  console.log("[Main] Creating worker threads...");
+  console.log('[Main] Creating worker threads...');
   validatedBotOptions.forEach((optionsWithAcronym) => {
     const workerUsername = optionsWithAcronym.username; // Get username from the validated options
      if (!workerUsername) return; // Should not happen if validated correctly, but safe check
 
-    console.log(`Creating worker for ${workerUsername} with acronym '${optionsWithAcronym.acronym || "(empty)"}'...`);
-    const worker = new Worker(path.resolve(__dirname, "src/botWorker.js"), {
+    console.log(`Creating worker for ${workerUsername} with acronym '${optionsWithAcronym.acronym || '(empty)'}'...`);
+    const worker = new Worker(path.resolve(__dirname, 'src/botWorker.js'), {
       workerData: optionsWithAcronym, // Pass options WITH the acronym
     });
 
@@ -149,22 +149,22 @@ function initializeWorkers() {
     botLogs.set(workerUsername, []); // Initialize logs
 
     // --- Worker Event Listeners (Copied and adjusted from original) ---
-    worker.on("message", (message: any) => {
+    worker.on('message', (message: any) => {
       // Make sure message.payload.username exists where needed
       const msgUsername = message.payload?.username;
 
       switch (message.type) {
-        case "initialized":
+        case 'initialized':
           if (msgUsername) {
              console.log(
                `[Main] Worker ${msgUsername} initialized successfully.`
              );
-             worker.postMessage({ type: "getState" });
+             worker.postMessage({ type: 'getState' });
            } else {
-             console.warn("[Main] Received 'initialized' message without username.");
+             console.warn('[Main] Received \'initialized\' message without username.');
            }
           break;
-        case "stateUpdate":
+        case 'stateUpdate':
           if (msgUsername) {
              botStates.set(msgUsername, message.payload.state);
              // Update logs based on state if conversationLog exists
@@ -175,10 +175,10 @@ function initializeWorkers() {
                );
              }
            } else {
-             console.warn("[Main] Received 'stateUpdate' message without username.");
+             console.warn('[Main] Received \'stateUpdate\' message without username.');
            }
           break;
-        case "logEntry":
+        case 'logEntry':
           const logUsername = msgUsername;
           if (logUsername) {
               const entry = message.payload.entry;
@@ -190,26 +190,26 @@ function initializeWorkers() {
                   const logFilePath = `${LOGFILE_PATH_PREFIX}${logUsername}_conversation.log`;
                   fs.appendFileSync(
                       logFilePath,
-                      JSON.stringify(entry) + "\n",
-                      "utf8"
+                      JSON.stringify(entry) + '\n',
+                      'utf8'
                   );
               } catch (e) {
                   console.error(`[Main] Error writing log for ${logUsername}:`, e);
               }
           } else {
-             console.warn("[Main] Received 'logEntry' message without username.");
+             console.warn('[Main] Received \'logEntry\' message without username.');
           }
           break;
-        case "llmRequest":
+        case 'llmRequest':
           // Assuming payload structure includes botUsername for LLM requests
           console.log(
             `[Main] Handling LLM Request ${message.requestId} from ${message.payload?.botUsername || 'unknown worker'}`
           );
           handleProxiedLLMRequest(worker, message.requestId, message.payload); // Ensure handleProxiedLLMRequest gets worker context if needed
           break;
-        case "goalPlanProgress":
-        case "goalPlanComplete":
-        case "goalPlanError":
+        case 'goalPlanProgress':
+        case 'goalPlanComplete':
+        case 'goalPlanError':
            if (msgUsername) {
                 console.log(
                     `[Main] Forwarding goal plan update type ${message.type} from ${msgUsername}`
@@ -225,10 +225,10 @@ function initializeWorkers() {
                 io.emit(message.type, message.payload.tree || message.payload.error);
             }
           break;
-        case "botError":
-        case "botKicked":
-        case "botEnd":
-        case "initializationError":
+        case 'botError':
+        case 'botKicked':
+        case 'botEnd':
+        case 'initializationError':
           console.error(
             `[Main] Critical event from worker ${msgUsername || 'unknown'}: ${message.type}`,
             message.payload
@@ -242,14 +242,14 @@ function initializeWorkers() {
       }
     });
 
-    worker.on("error", (err) => {
+    worker.on('error', (err) => {
       console.error(`[Main] Worker ${workerUsername} error:`, err);
       workers.delete(workerUsername);
       botStates.delete(workerUsername); // Clean up state on error
       botLogs.delete(workerUsername);   // Clean up logs on error
     });
 
-    worker.on("exit", (code) => {
+    worker.on('exit', (code) => {
       console.log(`[Main] Worker ${workerUsername} exited with code ${code}`);
       workers.delete(workerUsername);
       botStates.delete(workerUsername); // Clean up state on exit
@@ -260,7 +260,7 @@ function initializeWorkers() {
       }
     });
   });
-  console.log("[Main] Worker creation loop finished.");
+  console.log('[Main] Worker creation loop finished.');
 }
 
 
@@ -277,11 +277,11 @@ async function handleProxiedLLMRequest(
     console.log(`[Main LLM Proxy] Request ${requestId} - Type: ${type}`);
     // Optionally log full payload if needed: console.log(JSON.stringify(data));
 
-    if (type === "chat") {
+    if (type === 'chat') {
       // Assuming data = { model?, messages, tools?, tool_choice?, parallel_tool_calls? }
       // Call the actual OpenAI API using the main thread's instance/wrapper
       const completion = await openai.chat.completions.create({
-        model: data.model || "gpt-4o", // Use provided or default
+        model: data.model || 'gpt-4o', // Use provided or default
         messages: data.messages,
         tools: data.tools,
         tool_choice: data.tool_choice,
@@ -289,7 +289,7 @@ async function handleProxiedLLMRequest(
       });
       responsePayload = { response: completion }; // Send back the full completion object structure
       console.log(`[Main LLM Proxy] Response ${requestId} - Success (Chat)`);
-    } else if (type === "json") {
+    } else if (type === 'json') {
       // Assuming data = { model?, systemMsg, userMsg, jsonSchema }
       // Use callLLMJsonSchema directly in main thread
       const result = await callLLMJsonSchema(
@@ -314,48 +314,48 @@ async function handleProxiedLLMRequest(
 
   // Send response back to the worker
   worker.postMessage({
-    type: "llmResponse",
+    type: 'llmResponse',
     requestId,
     payload: responsePayload,
   });
 }
 
 // --- Express & Socket.IO Setup ---
-app.use(express.static(path.join(__dirname, "../public")));
+app.use(express.static(path.join(__dirname, '../public')));
 
-app.get("/", (req: Request, res: Response) => {
-  res.sendFile(path.join(__dirname, "../public/index.html"));
+app.get('/', (req: Request, res: Response) => {
+  res.sendFile(path.join(__dirname, '../public/index.html'));
 });
 
-app.get("/goal-planner", (req: Request, res: Response) => {
-  res.sendFile(path.join(__dirname, "../public/index.html"));
+app.get('/goal-planner', (req: Request, res: Response) => {
+  res.sendFile(path.join(__dirname, '../public/index.html'));
 });
 
-app.post("/toggle-llm", (req: Request, res: Response) => {
+app.post('/toggle-llm', (req: Request, res: Response) => {
   const newState = toggleLLMEnabled();
-  const message = newState ? "LLM requests enabled." : "LLM requests disabled.";
+  const message = newState ? 'LLM requests enabled.' : 'LLM requests disabled.';
   res.json({ message: message, enabled: newState });
 });
 
-io.on("connection", (socket) => {
-  console.log("Browser connected via Socket.IO:", socket.id);
+io.on('connection', (socket) => {
+  console.log('Browser connected via Socket.IO:', socket.id);
 
   // Send initial state immediately if available
   if (botStates.size > 0) {
-    const allCurrentStates: { [key: string]: any } = {};
+    const allCurrentStates: Record<string, any> = {};
     botStates.forEach((state, username) => {
       allCurrentStates[username] = {
         ...state,
         conversationLog: botLogs.get(username) || [],
       }; // Combine state + log
     });
-    socket.emit("allSharedStates", allCurrentStates);
+    socket.emit('allSharedStates', allCurrentStates);
   }
 
   // Setup interval for sending state updates to this specific client
   const intervalId = setInterval(() => {
     try {
-      const allCurrentStates: { [key: string]: any } = {};
+      const allCurrentStates: Record<string, any> = {};
       // Construct state object for emission, combining latest state and logs
       workers.forEach((_, username) => {
         const state = botStates.get(username) || {};
@@ -364,28 +364,28 @@ io.on("connection", (socket) => {
         // Add LLM metrics (assuming they are global in main thread)
         allCurrentStates[username].llmMetrics = getLLMMetrics();
       });
-      socket.emit("allSharedStates", allCurrentStates);
+      socket.emit('allSharedStates', allCurrentStates);
     } catch (error) {
-      console.error("[Main] Error in server state update interval:", error);
+      console.error('[Main] Error in server state update interval:', error);
     }
   }, 1000); // Update interval
 
-  socket.on("disconnect", () => {
+  socket.on('disconnect', () => {
     clearInterval(intervalId);
-    console.log("Browser disconnected:", socket.id);
+    console.log('Browser disconnected:', socket.id);
   });
 
   // Handle goal planning requests from this client
   socket.on(
-    "startGoalPlan",
-    async (data: { goal: string; mode?: "bfs" | "dfs" }) => {
+    'startGoalPlan',
+    async (data: { goal: string; mode?: 'bfs' | 'dfs' }) => {
       try {
         const goal = data.goal;
-        const mode = data.mode || "bfs"; // Default to bfs
+        const mode = data.mode || 'bfs'; // Default to bfs
         // Determine which bot should handle (e.g., AgentBot)
-        const targetWorker = workers.get("AgentBot"); // Example: hardcode AgentBot
+        const targetWorker = workers.get('AgentBot'); // Example: hardcode AgentBot
         if (!targetWorker) {
-          throw new Error("Target bot worker (AgentBot) not found.");
+          throw new Error('Target bot worker (AgentBot) not found.');
         }
         console.log(
           `[Main] Relaying startGoalPlan to AgentBot worker for goal: "${goal}"`
@@ -393,14 +393,14 @@ io.on("connection", (socket) => {
         // TODO: Store association between socket.id and this goal request
         // so progress can be sent back specifically to this client.
         targetWorker.postMessage({
-          type: "startGoalPlan",
+          type: 'startGoalPlan',
           payload: { goal, mode },
         });
       } catch (err: any) {
-        console.error("[Main] Error starting goal plan:", err);
+        console.error('[Main] Error starting goal plan:', err);
         socket.emit(
-          "goalPlanError",
-          err.message || "Unknown error starting goal plan"
+          'goalPlanError',
+          err.message || 'Unknown error starting goal plan'
         );
       }
     }
@@ -413,15 +413,15 @@ server.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
   console.log(`Dashboard: http://localhost:${PORT} \n`);
   const runStartDateAndTime = new Date(Date.now());
-  console.log(`Run Started at:`, runStartDateAndTime.toLocaleString(), "\n");
+  console.log('Run Started at:', runStartDateAndTime.toLocaleString(), '\n');
   // Initialize workers after server starts listening
   initializeWorkers();
 });
 
 // Handle graceful shutdown
-process.on("SIGINT", async () => {
+process.on('SIGINT', async () => {
   // Make the handler async
-  console.log("SIGINT received. Shutting down workers...");
+  console.log('SIGINT received. Shutting down workers...');
 
   const exitPromises: Promise<void>[] = []; // Array to hold promises
 
@@ -429,7 +429,7 @@ process.on("SIGINT", async () => {
     console.log(`[Main] Terminating worker ${username}...`);
     // Create a promise that resolves when the worker exits
     const exitPromise = new Promise<void>((resolve, reject) => {
-      worker.once("exit", (code) => {
+      worker.once('exit', (code) => {
         console.log(`[Main] Worker ${username} exited with code ${code}`);
         if (code !== 0) {
           console.warn(`[Main] Worker ${username} exited abnormally.`);
@@ -438,7 +438,7 @@ process.on("SIGINT", async () => {
         }
         resolve(); // Resolve the promise when exit event occurs
       });
-      worker.once("error", (err) => {
+      worker.once('error', (err) => {
         console.error(`[Main] Error during termination for ${username}:`, err);
         reject(err); // Reject the promise on error
       });
@@ -451,17 +451,17 @@ process.on("SIGINT", async () => {
 
   // Keep the overall timeout as a failsafe for the *entire* shutdown
   const shutdownTimeout = setTimeout(() => {
-    console.error("Shutdown timed out. Forcing exit.");
+    console.error('Shutdown timed out. Forcing exit.');
     process.exit(1);
   }, 10000); // Increased timeout (e.g., 10 seconds)
 
   try {
     // Wait for all workers to emit 'exit'
     await Promise.all(exitPromises);
-    console.log("[Main] All workers have exited.");
+    console.log('[Main] All workers have exited.');
     process.exit(0);
   } catch (error) {
-    console.error("[Main] Error during worker termination:", error);
+    console.error('[Main] Error during worker termination:', error);
     clearTimeout(shutdownTimeout); // Clear the failsafe timeout
     process.exit(1); // Exit with error if waiting failed
   }

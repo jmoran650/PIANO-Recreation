@@ -1,6 +1,6 @@
 // src/social.ts
-import { callLLM } from "../../../utils/llmWrapper";
-import { SharedAgentState } from "../../sharedAgentState";
+import { callLLM } from '../../../utils/llmWrapper';
+import { SharedAgentState } from '../../sharedAgentState';
 
 export class Social {
   private sharedState: SharedAgentState;
@@ -40,7 +40,7 @@ export class Social {
    */
   public analyzeBehavior(socialContext: any): boolean {
     if (socialContext && socialContext.alignment) {
-      return socialContext.alignment === "aligned";
+      return socialContext.alignment === 'aligned';
     }
     return true;
   }
@@ -93,7 +93,7 @@ export class Social {
    */
   public async filterMessageForSpeech(rawMessage: string): Promise<string> {
     // Basic example prompt. This can be customized to reflect a detailed personality.
-    const personalityPrompt =  `You are a Minecraft character with a friendly, upbeat personality.`
+    const personalityPrompt =  'You are a Minecraft character with a friendly, upbeat personality.';
     const systemPrompt = `
 Rewrite the supplied text so it reflects your personality,
 while preserving the core meaning and tone. You do not need to make drastic changes to the message unless necessary.
@@ -101,7 +101,7 @@ Between changing the meaning of the message and upholding your personality, alwa
 Output ONLY the rewritten text, with no extra commentary.
 `;
     const userContent = rawMessage.trim();
-    if (!userContent) return "";
+    if (!userContent) return '';
 
     // Combine them into a single message to feed the LLM
     const prompt = `${personalityPrompt} ${systemPrompt} \nUser text: "${userContent}"\nRewritten:`;
@@ -120,8 +120,8 @@ You are a sentiment analysis model. Describe the sentiment of this message and d
     const result = await callLLM(sentimentPrompt);
     const lower = result.toLowerCase();
 
-    if (lower.includes("positive")) return 1;
-    if (lower.includes("negative")) return -1;
+    if (lower.includes('positive')) return 1;
+    if (lower.includes('negative')) return -1;
     return 0;
   }
 }

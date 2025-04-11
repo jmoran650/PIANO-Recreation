@@ -1,8 +1,8 @@
 // src/actions/helpers.ts
-import { Bot } from "mineflayer";
-import { Block } from "prismarine-block";
-import { Vec3 } from "vec3";
-import { Item } from "prismarine-item"; // Added import for Item type
+import { Bot } from 'mineflayer';
+import { Block } from 'prismarine-block';
+import { Vec3 } from 'vec3';
+import { Item } from 'prismarine-item'; // Added import for Item type
 
 /**
  * Checks if placing a block at targetPos onto referenceBlock seems possible.
@@ -23,11 +23,11 @@ export function checkPlacementPossible(
     let failureReason: string | null = null;
 
     if (!referenceBlock) {
-        failureReason = "Reference block below target is missing";
+        failureReason = 'Reference block below target is missing';
     } else if (referenceBlock.boundingBox !== 'block') {
         failureReason = `Reference block '${referenceBlock.name}' is not solid ('${referenceBlock.boundingBox}')`;
     } else if (!targetBlock) {
-        failureReason = "Target block data could not be retrieved";
+        failureReason = 'Target block data could not be retrieved';
     } else if (mcData.blocks[targetBlock.type]?.boundingBox !== 'empty') {
         failureReason = `Target block '${targetBlock.name}' is not empty/replaceable ('${mcData.blocks[targetBlock.type]?.boundingBox}')`;
     }
@@ -68,7 +68,7 @@ export function findNearbyPlacedTable(
   const tablePositions = bot.findBlocks({
     point: bot.entity.position,
     matching: (block): block is Block =>
-      block !== null && block.name === "crafting_table", // Type guard added
+      block !== null && block.name === 'crafting_table', // Type guard added
     maxDistance,
     count: 1,
   });
@@ -149,9 +149,9 @@ export function findSafePlacement(bot: Bot): Vec3 | null {
         // Check if the candidate spot is 'air', has a solid 'block' below it, and is likely loaded (canSeeBlock)
         if (
           blockAtCandidate &&
-          blockAtCandidate.name === "air" &&
+          blockAtCandidate.name === 'air' &&
           blockBelowCandidate &&
-          blockBelowCandidate.boundingBox === "block" && // Check for solid ground
+          blockBelowCandidate.boundingBox === 'block' && // Check for solid ground
           bot.canSeeBlock(blockAtCandidate)
         ) {
           // Ensures the block is within loaded/visible chunks
@@ -162,7 +162,7 @@ export function findSafePlacement(bot: Bot): Vec3 | null {
     }
   }
 
-  console.log("[Helpers] Could not find a safe placement spot nearby.");
+  console.log('[Helpers] Could not find a safe placement spot nearby.');
   return null;
 }
 
@@ -170,54 +170,54 @@ export async function equipBestToolForBlock(
   bot: Bot,
   blockName: string
 ): Promise<void> {
-  let toolCategory: "pickaxe" | "axe" | "shovel" | "hoe" | null = null;
+  let toolCategory: 'pickaxe' | 'axe' | 'shovel' | 'hoe' | null = null;
 
   // Determine tool category based on block name (Combine logic from MiningService and FarmingService)
   if (
-    blockName.includes("ore") ||
-    blockName.includes("stone") ||
-    blockName === "cobblestone" ||
-    blockName === "basalt" ||
-    blockName === "blackstone" ||
-    blockName === "furnace" ||
-    blockName === "dispenser" ||
-    blockName === "dropper" ||
-    blockName === "observer" ||
-    blockName === "netherrack" ||
-    blockName === "crafting_table"
+    blockName.includes('ore') ||
+    blockName.includes('stone') ||
+    blockName === 'cobblestone' ||
+    blockName === 'basalt' ||
+    blockName === 'blackstone' ||
+    blockName === 'furnace' ||
+    blockName === 'dispenser' ||
+    blockName === 'dropper' ||
+    blockName === 'observer' ||
+    blockName === 'netherrack' ||
+    blockName === 'crafting_table'
   ) {
-    toolCategory = "pickaxe";
+    toolCategory = 'pickaxe';
   } else if (
-    blockName.includes("log") ||
-    blockName.includes("wood") ||
-    blockName.includes("planks") ||
-    blockName === "chest"
+    blockName.includes('log') ||
+    blockName.includes('wood') ||
+    blockName.includes('planks') ||
+    blockName === 'chest'
   ) {
-    toolCategory = "axe";
+    toolCategory = 'axe';
   } else if (
-    blockName.includes("dirt") ||
-    blockName.includes("sand") ||
-    blockName.includes("gravel") ||
-    blockName.includes("soul_sand") ||
-    blockName.includes("soul_soil") ||
-    blockName === "grass_block" ||
-    blockName === "mycelium" ||
-    blockName === "podzol" ||
-    blockName === "farmland" ||
-    blockName.includes("clay")
+    blockName.includes('dirt') ||
+    blockName.includes('sand') ||
+    blockName.includes('gravel') ||
+    blockName.includes('soul_sand') ||
+    blockName.includes('soul_soil') ||
+    blockName === 'grass_block' ||
+    blockName === 'mycelium' ||
+    blockName === 'podzol' ||
+    blockName === 'farmland' ||
+    blockName.includes('clay')
   ) {
-    toolCategory = "shovel";
+    toolCategory = 'shovel';
   } else if (
-    blockName.includes("crop") ||
-    blockName.includes("wart") ||
-    blockName.includes("leaves") ||
-    blockName === "hay_block" ||
-    blockName === "target" ||
-    blockName === "shroomlight" ||
-    blockName === "sponge" ||
-    blockName === "sculk"
+    blockName.includes('crop') ||
+    blockName.includes('wart') ||
+    blockName.includes('leaves') ||
+    blockName === 'hay_block' ||
+    blockName === 'target' ||
+    blockName === 'shroomlight' ||
+    blockName === 'sponge' ||
+    blockName === 'sculk'
   ) {
-    toolCategory = "hoe";
+    toolCategory = 'hoe';
   }
 
   if (!toolCategory) {
@@ -225,7 +225,7 @@ export async function equipBestToolForBlock(
     return; // No specific tool needed or recognized
   }
 
-  const toolMaterials = ["netherite", "diamond", "iron", "stone", "wooden"];
+  const toolMaterials = ['netherite', 'diamond', 'iron', 'stone', 'wooden'];
   let bestToolFound: Item | null = null;
 
   // Find the best available tool in inventory
@@ -258,7 +258,7 @@ export async function equipBestToolForBlock(
         // console.log(`[Helpers] Already holding the best tool: ${bestToolFound.name}`);
         return; // Already holding the best tool
       }
-      await bot.equip(bestToolFound, "hand");
+      await bot.equip(bestToolFound, 'hand');
       console.log(`[Helpers] Equipped ${bestToolFound.name} for ${blockName}`);
     } catch (err) {
       console.log(

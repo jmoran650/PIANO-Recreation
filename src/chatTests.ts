@@ -1,10 +1,7 @@
 // src/chatTests.ts
 
-import { AgentBot } from "./createAgentBot";
-import { handleTestGoal } from "./testGoal";
-import minecraftData from "minecraft-data"; // Import minecraft-data
-import { Block } from "prismarine-block"; // Import Block type
-import { findNearbyPlacedTable } from "./actions/helpers/helpers"; // Import helper
+import { AgentBot } from './createAgentBot';
+import { handleTestGoal } from './testGoal';
 
 export async function handleChatTestCommand(
   agent: AgentBot, // AgentBot now contains 'services' instead of 'actions'
@@ -31,7 +28,7 @@ export async function handleChatTestCommand(
       // Add other services if new test commands require them
   } = actionServices;
 
-  const parts = commandMessage.split(" ");
+  const parts = commandMessage.split(' ');
   const command = parts[0]?.toLowerCase();
 
   bot.chat(`[${bot.username}] Executing test command: ${commandMessage}`);
@@ -39,45 +36,45 @@ export async function handleChatTestCommand(
   try {
     switch (command) {
       // Commands using Observer (No change needed)
-      case "recipe":
-      case "craftable":
-      case "possible":
-      case "allblocks":
-      case "inv": {
+      case 'recipe':
+      case 'craftable':
+      case 'possible':
+      case 'allblocks':
+      case 'inv': {
         // These commands primarily use 'observer' which is still directly available
-        const itemName = parts.slice(1).join("_"); // Used by recipe, craftable, possible
-        const radius = parseInt(parts[1] || "10", 10); // Used by allblocks
+        const itemName = parts.slice(1).join('_'); // Used by recipe, craftable, possible
+        const radius = parseInt(parts[1] || '10', 10); // Used by allblocks
 
-        if (command === "recipe") {
+        if (command === 'recipe') {
           if (!itemName) {
             bot.chat(`[${bot.username}] Usage: test recipe <itemName>`); return;
           }
           const recipeInfo = observer.getRecipeForItem(itemName);
           bot.chat(`[${bot.username}] ${recipeInfo}`);
-        } else if (command === "craftable") {
+        } else if (command === 'craftable') {
           if (!itemName) {
              bot.chat(`[${bot.username}] Usage: test craftable <itemName>`); return;
           }
           const canCraft = observer.canCraftItem(itemName);
           bot.chat(`[${bot.username}] ${canCraft ? `Yes, I can craft "${itemName}" immediately.` : `No, I cannot craft "${itemName}" immediately.`}`);
-        } else if (command === "possible") {
+        } else if (command === 'possible') {
            if (!itemName) {
              bot.chat(`[${bot.username}] Usage: test possible <itemName>`); return;
            }
            const canEventually = observer.canEventuallyCraftItem(itemName);
            bot.chat(`[${bot.username}] ${canEventually ? `Yes, it is possible to craft "${itemName}" eventually.` : `No, it is not possible to craft "${itemName}".`}`);
-        } else if (command === "allblocks") {
+        } else if (command === 'allblocks') {
             const blocks = await observer.getAllBlocksInRadius(radius);
-            const blockList = blocks.map(b => `${b.name}(${b.x},${b.y},${b.z})`).join(", ");
-            const output = `[${bot.username}] Detailed Blocks (${radius} radius): ${blockList || "None found"}`;
+            const blockList = blocks.map(b => `${b.name}(${b.x},${b.y},${b.z})`).join(', ');
+            const output = `[${bot.username}] Detailed Blocks (${radius} radius): ${blockList || 'None found'}`;
             bot.chat(output.substring(0, 250)); // Limit chat length
             console.log(`[${bot.username}] All blocks (${radius}): ${blockList}`);
-        } else if (command === "inv") {
+        } else if (command === 'inv') {
             const contents = observer.getInventoryContents();
             if (contents.length === 0) {
               bot.chat(`[${bot.username}] My inventory is empty.`);
             } else {
-              const invString = contents.join("\n"); // Maybe format better later
+              const invString = contents.join('\n'); // Maybe format better later
               bot.chat(`[${bot.username}] Inventory:\n${invString}`);
             }
         }
@@ -85,8 +82,8 @@ export async function handleChatTestCommand(
       }
 
       // Command using Navigation (No change needed)
-      case "pullup": {
-        const targetPlayerName = parts[1] || "jibbum"; // Default target?
+      case 'pullup': {
+        const targetPlayerName = parts[1] || 'jibbum'; // Default target?
         const targetPlayer = bot.players[targetPlayerName];
         if (!targetPlayer || !targetPlayer.entity) {
           bot.chat(`[${bot.username}] I cannot find player ${targetPlayerName}.`);
@@ -100,16 +97,16 @@ export async function handleChatTestCommand(
       }
 
        // Command using FunctionCaller (No change needed, assuming handleTestGoal is correct)
-       case "goal:": {
-        await handleTestGoal(bot, functionCaller, ["test", ...parts]);
+       case 'goal:': {
+        await handleTestGoal(bot, functionCaller, ['test', ...parts]);
         break;
       }
 
       // --- Commands using Action Services (NEED UPDATING) ---
 
-      case "mine": {
+      case 'mine': {
         const blockName = parts[1];
-        const desiredCount = parseInt(parts[2] || "1", 10);
+        const desiredCount = parseInt(parts[2] || '1', 10);
         if (!blockName || isNaN(desiredCount)) {
           bot.chat(`[${bot.username}] Usage: test mine <blockName> [count]`);
           return;
@@ -187,7 +184,7 @@ export async function handleChatTestCommand(
       //   break;
       // }
 
-      case "place": {
+      case 'place': {
         const blockType = parts[1];
         if (!blockType) {
           bot.chat(`[${bot.username}] Usage: test place <blockType>`);
@@ -200,7 +197,7 @@ export async function handleChatTestCommand(
         break;
       }
 
-      case "attack": {
+      case 'attack': {
         const mobType = parts[1];
         if (!mobType) {
           bot.chat(`[${bot.username}] Usage: test attack <mobType>`);
@@ -212,7 +209,7 @@ export async function handleChatTestCommand(
         break;
       }
 
-      case "usetable": {
+      case 'usetable': {
         // Use the CraftingService
         await craftingService.useCraftingTable();
         bot.chat(`[${bot.username}] Attempted to use crafting table.`);

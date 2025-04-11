@@ -1,6 +1,6 @@
 // src/actions/talk.ts
-import dotenv from "dotenv";
-import { Bot } from "mineflayer";
+import dotenv from 'dotenv';
+import { Bot } from 'mineflayer';
 
 // Load environment variables
 dotenv.config();
@@ -17,7 +17,7 @@ export class TalkService {
    */
   constructor(bot: Bot) {
     this.bot = bot;
-    console.log("[TalkService] Initialized."); // Optional: Add initialization log
+    console.log('[TalkService] Initialized.'); // Optional: Add initialization log
   }
 
   /**
@@ -27,7 +27,7 @@ export class TalkService {
    */
   public chat(message: string): void {
     if (!message || typeof message !== 'string' || message.trim() === '') {
-        console.warn("[TalkService] Attempted to send an empty or invalid chat message.");
+        console.warn('[TalkService] Attempted to send an empty or invalid chat message.');
         return; // Avoid sending empty messages
     }
     try {

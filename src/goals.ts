@@ -1,5 +1,5 @@
 // src/goals.ts
-import { SharedAgentState } from "./sharedAgentState";
+import { SharedAgentState } from './sharedAgentState';
 
 export class Goals {
   private sharedState: SharedAgentState;
@@ -39,15 +39,15 @@ export class Goals {
    * Example breakdown logic using an LLM (stub).
    */
   public async breakDownGoalWithLLM(goal: string): Promise<string[]> {
-    if (goal.toLowerCase().includes("iron pickaxe")) {
+    if (goal.toLowerCase().includes('iron pickaxe')) {
       return [
-        "mine iron ore (find iron ore, travel to iron ore, mine it)",
-        "make furnace (gather stone, craft furnace)",
-        "smelt iron ore (ore + fuel in furnace)",
-        "craft iron pickaxe (sticks + iron ingots)",
+        'mine iron ore (find iron ore, travel to iron ore, mine it)',
+        'make furnace (gather stone, craft furnace)',
+        'smelt iron ore (ore + fuel in furnace)',
+        'craft iron pickaxe (sticks + iron ingots)',
       ];
     }
-    return ["No known breakdown; proceed manually."];
+    return ['No known breakdown; proceed manually.'];
   }
 
   /**

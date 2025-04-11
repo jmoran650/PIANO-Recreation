@@ -1,14 +1,14 @@
 // src/actions/MiningService.ts
-import dotenv from "dotenv";
+import dotenv from 'dotenv';
 
-import { Bot } from "mineflayer";
+import { Bot } from 'mineflayer';
 
-import { Vec3 } from "vec3";
-import { blockDropMapping } from "../../data/minecraftItems";
-import { Navigation } from "../navigation";
+import { Vec3 } from 'vec3';
+import { blockDropMapping } from '../../data/minecraftItems';
+import { Navigation } from '../navigation';
 
-import { SharedAgentState } from "../sharedAgentState";
-import { sleep, equipBestToolForBlock } from "./helpers/helpers";
+import { SharedAgentState } from '../sharedAgentState';
+import { sleep, equipBestToolForBlock } from './helpers/helpers';
 dotenv.config();
 
 export class MiningService {
@@ -108,7 +108,7 @@ export class MiningService {
   async collectDroppedItems(origin: Vec3, goalBlock: string): Promise<void> {
     // Exact copy from Actions.collectDroppedItems
     const collectionRadius = 20; // Kept original value
-    console.log("[MiningService] collectDroppedItems called.");
+    console.log('[MiningService] collectDroppedItems called.');
     // Look up the expected drop from the mapping.
     // Cast blockDropMapping to a record type to fix the index error.
     const expectedDrop = (blockDropMapping as Record<string, string>)[
@@ -124,10 +124,10 @@ export class MiningService {
     // Filter entities to find dropped items matching the expected drop.
     const drops = Object.values(this.bot.entities).filter((entity: any) => {
       // Type entity more strictly if possible
-      if (entity.name !== "item") return false; // Check entity type ('object' for items) name:'item'
+      if (entity.name !== 'item') return false; // Check entity type ('object' for items) name:'item'
       if (entity.position.distanceTo(origin) > collectionRadius) return false;
       // Check for existence of getDroppedItem before calling
-      if (!entity.getDroppedItem || typeof entity.getDroppedItem !== "function")
+      if (!entity.getDroppedItem || typeof entity.getDroppedItem !== 'function')
         return false;
       // Check item metadata/name
       const item = entity.getDroppedItem();

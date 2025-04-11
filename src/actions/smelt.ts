@@ -1,12 +1,12 @@
 // src/actions/SmeltingService.ts
-import dotenv from "dotenv";
-import minecraftData from "minecraft-data";
-import { Bot } from "mineflayer";
-import { Block } from "prismarine-block";
-import { CraftingService } from "./craft"; 
-import { SharedAgentState } from "../sharedAgentState";
-import { sleep } from "./helpers/helpers"; 
-import { BuildingService } from "./build";
+import dotenv from 'dotenv';
+import minecraftData from 'minecraft-data';
+import { Bot } from 'mineflayer';
+import { Block } from 'prismarine-block';
+import { CraftingService } from './craft'; 
+import { SharedAgentState } from '../sharedAgentState';
+import { sleep } from './helpers/helpers'; 
+import { BuildingService } from './build';
 
 dotenv.config();
 export class SmeltingService {
@@ -25,7 +25,7 @@ export class SmeltingService {
     this.bot = bot;
     this.sharedState = sharedState;
     if (process.env.MINECRAFT_VERSION == undefined) {
-      throw new Error("[SmeltingService] Minecraft Version Undefined");
+      throw new Error('[SmeltingService] Minecraft Version Undefined');
     }
     this.mcData = minecraftData(process.env.MINECRAFT_VERSION);
     this.craftingService = craftingService;
@@ -43,14 +43,14 @@ export class SmeltingService {
     let furnaceBlock = this.findNearbyFurnace(3); // Use internal helper
     if (!furnaceBlock) {
       console.log(
-        "[SmeltingService] No furnace nearby. Attempting to place one..."
+        '[SmeltingService] No furnace nearby. Attempting to place one...'
       );
       // Calls the included placeFurnace method (which might call duplicated craft)
       await this.buildingService.placeFurnace();
       furnaceBlock = this.findNearbyFurnace(3); // Check again after placing
       if (!furnaceBlock) {
         console.log(
-          "[SmeltingService] Unable to find or place a furnace. Aborting smelt."
+          '[SmeltingService] Unable to find or place a furnace. Aborting smelt.'
         );
         // Should this throw an error? Original just returned.
         return;
@@ -64,7 +64,7 @@ export class SmeltingService {
       // Need to check if furnaceBlock is valid before activating
       if (!furnaceBlock) {
         console.log(
-          "[SmeltingService] Furnace block became invalid before activation."
+          '[SmeltingService] Furnace block became invalid before activation.'
         );
         return;
       }
@@ -72,7 +72,7 @@ export class SmeltingService {
       // Original used activateBlock - openFurnace is more specific and likely intended.
       // Sticking to openFurnace as it's more standard for furnace interaction.
       // await this.bot.activateBlock(furnaceBlock); // Original line
-      console.log("[SmeltingService] Opened furnace window...");
+      console.log('[SmeltingService] Opened furnace window...');
     } catch (err) {
       console.log(`[SmeltingService] Failed to open furnace: ${err}`);
       return; // Cannot proceed if furnace can't be opened
@@ -83,7 +83,7 @@ export class SmeltingService {
     // Ensure the furnace window opened successfully
     if (!furnaceWindow) {
       console.log(
-        "[SmeltingService] Furnace window not available after open attempt."
+        '[SmeltingService] Furnace window not available after open attempt.'
       );
       return;
     }
@@ -93,7 +93,7 @@ export class SmeltingService {
     if (!(await this.addFuelToFurnace(furnaceWindow))) {
       // Pass window to helper
       console.log(
-        "[SmeltingService] Failed to add fuel to furnace. Aborting smelt."
+        '[SmeltingService] Failed to add fuel to furnace. Aborting smelt.'
       );
       // Close window if fuel fails? Original didn't explicitly close here.
       furnaceWindow.close();
@@ -133,14 +133,14 @@ export class SmeltingService {
     // Original checked bot.currentWindow, safer to use the window object we have
     try {
       await furnaceWindow.close();
-      console.log("[SmeltingService] Furnace window closed.");
+      console.log('[SmeltingService] Furnace window closed.');
     } catch (err) {
       console.log(`[SmeltingService] Error closing furnace window: ${err}`);
       // May already be closed, ignore error?
     }
 
     console.log(
-      `[SmeltingService] Smelting process initiated/done. Check furnace output!`
+      '[SmeltingService] Smelting process initiated/done. Check furnace output!'
     );
   }
 
@@ -152,7 +152,7 @@ export class SmeltingService {
   private findNearbyFurnace(maxDistance: number): Block | null {
     const furnacePositions = this.bot.findBlocks({
       point: this.bot.entity.position,
-      matching: (block) => block && block.name === "furnace",
+      matching: (block) => block && block.name === 'furnace',
       maxDistance,
       count: 1,
     });
@@ -168,7 +168,7 @@ export class SmeltingService {
   private async addFuelToFurnace(furnaceWindow: any): Promise<boolean> {
     // Check if window is valid (passed as argument)
     if (!furnaceWindow) {
-      console.log("[SmeltingService] No furnace window provided to add fuel.");
+      console.log('[SmeltingService] No furnace window provided to add fuel.');
       return false;
     }
 
@@ -182,27 +182,27 @@ export class SmeltingService {
 
     // Find fuel in inventory (Original logic)
     const possibleFuels = [
-      "coal",
-      "charcoal",
-      "oak_log",
-      "spruce_log",
-      "birch_log",
-      "jungle_log",
-      "acacia_log",
-      "dark_oak_log",
-      "mangrove_log",
-      "cherry_log",
-      "oak_planks",
-      "spruce_planks",
-      "birch_planks",
-      "jungle_planks",
-      "acacia_planks",
-      "dark_oak_planks",
-      "mangrove_planks",
-      "cherry_planks",
-      "bamboo_planks",
-      "crimson_planks",
-      "warped_planks",
+      'coal',
+      'charcoal',
+      'oak_log',
+      'spruce_log',
+      'birch_log',
+      'jungle_log',
+      'acacia_log',
+      'dark_oak_log',
+      'mangrove_log',
+      'cherry_log',
+      'oak_planks',
+      'spruce_planks',
+      'birch_planks',
+      'jungle_planks',
+      'acacia_planks',
+      'dark_oak_planks',
+      'mangrove_planks',
+      'cherry_planks',
+      'bamboo_planks',
+      'crimson_planks',
+      'warped_planks',
     ];
     for (const fuelName of possibleFuels) {
       // Find item by name - use findInventoryItem for robustness
@@ -230,7 +230,7 @@ export class SmeltingService {
         }
       }
     }
-    console.log("[SmeltingService] No valid fuel found in inventory.");
+    console.log('[SmeltingService] No valid fuel found in inventory.');
     return false;
   }
 
@@ -245,7 +245,7 @@ export class SmeltingService {
     count: number
   ): Promise<number> {
     if (!furnaceWindow) {
-      console.log("[SmeltingService] No furnace window provided to add input.");
+      console.log('[SmeltingService] No furnace window provided to add input.');
       return 0;
     }
 

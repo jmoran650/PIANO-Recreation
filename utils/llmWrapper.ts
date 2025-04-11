@@ -1,9 +1,23 @@
-import OpenAI from "openai";
+import OpenAI from 'openai';
+// Keep the standard JSONSchema type for potential other uses or as a base
+import { type JSONSchema as StandardJSONSchema } from 'openai/lib/jsonschema';
+
+// Define the specific schema type required by the OpenAI API call, including 'name'
+interface NamedJSONSchema extends StandardJSONSchema {
+  name: string;
+  // You might need to refine this further based on exact OpenAI requirements,
+  // but 'name' is the one flagged by the error.
+  // StandardJSONSchema already includes properties like 'type', 'properties', etc.
+}
+
+
+// Define a type for the meta object in the logger for better type safety
+type LogMeta = Record<string, unknown>;
 
 interface LLMPendingRequest {
   prompt: string;
   resolve: (value: string) => void;
-  reject: (error: any) => void;
+  reject: (error: Error) => void; // Ensure reject handles Error objects
 }
 
 const llmQueue: LLMPendingRequest[] = [];
@@ -18,58 +32,45 @@ let totalOutputChars = 0;
 let llmEnabled = true;
 
 // We'll store an optional logger callback that can funnel logs into sharedState
-let logger: null | ((type: string, msg: string, meta?: any) => void) = null;
+let logger: null | ((type: string, msg: string, meta?: LogMeta) => void) = null;
 
 /**
  * Provide a logging function that we can call whenever we do an OpenAI request or response.
- * For example:
- *   setLLMLogger((role, content, metadata) => {
- *     sharedState.logMessage("system", content, metadata);
- *   });
  */
 export function setLLMLogger(
-  logFn: (type: string, message: string, meta?: any) => void
-) {
+  logFn: (type: string, message: string, meta?: LogMeta) => void
+): void {
   logger = logFn;
 }
 
 const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
+  apiKey: process.env.OPENAI_API_KEY, // Ensure OPENAI_API_KEY is set in your environment
 });
 
+// --- actualLLMCall remains the same ---
 async function actualLLMCall(prompt: string): Promise<string> {
-  // Log outgoing request (if logger is available)
   if (logger) {
     logger(
-      "system",
-      "OpenAI Request (callLLM)",
-      { endpoint: "chat.completions.create", prompt }
+      'system',
+      'OpenAI Request (callLLM)',
+      { endpoint: 'chat.completions.create', prompt }
     );
   }
-
-  let responseContent = "";
+  let responseContent = '';
   try {
     const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: [{ role: "user", content: prompt }],
+      model: 'gpt-4o-mini',
+      messages: [{ role: 'user', content: prompt }],
     });
-
-    if (
-      completion.choices &&
-      completion.choices.length > 0 &&
-      completion.choices[0].message &&
-      completion.choices[0].message.content
-    ) {
-      responseContent = completion.choices[0].message.content;
-
-      // Log successful response
+    const content = completion.choices?.[0]?.message?.content;
+    if (content) {
+      responseContent = content;
       if (logger) {
-        logger("system", "OpenAI Response (callLLM)", {
-          endpoint: "chat.completions.create",
+        logger('system', 'OpenAI Response (callLLM)', {
+          endpoint: 'chat.completions.create',
           response: completion,
         });
       }
-
       if (responseContent.length > MAX_LENGTH) {
         throw new Error(
           `LLM response length (${responseContent.length}) exceeds maximum allowed (${MAX_LENGTH}).`
@@ -78,12 +79,11 @@ async function actualLLMCall(prompt: string): Promise<string> {
       totalOutputChars += responseContent.length;
       return responseContent;
     }
-    throw new Error("No valid response from OpenAI API.");
+    throw new Error('No valid response content from OpenAI API.');
   } catch (error) {
-    // Log the error
     if (logger) {
-      logger("system", "OpenAI Error (callLLM)", {
-        endpoint: "chat.completions.create",
+      logger('system', 'OpenAI Error (callLLM)', {
+        endpoint: 'chat.completions.create',
         error: String(error),
       });
     }
@@ -91,66 +91,67 @@ async function actualLLMCall(prompt: string): Promise<string> {
   }
 }
 
+
+// This internal function returns unknown because its parsed type depends
+// on the schema provided by the caller. The public wrapper will handle casting.
 async function actualLLMCallJsonSchema(
   systemMsg: string,
   userMsg: string,
-  jsonSchema: any
-): Promise<{ parsed: any }> {
-  // Log outgoing request
+  // Use the new specific NamedJSONSchema type
+  jsonSchema: NamedJSONSchema
+): Promise<{ parsed: unknown }> { // Return unknown, casting is done in the caller
   if (logger) {
-    logger("system", "OpenAI Request (callLLMJsonSchema)", {
-      endpoint: "chat.completions.create (json_schema)",
+    logger('system', 'OpenAI Request (callLLMJsonSchema)', {
+      endpoint: 'chat.completions.create (json_schema)',
       systemMsg,
       userMsg,
       schema: jsonSchema,
     });
   }
 
-  let rawContent = "";
+  let rawContent: string | null = '';
   try {
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+    const completion = await openai.chat.completions.create({ // Line 129 where error occurred
+      model: 'gpt-4o-mini',
       messages: [
-        { role: "system", content: systemMsg },
-        { role: "user", content: userMsg },
+        { role: 'system', content: systemMsg },
+        { role: 'user', content: userMsg },
       ],
       response_format: {
-        type: "json_schema",
+        type: 'json_schema',
+        // Pass the schema which now conforms to the expected type (has 'name')
         json_schema: jsonSchema,
       },
     });
 
-    if (!completion.choices || !completion.choices[0].message.content) {
-      throw new Error("No valid structured response from OpenAI API.");
-    }
+    rawContent = completion.choices?.[0]?.message?.content ?? null;
 
-    rawContent = completion.choices[0].message.content;
     if (!rawContent) {
-      throw new Error("Model returned empty response.");
+      throw new Error('Model returned empty response.');
     }
 
-    // Log successful response
     if (logger) {
-      logger("system", "OpenAI Response (callLLMJsonSchema)", {
-        endpoint: "chat.completions.create (json_schema)",
+      logger('system', 'OpenAI Response (callLLMJsonSchema)', {
+        endpoint: 'chat.completions.create (json_schema)',
         response: completion,
       });
     }
 
-    let parsedObj: any;
+    let parsedObj: unknown;
     try {
       parsedObj = JSON.parse(rawContent);
-    } catch (err) {
+    } catch (parseError) {
       throw new Error(
-        `Failed to parse the LLM JSON response. Raw output:\n${rawContent}\n\nError: ${err}`
+        `Failed to parse the LLM JSON response. Raw output:\n${rawContent}\n\nError: ${String(
+          parseError
+        )}`
       );
     }
     return { parsed: parsedObj };
   } catch (error) {
-    // Log error
     if (logger) {
-      logger("system", "OpenAI Error (callLLMJsonSchema)", {
-        endpoint: "chat.completions.create (json_schema)",
+      logger('system', 'OpenAI Error (callLLMJsonSchema)', {
+        endpoint: 'chat.completions.create (json_schema)',
         error: String(error),
       });
     }
@@ -158,23 +159,33 @@ async function actualLLMCallJsonSchema(
   }
 }
 
-setInterval(async () => {
-  if (llmQueue.length > 0) {
-    const request = llmQueue.shift();
-    if (request) {
+// Process the queue
+// FIX: Address @typescript-eslint/no-misused-promises
+setInterval(() => { // Outer function is sync (returns void)
+  // Immediately invoked async function expression (IIAFE)
+  // Use 'void' to explicitly ignore the returned promise from the IIAFE
+  void (async () => { // Line 176 where error occurred
+    if (llmQueue.length > 0) {
+      const request = llmQueue.shift()!;
       try {
         const response = await actualLLMCall(request.prompt);
         request.resolve(response);
       } catch (err) {
-        request.reject(err);
+        if (err instanceof Error) {
+          request.reject(err);
+        } else {
+          request.reject(new Error(String(err)));
+        }
       }
     }
-  }
+  })(); // Invoke the async function
 }, RATE_LIMIT_INTERVAL);
 
+
+// --- callLLM remains the same ---
 export async function callLLM(prompt: string): Promise<string> {
   if (!llmEnabled) {
-    return Promise.reject(new Error("LLM requests are disabled."));
+    return Promise.reject(new Error('LLM requests are disabled.'));
   }
   if (prompt.length > MAX_LENGTH) {
     return Promise.reject(
@@ -186,20 +197,24 @@ export async function callLLM(prompt: string): Promise<string> {
   totalLLMRequests++;
   llmRequestTimestamps.push(Date.now());
   totalInputChars += prompt.length;
-  return new Promise((resolve, reject) => {
+
+  return new Promise<string>((resolve, reject) => {
     llmQueue.push({ prompt, resolve, reject });
   });
 }
 
+
+// Use a generic type T for the expected parsed result structure
 export async function callLLMJsonSchema<T>(
   systemMsg: string,
   userMsg: string,
-  jsonSchema: any
-): Promise<{ parsed: T | null }> {
+  // Use the new specific NamedJSONSchema type
+  jsonSchema: NamedJSONSchema
+): Promise<{ parsed: T }> {
   if (!llmEnabled) {
-    return Promise.reject(new Error("LLM requests are disabled."));
+    return Promise.reject(new Error('LLM requests are disabled.'));
   }
-  const combined = systemMsg + "\n" + userMsg;
+  const combined = systemMsg + '\n' + userMsg;
   if (combined.length > MAX_LENGTH) {
     return Promise.reject(
       new Error(
@@ -211,24 +226,35 @@ export async function callLLMJsonSchema<T>(
   llmRequestTimestamps.push(Date.now());
   totalInputChars += combined.length;
 
-  try {
-    const { parsed } = await actualLLMCallJsonSchema(systemMsg, userMsg, jsonSchema);
-    if (parsed) {
-      const outStr = JSON.stringify(parsed);
-      totalOutputChars += outStr.length;
-    }
-    return { parsed: parsed as T };
-  } catch (err) {
-    throw err;
+  // FIX: Remove useless try-catch (eslint: no-useless-catch) - Error occurred around Line 242
+  // Errors from actualLLMCallJsonSchema will now propagate directly.
+  const result = await actualLLMCallJsonSchema(systemMsg, userMsg, jsonSchema);
+
+  const parsed = result.parsed as T;
+
+  if (parsed !== null && parsed !== undefined) {
+      try {
+          const outStr = JSON.stringify(parsed);
+          totalOutputChars += outStr.length;
+      } catch (stringifyError) {
+          console.error("Failed to stringify LLM JSON response for metrics:", stringifyError);
+           if (logger) {
+              logger('system', 'LLM Metrics Stringify Error', { error: String(stringifyError) });
+           }
+      }
   }
+  return { parsed: parsed };
 }
 
-export function getLLMMetrics(): {
+// --- getLLMMetrics, setLLMEnabled, toggleLLMEnabled remain the same ---
+interface LLMMetrics {
   totalRequests: number;
   requestsLast10Min: number;
   totalInputChars: number;
   totalOutputChars: number;
-} {
+}
+
+export function getLLMMetrics(): LLMMetrics {
   const now = Date.now();
   const tenMinutesAgo = now - 600000;
   const recentTimestamps = llmRequestTimestamps.filter((ts) => ts >= tenMinutesAgo);
