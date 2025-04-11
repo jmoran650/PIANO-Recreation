@@ -27,7 +27,7 @@ export class MiningService {
    */
   async mine(goalBlock: string, desiredCount: number): Promise<void> {
     // Exact copy from Actions.mine
-    this.bot.waitForChunksToLoad();
+    await this.bot.waitForChunksToLoad();
     this.sharedState.addPendingAction(`Mine ${goalBlock} x${desiredCount}`);
     await equipBestToolForBlock(this.bot, goalBlock);
 

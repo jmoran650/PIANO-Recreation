@@ -133,8 +133,8 @@ const GoalPlanner: React.FC = () => {
 
     const linkGenerator = d3
       .linkVertical<HierarchyPointLink<TreeNode>, HierarchyPointNode<TreeNode>>()
-      .x((d) => d.x!)
-      .y((d) => d.y!);
+      .x((d) => d.x)
+      .y((d) => d.y);
 
     const links = root.links() as HierarchyPointLink<TreeNode>[];
     g.selectAll("path.link")

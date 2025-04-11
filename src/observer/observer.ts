@@ -24,7 +24,7 @@ export class Observer {
   private bot: Bot;
   private radius: number;
   private sharedState: SharedAgentState;
-  private mcData: any;
+  private mcData: minecraftData.IndexedData;
   private _wasHurt = false;
   private _swingArmAttacker: Entity | null = null;
   public recentChats: string[] = [];
@@ -107,8 +107,7 @@ export class Observer {
    */
   public async updateFastBotStats(): Promise<void> {
     
-    const fastbotStatStartTime = Date.now();
-    this.bot.waitForChunksToLoad();
+    void this.bot.waitForChunksToLoad();
     const inventory = this.getInventoryContents();
     //console.log("this is inventory: ", inventory);
     this.sharedState.inventory = inventory;
@@ -135,7 +134,6 @@ export class Observer {
     const nearbyPlayers = this.getNearbyPlayers();
     this.sharedState.playersNearby = nearbyPlayers;
 
-    const fastbotStatEndTime = Date.now();
     //console.log("fastBotStat update time: ", fastbotStatEndTime - fastbotStatStartTime)
   }
 

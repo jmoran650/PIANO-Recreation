@@ -15,7 +15,7 @@ dotenv.config();
 export class FarmingService {
   private bot: Bot;
   private navigation: Navigation;
-  private mcData: any;
+  private mcData: minecraftData.IndexedData;
   private sharedState: SharedAgentState;
 
   constructor(

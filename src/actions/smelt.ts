@@ -11,7 +11,7 @@ import { BuildingService } from './build';
 dotenv.config();
 export class SmeltingService {
   private bot: Bot;
-  private mcData: any;
+  private mcData: minecraftData.IndexedData;
   private sharedState: SharedAgentState;
   private craftingService: CraftingService;
   private buildingService: BuildingService;

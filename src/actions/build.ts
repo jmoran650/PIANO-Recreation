@@ -18,7 +18,7 @@ dotenv.config();
 export class BuildingService {
   private bot: Bot;
   private sharedState: SharedAgentState;
-  private mcData: any;
+  private mcData: minecraftData.IndexedData;
 
   constructor(
     bot: Bot,

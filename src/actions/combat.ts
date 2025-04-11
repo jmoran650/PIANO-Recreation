@@ -1,6 +1,6 @@
 // src/actions/combat.ts
 import dotenv from 'dotenv';
-import { Bot, BotEvents } from 'mineflayer';
+import { Bot } from 'mineflayer';
 import { SharedAgentState } from '../sharedAgentState';
 import { Entity } from 'prismarine-entity'; // Import Entity type
 
@@ -105,7 +105,7 @@ export class CombatService {
 
     try {
       // FIX 3: Pass the closestTarget (the Entity object itself) directly
-      pvp.attack(closestTarget);
+      void pvp.attack(closestTarget);
 
       // Re-attack logic
       this.bot.once('stoppedAttacking', () => {

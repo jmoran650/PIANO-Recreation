@@ -140,23 +140,14 @@ export class Navigation {
     x: number,
     y: number,
     z: number,
-    options: {
-      range?: number;
-      faces?: number[];
-      facing?: string;
-      facing3D?: boolean;
-      half?: string;
-      LOS?: boolean;
-    } = {}
   ): Promise<void> {
     const pos = new Vec3(x, y, z);
     const goal = new GoalPlaceBlock(pos, this.bot.world, {
-      range: 4.5, // Maximum distance from the face; default is 5.
+      range: 4.5,
       faces: [new Vec3(0, 1, 0)], // Only allow clicking the top face (i.e. placing on top).
-      facing: 'down', // Require the bot to face down (adjust as needed).
-      //facing3D: false,                    // Only consider horizontal orientation.
-      //half: "top",                        // Click on the top half of the target block.
-      LOS: true, // Ensure the bot has line of sight to the placement face.
+      facing: 'down',
+
+      LOS: true,
     });
     try {
       await this.bot.pathfinder.goto(goal);
@@ -177,7 +168,6 @@ export class Navigation {
    * @param range The desired distance to be within. Default: 2.0 blocks.
    */
   public async moveToInteractRange(
-    // *** FIX 3: Explicitly allow plain object type in signature ***
     target: Vec3 | Block,
     range = 2.0
   ): Promise<void> {

@@ -221,7 +221,7 @@ export async function handleChatTestCommand(
           `[${bot.username}] Unknown test command: '${command}'. Valid: recipe, craftable, possible, mine, craft, place, attack, allblocks, usetable, inv, pullup, goal:`
         );
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     // General error handling for the command execution
     console.error(
       `[${bot.username}] Error executing test command '${commandMessage}':`,

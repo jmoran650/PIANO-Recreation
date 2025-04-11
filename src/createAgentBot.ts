@@ -63,7 +63,7 @@ export async function createAgentBot(options: BotOptions): Promise<AgentBot> {
     bot.once('error', (err) => reject(err));
   });
 
-  bot.waitForChunksToLoad();
+  void bot.waitForChunksToLoad();
   bot.loadPlugin(pathfinder);
   bot.loadPlugin(pvp);
 

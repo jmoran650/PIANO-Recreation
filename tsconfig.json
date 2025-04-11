@@ -11,8 +11,11 @@
     "rootDir": "."
   },
   "include": [
+    "eslint.config.mjs",
     "src/**/*",
     "index.ts",
+    "**/*.ts",
+    "**/*.tsx",
     "src/createAgentBot.ts",
     "goalPlanAppServer.ts",
     "treeviewer/goal-planner-app/src/goalPlanner.ts",

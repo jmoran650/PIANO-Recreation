@@ -3,7 +3,6 @@ import dotenv from 'dotenv';
 import minecraftData from 'minecraft-data'; // Useful for item type lookups if needed
 import { Bot } from 'mineflayer';
 import { Block } from 'prismarine-block';
-import { Vec3 } from 'vec3';
 import { SharedAgentState } from '../sharedAgentState'; // Included for consistency
 
 dotenv.config();
@@ -11,7 +10,7 @@ dotenv.config();
 
 export class InventoryService {
   private bot: Bot;
-  private mcData: any; // Keep for potential item lookups
+  private mcData: minecraftData.IndexedData; // Keep for potential item lookups
   private sharedState: SharedAgentState; // Keep for consistency
 
   constructor(

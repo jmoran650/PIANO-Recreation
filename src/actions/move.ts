@@ -2,8 +2,6 @@
 import dotenv from 'dotenv';
 import minecraftData from 'minecraft-data'; // Included for consistency
 import { Bot } from 'mineflayer';
-import { Block } from 'prismarine-block'; // Included for consistency
-import { Vec3 } from 'vec3'; // Included for consistency
 import { Navigation } from '../navigation'; // Essential dependency
 import { SharedAgentState } from '../sharedAgentState';
 
@@ -13,7 +11,6 @@ dotenv.config();
 export class MovementService {
   private bot: Bot;
   private navigation: Navigation; // Essential dependency
-  private mcData: any; // Keep for consistency
   private sharedState: SharedAgentState;
 
   constructor(
@@ -28,7 +25,6 @@ export class MovementService {
     if (process.env.MINECRAFT_VERSION == undefined) {
       throw new Error('[MovementService] Minecraft Version Undefined');
     }
-    this.mcData = minecraftData(process.env.MINECRAFT_VERSION); // Init for consistency
   }
 
   /**

@@ -21,7 +21,7 @@ dotenv.config();
 export class CraftingService {
   private bot: Bot;
   private navigation: Navigation;
-  private mcData: any;
+  private mcData: minecraftData.IndexedData;
   private sharedState: SharedAgentState;
   private observer: Observer;
   public readonly INTERACTION_RANGE = 4.5; // Range for immediate use
