@@ -10,21 +10,19 @@ dotenv.config();
 
 export class InventoryService {
   private bot: Bot;
-  private mcData: minecraftData.IndexedData; // Keep for potential item lookups
-  private sharedState: SharedAgentState; // Keep for consistency
+  private mcData: minecraftData.IndexedData;
+  private sharedState: SharedAgentState;
 
   constructor(
     bot: Bot,
     sharedState: SharedAgentState
-    // navigation: Navigation // Not needed by these funcs
-    // observer: Observer // Not needed by these funcs
   ) {
     this.bot = bot;
-    this.sharedState = sharedState; // Store for consistency
+    this.sharedState = sharedState; 
     if (process.env.MINECRAFT_VERSION == undefined) {
       throw new Error('[InventoryService] Minecraft Version Undefined');
     }
-    this.mcData = minecraftData(process.env.MINECRAFT_VERSION); // Initialize for consistency
+    this.mcData = minecraftData(process.env.MINECRAFT_VERSION); 
   }
 
   /**

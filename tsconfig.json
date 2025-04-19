@@ -11,7 +11,7 @@
     "rootDir": "."
   },
   "include": [
-    "eslint.config.mjs",
+    "./eslint.config.mjs",
     "src/**/*",
     "index.ts",
     "**/*.ts",
