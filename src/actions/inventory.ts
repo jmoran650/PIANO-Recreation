@@ -1,12 +1,20 @@
 // src/actions/InventoryService.ts
 import dotenv from 'dotenv';
-import minecraftData from 'minecraft-data'; // Useful for item type lookups if needed
+import minecraftData from 'minecraft-data';
 import { Bot } from 'mineflayer';
+// Import the Chest type directly from mineflayer
+import { Chest } from 'mineflayer'; // <<< Corrected Import
 import { Block } from 'prismarine-block';
-import { SharedAgentState } from '../sharedAgentState'; // Included for consistency
+// WindowType might not be needed if Chest provides all necessary properties/methods
+// import { Window as WindowType } from 'prismarine-windows';
+import { Item } from 'prismarine-item';
+import { Vec3 } from 'vec3';
+import { SharedAgentState } from '../sharedAgentState';
 
 dotenv.config();
 
+// No longer need the alias, using Chest directly from mineflayer
+// type ChestWindow = WindowType;
 
 export class InventoryService {
   private bot: Bot;
@@ -18,70 +26,51 @@ export class InventoryService {
     sharedState: SharedAgentState
   ) {
     this.bot = bot;
-    this.sharedState = sharedState; 
+    this.sharedState = sharedState;
     if (process.env.MINECRAFT_VERSION == undefined) {
       throw new Error('[InventoryService] Minecraft Version Undefined');
     }
-    this.mcData = minecraftData(process.env.MINECRAFT_VERSION); 
+    this.mcData = minecraftData(process.env.MINECRAFT_VERSION);
   }
 
   /**
    * Sorts the bot's main inventory contents (simple name/count sort).
-   * NOTE: This is a basic example sort, behavior preserved exactly.
-   * It might be inefficient or have issues with item stacking/NBT.
    */
   async sortInventory(): Promise<void> {
     console.log('[InventoryService] Sorting inventory...');
-    // this.sharedState.addPendingAction("Sort Inventory"); // Add if desired
+    // this.sharedState.addPendingAction("Sort Inventory");
 
-    const items = this.bot.inventory.items(); // Get current items
+    const items: Item[] = this.bot.inventory.items();
 
-    // Sort criteria: name ascending, then count descending (Original Logic)
-    const sorted = [...items].sort((a, b) => {
+    const sorted: Item[] = [...items].sort((a, b) => {
       if (a.name < b.name) return -1;
       if (a.name > b.name) return 1;
-      return b.count - a.count; // Higher count first for same item name
+      return b.count - a.count;
     });
 
-    // Attempt to move items to sorted positions
-    // WARNING: This is a naive sort and likely doesn't handle partial stacks,
-    // NBT data correctly, or optimize moves. Preserving original logic.
     for (let i = 0; i < sorted.length; i++) {
-      // Calculate target slot index in main inventory area
       const targetSlot = this.bot.inventory.inventoryStart + i;
-
-      // Get item currently in the target slot
       const currentItemInTargetSlot = this.bot.inventory.slots[targetSlot];
-      // Get the item that *should* be in this slot based on sort
       const desiredItemForSlot = sorted[i];
 
-      // Check if the item is already in the correct place
-      // This check compares type and count, might not be sufficient for NBT items.
       if (
-        !currentItemInTargetSlot || // Slot is empty
+        currentItemInTargetSlot === null ||
         currentItemInTargetSlot.type !== desiredItemForSlot.type ||
         currentItemInTargetSlot.count !== desiredItemForSlot.count
-        // Add NBT comparison here if needed:
-        // || JSON.stringify(currentItemInTargetSlot.nbt) !== JSON.stringify(desiredItemForSlot.nbt)
       ) {
-        // Item is not in the correct place, find where it currently is
         const sourceSlot = desiredItemForSlot.slot;
-
-        // Check if source and target are the same (shouldn't happen with check above, but safe)
         if (sourceSlot === targetSlot) continue;
 
         console.log(`[InventoryService] Moving ${desiredItemForSlot.name} from slot ${sourceSlot} to ${targetSlot}`);
         try {
-          // Attempt to move the item
-          // NOTE: moveSlotItem moves the *entire* stack. This naive loop might
-          // overwrite items or fail if slots aren't empty.
-          // A real sort needs inventory transaction logic.
           await this.bot.moveSlotItem(sourceSlot, targetSlot);
-          // Small delay might help avoid inventory desync issues?
-          // await this.sleep(50); // Requires sleep helper if added
-        } catch (err) {
-          console.log(`[InventoryService] Error while sorting item ${desiredItemForSlot.name} (slot ${sourceSlot} to ${targetSlot}): ${err}`);
-          // Continue trying to sort other items? Or stop? Original continued.
+        } catch (err: unknown) {
+          if (err instanceof Error) {
+            console.log(`[InventoryService] Error while sorting item ${desiredItemForSlot.name} (slot ${sourceSlot} to ${targetSlot}): ${err.message}`);
+          } else {
+            console.log(`[InventoryService] An unknown error occurred while sorting item ${desiredItemForSlot.name} (slot ${sourceSlot} to ${targetSlot})`);
+            console.error(err);
+          }
         }
       }
     }
@@ -92,87 +81,85 @@ export class InventoryService {
    * Stores a specified quantity of an item into a nearby chest.
    */
   async storeItemInChest(itemName: string, count: number): Promise<void> {
-    // this.sharedState.addPendingAction(`Store ${itemName} x${count}`); // Add if desired
-    const chestBlock = this.findNearbyChest(3); // Use internal helper
+    // this.sharedState.addPendingAction(`Store ${itemName} x${count}`);
+    const chestBlock = this.findNearbyChest(3);
     if (!chestBlock) {
       console.log('[InventoryService] No chest found nearby to store items.');
       return;
     }
 
-     // Ensure bot is close enough? Original didn't check. Assume findNearbyChest(3) suffices.
-
-    let chest: any = null; // Use 'any' for ChestWindow type consistency
+    let chest: Chest | null = null; // <<< Use Chest type
     try {
-        console.log(`[InventoryService] Opening chest at ${chestBlock.position}...`);
-        chest = await this.bot.openChest(chestBlock);
-    } catch(err) {
-        console.error(`[InventoryService] Failed to open chest: ${err}`);
-        return; // Cannot continue if chest doesn't open
+      console.log(`[InventoryService] Opening chest at ${chestBlock.position.toString()}...`);
+      // bot.openChest returns Promise<Chest>
+      chest = await this.bot.openChest(chestBlock);
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        console.error(`[InventoryService] Failed to open chest: ${err.message}`);
+      } else {
+        console.error('[InventoryService] Failed to open chest due to an unknown error.');
+        console.error(err);
+      }
+      return;
     }
 
     try {
-      // Find the item(s) to store in the bot's inventory
-      // Original used includes(itemName) - matching exact name is safer.
-      // Let's find *all* stacks matching the name.
-       const itemData = this.mcData.itemsByName[itemName];
-       if (!itemData) {
-           console.log(`[InventoryService] Unknown item name to store: ${itemName}`);
-           chest.close();
-           return;
-       }
-       const itemsToStore = this.bot.inventory.items().filter(it => it.type === itemData.id);
+      const itemData = this.mcData.itemsByName[itemName];
+      if (!itemData) {
+        console.log(`[InventoryService] Unknown item name to store: ${itemName}`);
+        // Ensure chest is not null before calling close
+        if (chest) chest.close(); // <<< chest is now Chest type
+        return;
+      }
+      const itemsToStore = this.bot.inventory.items().filter(it => it.type === itemData.id);
 
       if (itemsToStore.length === 0) {
         console.log(`[InventoryService] I have no "${itemName}" in my inventory to store.`);
-        chest.close();
+        // Ensure chest is not null before calling close
+        if (chest) chest.close(); // <<< chest is now Chest type
         return;
       }
 
-      // Deposit items up to the specified count
-      const totalDeposited = 0;
-      const depositPromises = [];
+      console.log(`[InventoryService] Attempting to deposit ${count} of ${itemName}...`);
+      try {
+         // Ensure chest is not null before calling deposit
+         if (chest) {
+            await chest.deposit(itemData.id, null, count); // <<< chest is now Chest type
+            console.log(`[InventoryService] Deposit operation completed for up to ${count} ${itemName}.`);
+         } else {
+             console.error('[InventoryService] Cannot deposit, chest reference is null.');
+         }
+      } catch (depositErr: unknown) {
+        if (depositErr instanceof Error) {
+           console.error(`[InventoryService] Error during chest deposit for ${itemName}: ${depositErr.message}`);
+        } else {
+            console.error(`[InventoryService] An unknown error occurred during chest deposit for ${itemName}.`);
+            console.error(depositErr);
+        }
+      }
 
-       // Use chest.deposit which handles finding space. Deposit from each stack.
-       console.log(`[InventoryService] Attempting to deposit ${count} of ${itemName}...`);
-       try {
-          // chest.deposit handles finding items in inventory and depositing up to 'count'
-          await chest.deposit(itemData.id, null, count);
-          // Note: chest.deposit doesn't directly return the amount deposited easily.
-          // We'd have to re-check inventory or chest contents to confirm exact amount.
-          // For simplicity, assume it deposited *up to* count if possible.
-          console.log(`[InventoryService] Deposit operation completed for up to ${count} ${itemName}.`);
-          // Original log assumed success based on finding item: `Stored ${moveCount} of ${itemName}...`
-          // Logging completion is more accurate here.
-       } catch(depositErr) {
-           console.error(`[InventoryService] Error during chest deposit for ${itemName}: ${depositErr}`);
-           // Continue to close chest even if deposit fails partially/fully
-       }
-
-      // Original loop logic (less robust than chest.deposit):
-      // let remainingToStore = count;
-      // for (const itemStack of itemsToStore) {
-      //     if (remainingToStore <= 0) break;
-      //     const amountToDeposit = Math.min(itemStack.count, remainingToStore);
-      //     depositPromises.push(chest.deposit(itemStack.type, null, amountToDeposit));
-      //     remainingToStore -= amountToDeposit;
-      //     totalDeposited += amountToDeposit; // Track deposited amount more accurately
-      // }
-      // await Promise.all(depositPromises);
-      // console.log(`[InventoryService] Stored ${totalDeposited} of ${itemName} into the chest.`);
-
-    } catch (err) {
-      // Catch errors during the inventory interaction part
-      console.log(`[InventoryService] Error interacting with inventory/chest: ${err}`);
+    } catch (err: unknown) {
+        if (err instanceof Error) {
+            console.log(`[InventoryService] Error interacting with inventory/chest: ${err.message}`);
+        } else {
+            console.log('[InventoryService] An unknown error occurred interacting with inventory/chest.');
+            console.error(err);
+        }
     } finally {
-        // Always try to close the chest window
-        if (chest) {
-            try {
-                await chest.close();
-                console.log('[InventoryService] Chest closed.');
-            } catch (closeErr) {
-                console.warn(`[InventoryService] Error closing chest: ${closeErr}`);
+      // Ensure chest is not null before calling close
+      if (chest) {
+        try {
+          chest.close(); // <<< chest is now Chest type
+          console.log('[InventoryService] Chest closed.');
+        } catch (closeErr: unknown) {
+            if (closeErr instanceof Error) {
+                 console.warn(`[InventoryService] Error closing chest: ${closeErr.message}`);
+            } else {
+                 console.warn('[InventoryService] An unknown error occurred closing chest.');
+                 console.error(closeErr);
             }
         }
+      }
     }
   }
 
@@ -180,72 +167,80 @@ export class InventoryService {
    * Retrieves a specified quantity of an item from a nearby chest.
    */
   async retrieveItemFromChest(itemName: string, count: number): Promise<void> {
-     // this.sharedState.addPendingAction(`Retrieve ${itemName} x${count}`); // Add if desired
-    const chestBlock = this.findNearbyChest(3); // Use internal helper
+    // this.sharedState.addPendingAction(`Retrieve ${itemName} x${count}`);
+    const chestBlock = this.findNearbyChest(3);
     if (!chestBlock) {
       console.log('[InventoryService] No chest found nearby to retrieve items.');
       return;
     }
 
-    let chest: any = null;
-     try {
-        console.log(`[InventoryService] Opening chest at ${chestBlock.position}...`);
-        chest = await this.bot.openChest(chestBlock);
-    } catch(err) {
-        console.error(`[InventoryService] Failed to open chest: ${err}`);
-        return;
+    let chest: Chest | null = null; // <<< Use Chest type
+    try {
+      console.log(`[InventoryService] Opening chest at ${chestBlock.position.toString()}...`);
+       // bot.openChest returns Promise<Chest>
+      chest = await this.bot.openChest(chestBlock);
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+         console.error(`[InventoryService] Failed to open chest: ${err.message}`);
+      } else {
+         console.error('[InventoryService] Failed to open chest due to an unknown error.');
+         console.error(err);
+      }
+      return;
     }
 
     try {
-        // Find item type ID
-        const itemData = this.mcData.itemsByName[itemName];
-        if (!itemData) {
-            console.log(`[InventoryService] Unknown item name to retrieve: ${itemName}`);
-            chest.close();
-            return;
-        }
+      const itemData = this.mcData.itemsByName[itemName];
+      if (!itemData) {
+        console.log(`[InventoryService] Unknown item name to retrieve: ${itemName}`);
+        // Ensure chest is not null before calling close
+        if (chest) chest.close(); // <<< chest is now Chest type
+        return;
+      }
 
-      // Check if chest contains the item and withdraw
-      // Use chest.withdraw which handles finding items in chest
-       console.log(`[InventoryService] Attempting to withdraw ${count} of ${itemName}...`);
-       try {
-           await chest.withdraw(itemData.id, null, count);
-           // Similar to deposit, withdraw doesn't easily return exact count.
-           console.log(`[InventoryService] Withdraw operation completed for up to ${count} ${itemName}.`);
-       } catch(withdrawErr) {
-            console.error(`[InventoryService] Error during chest withdraw for ${itemName}: ${withdrawErr}`);
-            // Check if it was because item not found? Error message might indicate.
-             if (withdrawErr instanceof Error && withdrawErr.message.includes('doesn\'t have')) {
+      console.log(`[InventoryService] Attempting to withdraw ${count} of ${itemName}...`);
+      try {
+          // Ensure chest is not null before calling withdraw
+          if (chest) {
+             await chest.withdraw(itemData.id, null, count); // <<< chest is now Chest type
+             console.log(`[InventoryService] Withdraw operation completed for up to ${count} ${itemName}.`);
+          } else {
+              console.error('[InventoryService] Cannot withdraw, chest reference is null.');
+          }
+      } catch (withdrawErr: unknown) {
+        if (withdrawErr instanceof Error) {
+            console.error(`[InventoryService] Error during chest withdraw for ${itemName}: ${withdrawErr.message}`);
+             if (withdrawErr.message.includes('doesn\'t have')) {
                  console.log(`[InventoryService] Chest does not contain enough "${itemName}".`);
              }
-       }
+        } else {
+             console.error(`[InventoryService] An unknown error occurred during chest withdraw for ${itemName}.`);
+             console.error(withdrawErr);
+        }
+      }
 
-
-      // Original logic (less robust):
-      // const matchingItem = chest
-      //   .containerItems() // Get items inside the chest container
-      //   .find((it: any) => it.name.includes(itemName)); // Original used includes
-      // if (!matchingItem) {
-      //   console.log(`[InventoryService] Chest does not contain "${itemName}".`);
-      //   chest.close();
-      //   return;
-      // }
-      // const amountToWithdraw = Math.min(matchingItem.count, count);
-      // await chest.withdraw(matchingItem.type, null, amountToWithdraw);
-      // console.log(`[InventoryService] Withdrew ${amountToWithdraw} of ${itemName} from the chest.`);
-
-    } catch (err) {
-      console.log(`[InventoryService] Error interacting with inventory/chest: ${err}`);
+    } catch (err: unknown) {
+        if (err instanceof Error) {
+            console.log(`[InventoryService] Error interacting with inventory/chest: ${err.message}`);
+        } else {
+            console.log('[InventoryService] An unknown error occurred interacting with inventory/chest.');
+            console.error(err);
+        }
     } finally {
-        // Always try to close the chest window
-        if (chest) {
-            try {
-                await chest.close();
-                console.log('[InventoryService] Chest closed.');
-            } catch (closeErr) {
-                console.warn(`[InventoryService] Error closing chest: ${closeErr}`);
+       // Ensure chest is not null before calling close
+      if (chest) {
+        try {
+          chest.close(); 
+          console.log('[InventoryService] Chest closed.');
+        } catch (closeErr: unknown) {
+             if (closeErr instanceof Error) {
+                console.warn(`[InventoryService] Error closing chest: ${closeErr.message}`);
+            } else {
+                console.warn('[InventoryService] An unknown error occurred closing chest.');
+                console.error(closeErr);
             }
         }
+      }
     }
   }
 
@@ -253,19 +248,18 @@ export class InventoryService {
    * Finds a nearby chest block.
    */
   private findNearbyChest(maxDistance: number): Block | null {
-    const chestPositions = this.bot.findBlocks({
+    const chestPositions: Vec3[] = this.bot.findBlocks({
       point: this.bot.entity.position,
-      // Original used includes("chest") - find specific block name 'chest' or 'trapped_chest'
-      matching: (block) => block && (block.name === 'chest' || block.name === 'trapped_chest'),
+      matching: (block: Block): boolean => block !== null && (block.name === 'chest' || block.name === 'trapped_chest'),
       maxDistance,
-      count: 1, // Find the first one
+      count: 1,
     });
     if (chestPositions.length === 0) {
-        // console.log(`[InventoryService] No chest found within ${maxDistance} blocks.`);
-        return null;
+      return null;
     }
-    const pos = chestPositions[0];
-    return this.bot.blockAt(pos);
+    const pos: Vec3 = chestPositions[0];
+    const block = this.bot.blockAt(pos);
+    return block;
   }
 
   // /**
