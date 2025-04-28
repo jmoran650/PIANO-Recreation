@@ -1,9 +1,12 @@
-// src/actions/MiningService.ts
+// src/actions/mine.ts
 import dotenv from 'dotenv';
 
 import { Bot } from 'mineflayer';
-
 import { Vec3 } from 'vec3';
+// Import Entity and Item types based on the provided definitions
+import { Entity } from 'prismarine-entity';
+import { Item } from 'prismarine-item';
+
 import { blockDropMapping } from '../../data/minecraftItems';
 import { Navigation } from '../navigation';
 
@@ -35,7 +38,7 @@ export class MiningService {
     while (count < desiredCount) {
       const blockPositions = this.bot.findBlocks({
         point: this.bot.entity.position,
-        matching: (block) => block && block.name === goalBlock,
+        matching: (block) => block?.name === goalBlock, // Added optional chaining for safety
         maxDistance: 500, // Kept original value
       });
 
@@ -59,7 +62,13 @@ export class MiningService {
       }
 
       const block = this.bot.blockAt(closestBlockPos);
-      if (!block) continue;
+      // Ensure block is not null before proceeding
+      if (!block) {
+        console.log(
+          `[MiningService] Could not find block at expected position ${closestBlockPos.toString()}. Skipping.`
+        );
+        continue;
+      }
 
       // Navigate to the block
       await this.navigation.moveToLookAt(
@@ -75,7 +84,8 @@ export class MiningService {
           `[MiningService] Mined ${count} of ${desiredCount} ${goalBlock}.`
         );
       } catch (err) {
-        console.log(`[MiningService] Error mining block: ${err}`);
+        // FIX: Use String(err) for safe logging of unknown error types
+        console.log(`[MiningService] Error mining block: ${String(err)}`);
       }
 
       await sleep(200);
@@ -83,7 +93,7 @@ export class MiningService {
       // Check if there are any more blocks of this type in the immediate vicinity (defining the vein)
       const nearbyBlockPositions = this.bot.findBlocks({
         point: closestBlockPos, // Check around the *last mined block*
-        matching: (b) => b && b.name === goalBlock,
+        matching: (b) => b?.name === goalBlock, // Added optional chaining
         maxDistance: 8, // Kept original value
       });
 
@@ -122,16 +132,19 @@ export class MiningService {
     }
 
     // Filter entities to find dropped items matching the expected drop.
-    const drops = Object.values(this.bot.entities).filter((entity: any) => {
-      // Type entity more strictly if possible
-      if (entity.name !== 'item') return false; // Check entity type ('object' for items) name:'item'
+    // FIX: Use Entity type instead of any
+    const drops = Object.values(this.bot.entities).filter((entity: Entity) => {
+      // Use the Entity type
+      // FIX: Check entity.name (now type-safe)
+      if (entity.name !== 'item') return false; // Check entity name ('item' for dropped items)
+      // FIX: Access entity.position (now type-safe) and call distanceTo
       if (entity.position.distanceTo(origin) > collectionRadius) return false;
-      // Check for existence of getDroppedItem before calling
-      if (!entity.getDroppedItem || typeof entity.getDroppedItem !== 'function')
-        return false;
-      // Check item metadata/name
-      const item = entity.getDroppedItem();
-      return item && item.name === expectedDrop;
+
+      // FIX: Call entity.getDroppedItem (now type-safe, confirmed by prismarine-entity.d.ts)
+      // FIX: Assign result to a variable typed as Item | null
+      const item: Item | null = entity.getDroppedItem();
+      // FIX: Access item.name (type-safe, assuming Item has name) after checking item is not null
+      return item?.name === expectedDrop; // Use optional chaining for concise null check
     });
 
     if (drops.length === 0) {
@@ -145,6 +158,7 @@ export class MiningService {
       `[MiningService] Collecting ${drops.length} dropped ${expectedDrop} item(s)...`
     );
     for (const drop of drops) {
+      // drop is implicitly Entity here
       try {
         // Navigate to the drop's position to pick it up.
         // Use the injected navigation service
@@ -153,10 +167,14 @@ export class MiningService {
           drop.position.y,
           drop.position.z
         );
-        console.log(`[MiningService] Collected drop at ${drop.position}`);
+        // FIX: Format Vec3 manually for safe logging
+        console.log(
+          `[MiningService] Collected drop at (${drop.position.x}, ${drop.position.y}, ${drop.position.z})`
+        );
         await sleep(100); // Use internal sleep; slight delay between collecting drops
       } catch (err) {
-        console.log(`[MiningService] Error collecting drop: ${err}`);
+        // FIX: Use String(err) for safe logging of unknown error types
+        console.log(`[MiningService] Error collecting drop: ${String(err)}`);
         // Continue trying to collect other drops
       }
     }

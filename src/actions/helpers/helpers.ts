@@ -2,7 +2,9 @@
 import { Bot } from 'mineflayer';
 import { Block } from 'prismarine-block';
 import { Vec3 } from 'vec3';
-import { Item } from 'prismarine-item'; // Added import for Item type
+import { Item } from 'prismarine-item';
+// Import IndexedData for proper mcData typing
+import { IndexedData } from 'minecraft-data';
 
 /**
  * Checks if placing a block at targetPos onto referenceBlock seems possible.
@@ -14,35 +16,45 @@ import { Item } from 'prismarine-item'; // Added import for Item type
  * @returns {boolean} True if placement seems possible, false otherwise.
  */
 export function checkPlacementPossible(
-    bot: Bot,
-    mcData: any, // Type properly if you have specific mcData typings
-    targetPos: Vec3,
-    referenceBlock: Block | null
-): boolean { // Changed return type to boolean
-    const targetBlock = bot.blockAt(targetPos);
-    let failureReason: string | null = null;
+  bot: Bot,
+  // FIX: Use IndexedData type instead of any
+  mcData: IndexedData,
+  targetPos: Vec3,
+  referenceBlock: Block | null
+): boolean {
+  // FIX: Add explicit type Block | null
+  const targetBlock: Block | null = bot.blockAt(targetPos);
+  let failureReason: string | null = null;
 
-    if (!referenceBlock) {
-        failureReason = 'Reference block below target is missing';
-    } else if (referenceBlock.boundingBox !== 'block') {
-        failureReason = `Reference block '${referenceBlock.name}' is not solid ('${referenceBlock.boundingBox}')`;
-    } else if (!targetBlock) {
-        failureReason = 'Target block data could not be retrieved';
-    } else if (mcData.blocks[targetBlock.type]?.boundingBox !== 'empty') {
-        failureReason = `Target block '${targetBlock.name}' is not empty/replaceable ('${mcData.blocks[targetBlock.type]?.boundingBox}')`;
-    }
+  if (!referenceBlock) {
+    failureReason = 'Reference block below target is missing';
+  } else if (referenceBlock.boundingBox !== 'block') {
+    failureReason = `Reference block '${referenceBlock.name}' is not solid ('${referenceBlock.boundingBox}')`;
+  } else if (!targetBlock) {
+    failureReason = 'Target block data could not be retrieved';
+    // FIX: Use type-safe access with mcData typing
+  } else if (mcData.blocks[targetBlock.type]?.boundingBox !== 'empty') {
+    failureReason = `Target block '${targetBlock.name}' is not empty/replaceable ('${
+      mcData.blocks[targetBlock.type]?.boundingBox ?? 'unknown' // Add nullish coalescing for safety
+    }')`;
+  }
 
-    if (failureReason) {
-        // Log the reason but return false instead of throwing
-        console.warn(`[Helper:checkPlacementPossible] Placement check failed at ${targetPos}: ${failureReason}.`);
-        return false; // Return false on failure
-    }
+  if (failureReason) {
+    // Log the reason but return false instead of throwing
+    // FIX: Format Vec3 manually for safe logging
+    console.warn(
+      `[Helper:checkPlacementPossible] Placement check failed at (${targetPos.x}, ${targetPos.y}, ${targetPos.z}): ${failureReason}.`
+    );
+    return false; // Return false on failure
+  }
 
-    // If no failure reason, placement seems possible
-    console.log(`[Helper:checkPlacementPossible] Placement check passed for target ${targetPos} on reference ${referenceBlock?.name}@${referenceBlock?.position}`);
-    return true; // Return true on success
+  // If no failure reason, placement seems possible
+  // FIX: Format Vec3 manually for safe logging
+  console.log(
+    `[Helper:checkPlacementPossible] Placement check passed for target (${targetPos.x}, ${targetPos.y}, ${targetPos.z}) on reference ${referenceBlock?.name}@${referenceBlock?.position.toString()}` // Keep log simpler
+  );
+  return true; // Return true on success
 }
-
 
 /**
  * Provides a delay for a specified number of milliseconds.
@@ -67,7 +79,8 @@ export function findNearbyPlacedTable(
 
   const tablePositions = bot.findBlocks({
     point: bot.entity.position,
-    matching: (block): block is Block =>
+    // FIX: Add explicit type for block parameter in type guard
+    matching: (block: Block | null): block is Block =>
       block !== null && block.name === 'crafting_table', // Type guard added
     maxDistance,
     count: 1,
@@ -75,7 +88,8 @@ export function findNearbyPlacedTable(
 
   if (tablePositions.length === 0) return null;
 
-  const pos = tablePositions[0];
+  // FIX: Add explicit type Vec3
+  const pos: Vec3 = tablePositions[0];
   return bot.blockAt(pos); // blockAt can return null, the caller should handle this
 }
 
@@ -113,7 +127,8 @@ export function findSafePlacement(bot: Bot): Vec3 | null {
   // Consider calling this once before a sequence of placements if needed.
   // await bot.waitForChunksToLoad(); // Maybe call outside this helper
 
-  const pos = bot.entity.position;
+  // FIX: Add explicit type Vec3
+  const pos: Vec3 = bot.entity.position;
   const botBlockPos = new Vec3(
     Math.floor(pos.x),
     Math.floor(pos.y),
@@ -128,7 +143,7 @@ export function findSafePlacement(bot: Bot): Vec3 | null {
       const checkY = botBlockPos.y + yOffset;
       const ring = getRingPositions(d); // Use the helper function
 
-      for (const offset of ring) {
+      for (const offset of ring) { // offset is Vec3
         const candidatePos = new Vec3(
           botBlockPos.x + offset.x,
           checkY,
@@ -142,20 +157,24 @@ export function findSafePlacement(bot: Bot): Vec3 | null {
         ) {
           continue;
         }
-
-        const blockAtCandidate = bot.blockAt(candidatePos);
-        const blockBelowCandidate = bot.blockAt(candidatePos.offset(0, -1, 0));
+        // FIX: Add explicit type Block | null
+        const blockAtCandidate: Block | null = bot.blockAt(candidatePos);
+        // FIX: Add explicit type Block | null
+        const blockBelowCandidate: Block | null = bot.blockAt(
+          candidatePos.offset(0, -1, 0)
+        );
 
         // Check if the candidate spot is 'air', has a solid 'block' below it, and is likely loaded (canSeeBlock)
         if (
-          blockAtCandidate &&
-          blockAtCandidate.name === 'air' &&
-          blockBelowCandidate &&
-          blockBelowCandidate.boundingBox === 'block' && // Check for solid ground
-          bot.canSeeBlock(blockAtCandidate)
+          blockAtCandidate?.name === 'air' && // Use optional chaining
+          blockBelowCandidate?.boundingBox === 'block' && // Use optional chaining & Check for solid ground
+          bot.canSeeBlock(blockAtCandidate) // blockAtCandidate is non-null here due to previous checks
         ) {
           // Ensures the block is within loaded/visible chunks
-          console.log(`[Helpers] Found safe placement spot at ${candidatePos}`);
+          // FIX: Format Vec3 manually for safe logging
+          console.log(
+            `[Helpers] Found safe placement spot at (${candidatePos.x}, ${candidatePos.y}, ${candidatePos.z})`
+          );
           return candidatePos;
         }
       }
@@ -173,6 +192,8 @@ export async function equipBestToolForBlock(
   let toolCategory: 'pickaxe' | 'axe' | 'shovel' | 'hoe' | null = null;
 
   // Determine tool category based on block name (Combine logic from MiningService and FarmingService)
+  // This large if/else block is functionally okay, but could be refactored
+  // using a mapping or Set checks for better readability/maintainability if desired.
   if (
     blockName.includes('ore') ||
     blockName.includes('stone') ||
@@ -231,7 +252,8 @@ export async function equipBestToolForBlock(
   // Find the best available tool in inventory
   for (const material of toolMaterials) {
     const toolName = `${material}_${toolCategory}`;
-    const toolItem = bot.inventory
+    // FIX: Add explicit type Item | undefined
+    const toolItem: Item | undefined = bot.inventory
       .items()
       .find((item) => item.name === toolName);
     if (toolItem) {
@@ -243,7 +265,8 @@ export async function equipBestToolForBlock(
   // Fallback check for base tool (e.g. 'axe' itself, though unlikely in vanilla)
   if (!bestToolFound) {
     const baseToolName = toolCategory; // e.g. "pickaxe"
-    const toolItem = bot.inventory
+     // FIX: Add explicit type Item | undefined
+    const toolItem: Item | undefined = bot.inventory
       .items()
       .find((item) => item.name === baseToolName);
     if (toolItem) {
@@ -260,9 +283,10 @@ export async function equipBestToolForBlock(
       }
       await bot.equip(bestToolFound, 'hand');
       console.log(`[Helpers] Equipped ${bestToolFound.name} for ${blockName}`);
-    } catch (err) {
+    } catch (err: unknown) { // FIX: Catch error as unknown
+      // FIX: Handle unknown error safely and ensure bestToolFound is accessed safely
       console.log(
-        `[Helpers] Failed to equip tool ${bestToolFound.name}: ${err}`
+        `[Helpers] Failed to equip tool ${bestToolFound?.name ?? 'unknown'}: ${String(err)}`
       );
     }
   } else {

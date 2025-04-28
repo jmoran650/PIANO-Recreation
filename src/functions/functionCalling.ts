@@ -356,16 +356,15 @@ export class FunctionCaller {
       await buildingService.placeBlock(typedArgs.blockType);
       return `Placement of ${typedArgs.blockType} initiated successfully.`;
     });
-    // FIX: Prefix unused args with _
     registry.set("placeChest", async () => {
       await buildingService.placeChest();
       return "Chest placement initiated successfully.";
     });
-    // FIX: Prefix unused args with _
     registry.set("placeFurnace", async () => {
       await buildingService.placeFurnace();
       return "Furnace placement initiated successfully.";
     });
+    // eslint-disable-next-line @typescript-eslint/require-await
     registry.set("attack", async (args) => {
       const typedArgs = safeCast<AttackArgs>(args, "attack");
       combatService.attack(typedArgs.mobType);

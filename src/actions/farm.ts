@@ -3,14 +3,13 @@ import dotenv from 'dotenv';
 import minecraftData from 'minecraft-data';
 import { Bot } from 'mineflayer';
 import { Block } from 'prismarine-block';
-import { Item } from 'prismarine-item'; // Import Item type
+import { Item } from 'prismarine-item';
 import { Vec3 } from 'vec3';
 import { Navigation } from '../navigation';
 import { SharedAgentState } from '../sharedAgentState';
 // Removed: equipBestToolForBlock import/local definition as it's replaced by equipHoe
 
 dotenv.config();
-
 
 export class FarmingService {
   private bot: Bot;
@@ -26,10 +25,12 @@ export class FarmingService {
     this.bot = bot;
     this.navigation = navigation;
     this.sharedState = sharedState;
-    if (process.env.MINECRAFT_VERSION == undefined) {
+    const minecraftVersion = process.env.MINECRAFT_VERSION; // Store in variable
+    if (minecraftVersion == undefined) {
       throw new Error('[FarmingService] Minecraft Version Undefined');
     }
-    this.mcData = minecraftData(process.env.MINECRAFT_VERSION);
+    // FIX: Ensure minecraftVersion is passed correctly if required by the function signature
+    this.mcData = minecraftData(minecraftVersion);
   }
 
   async plantCrop(cropName: string): Promise<void> {
@@ -37,10 +38,12 @@ export class FarmingService {
       ? cropName
       : `${cropName}_seeds`; // Ensure correct seed name
     console.log(`[FarmingService] Attempting to plant ${seedItemName}...`);
-    const seedItem = this.bot.inventory.findInventoryItem(
-      this.mcData.itemsByName[seedItemName]?.id,
-      null,
-      false
+
+    // FIX: Add explicit type Item | null
+    const seedItem: Item | null = this.bot.inventory.findInventoryItem(
+      this.mcData.itemsByName[seedItemName]?.id, // Use optional chaining for safety
+      null, // metadata, null means any
+      false // NBT check disabled
     );
 
     if (!seedItem) {
@@ -52,24 +55,32 @@ export class FarmingService {
 
     // Check for farmland below the target placement spot
     // Target spot is one block in front, at the bot's feet level
-    const targetPlantPos = this.bot.entity.position.floored().offset(0, 0, 1); // Adjust offset based on desired planting location relative to bot
-    const blockBelowTarget = this.bot.blockAt(targetPlantPos.offset(0, -1, 0));
+    // FIX: Add explicit type Vec3
+    const targetPlantPos: Vec3 = this.bot.entity.position
+      .floored()
+      .offset(0, 0, 1); // Adjust offset based on desired planting location relative to bot
+    // FIX: Add explicit type Block | null
+    const blockBelowTarget: Block | null = this.bot.blockAt(
+      targetPlantPos.offset(0, -1, 0)
+    );
 
     if (!blockBelowTarget || blockBelowTarget.name !== 'farmland') {
+      const belowPos = targetPlantPos.offset(0, -1, 0);
+      // FIX: Format Vec3 manually for safe logging
       console.log(
-        `[FarmingService] No farmland found at ${targetPlantPos
-          .offset(0, -1, 0)
-          .toString()} to plant on.`
+        `[FarmingService] No farmland found at (${belowPos.x}, ${belowPos.y}, ${belowPos.z}) to plant on.`
       );
       // Optional: Add logic here to *create* farmland if holding a hoe and standing on dirt/grass
       return;
     }
 
     // Ensure the spot itself is air
-    const blockAtTarget = this.bot.blockAt(targetPlantPos);
+    // FIX: Add explicit type Block | null
+    const blockAtTarget: Block | null = this.bot.blockAt(targetPlantPos);
     if (!blockAtTarget || blockAtTarget.name !== 'air') {
+      // FIX: Format Vec3 manually for safe logging
       console.log(
-        `[FarmingService] Target planting spot at ${targetPlantPos.toString()} is not air.`
+        `[FarmingService] Target planting spot at (${targetPlantPos.x}, ${targetPlantPos.y}, ${targetPlantPos.z}) is not air.`
       );
       return;
     }
@@ -79,8 +90,9 @@ export class FarmingService {
       // Reference block is the farmland block, place seeds *onto* it (offset 0, 1, 0 relative to farmland)
       await this.bot.placeBlock(blockBelowTarget, new Vec3(0, 1, 0));
       console.log(`[FarmingService] ${seedItemName} planted successfully!`);
-    } catch (err) {
-      console.log(`[FarmingService] Error planting crop: ${err}`);
+    } catch (err: unknown) { // FIX: Catch error as unknown
+      // FIX: Handle unknown error safely
+      console.log(`[FarmingService] Error planting crop: ${String(err)}`);
     }
   }
 
@@ -92,7 +104,7 @@ export class FarmingService {
     // Find nearby mature crops
     const blockPositions = this.bot.findBlocks({
       point: this.bot.entity.position,
-      matching: (block: Block | null): block is Block => {
+      matching: (block: Block | null): block is Block => { // Type added
         if (!block || !block.name.includes(cropName)) return false;
         // Add specific maturity checks if mcData provides them for the crop
         // Example for wheat (usually stage 7 is mature):
@@ -119,11 +131,14 @@ export class FarmingService {
     }
 
     // Optional: Choose the closest one
-    const botPos = this.bot.entity.position;
+    // FIX: Add explicit type Vec3
+    const botPos: Vec3 = this.bot.entity.position;
     blockPositions.sort((a, b) => botPos.distanceTo(a) - botPos.distanceTo(b));
-    const pos = blockPositions[0];
+    // FIX: Add explicit type Vec3
+    const pos: Vec3 = blockPositions[0];
 
-    const block = this.bot.blockAt(pos);
+    // FIX: Add explicit type Block | null
+    const block: Block | null = this.bot.blockAt(pos);
     if (!block) {
       console.log(
         '[FarmingService] Could not resolve crop block at found position.'
@@ -137,10 +152,14 @@ export class FarmingService {
     // Navigate closer if needed
     try {
       // Move to a position adjacent to the block for digging
+      // Assuming navigation can handle a null block gracefully if it happens, though we checked above
       await this.navigation.moveToInteractRange(block);
-    } catch (err) {
+    } catch (err: unknown) { // FIX: Catch error as unknown
+      // FIX: Handle unknown error safely and format Vec3 manually
       console.log(
-        `[FarmingService] Failed to move close to crop at ${pos}: ${err}. Attempting to dig anyway.`
+        `[FarmingService] Failed to move close to crop at (${pos.x}, ${pos.y}, ${pos.z}): ${String(
+          err
+        )}. Attempting to dig anyway.`
       );
     }
 
@@ -150,8 +169,9 @@ export class FarmingService {
       console.log(`[FarmingService] ${cropName} harvested!`);
       // Optional: Add logic to collect drops if needed
       // Optional: Replant if holding seeds
-    } catch (err) {
-      console.log(`[FarmingService] Error harvesting crop: ${err}`);
+    } catch (err: unknown) { // FIX: Catch error as unknown
+      // FIX: Handle unknown error safely
+      console.log(`[FarmingService] Error harvesting crop: ${String(err)}`);
     }
   }
 
@@ -162,7 +182,7 @@ export class FarmingService {
     const hoeTiers: string[] = [
       'netherite_hoe',
       'diamond_hoe',
-      'golden_hoe',
+      'golden_hoe', // Note: Golden tools are fast but have low durability
       'iron_hoe',
       'stone_hoe',
       'wooden_hoe',
@@ -171,7 +191,8 @@ export class FarmingService {
     let bestHoeFound: Item | null = null;
 
     for (const toolName of hoeTiers) {
-      const toolItem = this.bot.inventory
+      // FIX: Add explicit type Item | undefined
+      const toolItem: Item | undefined = this.bot.inventory
         .items()
         .find((it) => it.name === toolName);
       if (toolItem) {
@@ -190,15 +211,16 @@ export class FarmingService {
       try {
         await this.bot.equip(bestHoeFound, 'hand');
         console.log(`[FarmingService] Equipped ${bestHoeFound.name}.`);
-      } catch (err) {
+      } catch (err: unknown) { // FIX: Catch error as unknown
+        // FIX: Handle unknown error safely and ensure safe access to name
         console.error(
-          `[FarmingService] Failed to equip hoe ${bestHoeFound.name}: ${err}`
+          `[FarmingService] Failed to equip hoe ${
+            bestHoeFound?.name ?? 'unknown' // Use optional chaining just in case
+          }: ${String(err)}`
         );
       }
     } else {
       console.log('[FarmingService] No hoe found in inventory.');
     }
   }
-
-
 }

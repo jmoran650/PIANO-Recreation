@@ -6,6 +6,15 @@ import ChatLog from "./chatLog";
 import { LogEntry } from "../types/log.types";
 import { EquippedItems, VisibleBlockTypes, VisibleMobs } from "../types/sharedAgentState.types"; // Import necessary types
 
+// Define a type for LLM Metrics if the structure is known, otherwise use Record<string, unknown>
+interface LlmMetrics {
+    // Example structure:
+    // tokensUsed?: number;
+    // lastQueryTime?: number;
+    // errorCount?: number;
+    [key: string]: unknown; // Allows for arbitrary properties but is safer than 'any'
+}
+
 // Define the structure for a single bot's state
 interface SingleBotState {
   visibleBlockTypes?: VisibleBlockTypes | null;
@@ -22,7 +31,7 @@ interface SingleBotState {
   feelingsToOthers?: Record<string, { sentiment: number; reasons: string[] }>;
   othersFeelingsTowardsSelf?: Record<string, { sentiment: number; reasons: string[] }>;
   conversationLog?: LogEntry[];
-  llmMetrics?: any; // Assuming LLM metrics might still be somewhat global or per-bot
+  llmMetrics?: LlmMetrics; // Use the defined type or Record<string, unknown>
   inventory?: string[];
   botHealth?: number;
   botHunger?: number;
@@ -33,6 +42,12 @@ interface SingleBotState {
 
 // Define the structure for holding states of all bots
 type AllBotStates = Record<string, SingleBotState>;
+
+// Define the expected response structure for the toggle-llm endpoint
+interface ToggleLlmResponse {
+    message: string;
+    enabled: boolean;
+}
 
 const socket = io();
 
@@ -67,7 +82,8 @@ const Dashboard: React.FC = () => {
     try {
       // Endpoint remains the same, assumes global toggle
       const response = await fetch("/toggle-llm", { method: "POST" });
-      const data = await response.json(); // Expect JSON response
+      // Assume the response conforms to ToggleLlmResponse
+      const data: ToggleLlmResponse = await response.json() as ToggleLlmResponse;
       alert(data.message);
       setLlmToggled(data.enabled); // Update state based on response
     } catch (err) {
@@ -84,12 +100,11 @@ const Dashboard: React.FC = () => {
   const availableBots = Object.keys(allStates);
 
   // Helper to safely stringify, handling potential undefined state
-  const safeStringify = (data: any) => {
+  const safeStringify = (data: unknown) => { // Use 'unknown' instead of 'any'
       if (data === undefined || data === null) return "Loading...";
       try {
           return JSON.stringify(data, null, 2);
-      } catch (err: unknown) {
-          
+      } catch { // Prefix unused variable with underscore
           return "Error displaying data";
       }
   }
@@ -246,7 +261,11 @@ const Dashboard: React.FC = () => {
             <pre>{safeStringify(selectedBotState?.llmMetrics)}</pre>
         </div>
         {/* Add specific metric sections if llmMetrics object structure is known */}
-        <button id="toggleButton" onClick={handleToggleLLM}>
+        <button
+          id="toggleButton"
+          onClick={() => { void handleToggleLLM(); }} // Wrap async call to handle promise
+          className={llmToggled ? 'enabled' : ''} // Add class based on state for styling
+        >
           {llmToggled ? "Disable LLM" : "Enable LLM"}
         </button>
       </div>
@@ -503,7 +522,8 @@ const Dashboard: React.FC = () => {
         }
          /* Change button text/color based on state */
          #toggleButton.enabled {
-             background-color: #ef5350; /* Red when enabled (for disabling) */
+             background-color: #ef5350; /* Red when enabled (to disable) */
+             color: white; /* Ensure text is readable */
          }
          #toggleButton.enabled:hover {
              background-color: #e53935; /* Darker red on hover */
