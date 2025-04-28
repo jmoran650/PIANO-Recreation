@@ -1,4 +1,3 @@
-// goalPlanAppServer.ts
 import dotenv from 'dotenv';
 import express, { Request, Response } from 'express';
 import fs from 'fs';
@@ -8,461 +7,544 @@ import { Server as SocketIOServer } from 'socket.io';
 import { generateAcronym } from './utils/acronyms';
 
 dotenv.config();
-// Remove direct main import from index if logic moved here
-// import { main } from "./index"; // No longer needed if main logic is here
+
+
 import { Worker } from 'worker_threads';
-import { BotOptions } from './src/createAgentBot'; // Import BotOptions type
+
 import {
-  callLLMJsonSchema,
-  getLLMMetrics,
-  setLLMLogger,
-  toggleLLMEnabled,
-} from './utils/llmWrapper'; // Import LLM utils for main thread use
+	// BotOptions, // Now exported from botWorker
+	WorkerMessage,
+	MessageType,
+	ChatRequestData,
+	JsonRequestData,
+	LlmResponsePayload,
+	
+} from './src/botWorker'; // Adjusted import assuming BotOptions is exported now
+import { SerializedState } from './src/server/serverUtils';
+import { LogEntry } from './types/log.types'; // Corrected import path
+import { BotOptions } from './src/createAgentBot'; // Import BotOptions from createAgentBot
 
-import OpenAI from 'openai'; // Import OpenAI for main thread proxy calls
+import {
+	callLLMJsonSchema,
+	getLLMMetrics,
+	setLLMLogger,
+	toggleLLMEnabled,
+	NamedJSONSchema, // Import NamedJSONSchema
+} from './utils/llmWrapper';
 
-const LOGFILE_PATH_PREFIX = path.join(__dirname, '../'); // Log path prefix
+import OpenAI from 'openai';
 
-// Ensure log directory exists (optional)
-// if (!fs.existsSync(LOGFILE_PATH_PREFIX)) {
-//     fs.mkdirSync(LOGFILE_PATH_PREFIX);
-// }
+const LOGFILE_PATH_PREFIX = path.join(__dirname, '../');
+
 
 const app = express();
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
 const server = http.createServer(app);
 const io = new SocketIOServer(server);
 
 if (process.env.MC_HOST == undefined) {
-  throw new Error('MC_HOST not loaded');
+	throw new Error('MC_HOST not loaded');
 }
 
 if (process.env.MC_PORT == undefined) {
-  throw new Error('MC_PORT not loaded');
+	throw new Error('MC_PORT not loaded');
 }
 
-// --- Centralized State and Worker Management ---
-const workers = new Map<string, Worker>(); // Map username -> Worker
-const botStates = new Map<string, any>(); // Map username -> latest serialized state
-const botLogs = new Map<string, any[]>(); // Map username -> conversation log entries
+
+const workers = new Map<string, Worker>();
+
+const botStates = new Map<string, SerializedState>();
+const botLogs = new Map<string, LogEntry[]>();
 
 
 const botOptionsList: BotOptions[] = [
-  {
-    host: process.env.MC_HOST, // Use env var or default
-    port: parseInt(process.env.MC_PORT, 10),
-    username: 'AgentBot',
-    version: process.env.MINECRAFT_VERSION,
-  },
-  {
-    host: process.env.MC_HOST,
-    port: parseInt(process.env.MC_PORT, 10),
-    username: 'DaBiggestBird',
-    version: process.env.MINECRAFT_VERSION,
-  },
+	{
+		host: process.env.MC_HOST,
+		port: parseInt(process.env.MC_PORT, 10),
+		username: 'AgentBot',
+		version: process.env.MINECRAFT_VERSION,
+	},
+	{
+		host: process.env.MC_HOST,
+		port: parseInt(process.env.MC_PORT, 10),
+		username: 'DaBiggestBird',
+		version: process.env.MINECRAFT_VERSION,
+	},
 ];
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY }); // OpenAI instance for main thread proxy
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-// Setup LLM Logger (using console for simplicity, adapt as needed)
+
 setLLMLogger((type, message, meta) => {
-  console.log(`[LLMLog-${type}] ${message}`, meta ? JSON.stringify(meta) : '');
-  // Could also emit this via socket.io if needed
+	console.log(`[LLMLog-${type}] ${message}`, meta ? JSON.stringify(meta) : '');
+	// Could also emit this via socket.io if needed
 });
 
 // --- Worker Initialization ---
-// --- Worker Initialization ---
 function initializeWorkers() {
-  console.log('Initializing workers...');
+	console.log('Initializing workers...');
 
-  const acronymMap = new Map<string, string>(); // To detect duplicates
-  const validatedBotOptions: BotOptions[] = []; // Store options with acronyms after validation
+	const acronymMap = new Map<string, string>(); // To detect duplicates
+	const validatedBotOptions: BotOptions[] = []; // Store options with acronyms after validation
 
-  // --- Step 1: Generate Acronyms and Validate ---
-  console.log('[Main] Generating and validating bot acronyms...');
-  for (const options of botOptionsList) {
-    if (!options.username) {
-      console.error('Bot username is missing in options:', options);
-      // Skip this bot configuration if username is missing
-      continue;
-    }
-    const workerUsername = options.username;
-    let acronym: string;
+	// --- Step 1: Generate Acronyms and Validate ---
+	console.log('[Main] Generating and validating bot acronyms...');
+	for (const options of botOptionsList) {
+		if (!options.username) {
+			console.error('Bot username is missing in options:', options);
+			// Skip this bot configuration if username is missing
+			continue;
+		}
+		const workerUsername = options.username;
+		let acronym: string;
 
-    try {
-      acronym = generateAcronym(workerUsername); // Generate acronym using the helper
-      if (!acronym) {
-         // Handle cases where no capitals are found if needed, or let it be an empty string
-         console.warn(`[Main] No capital letters found in username '${workerUsername}'. Acronym will be empty.`);
-         // Depending on requirements, you might want to throw an error here instead:
-         // throw new Error(`Could not generate acronym for '${workerUsername}' (no capital letters).`);
-      }
-    } catch (error: any) {
-      // Handle unexpected errors from generateAcronym
-      console.error(
-        `[Main] Failed to generate acronym for '${workerUsername}': ${error.message}`
-      );
-      // Stop server initialization if acronym generation fails critically
-      throw new Error(
-        `Acronym generation failed for bot '${workerUsername}'. Server startup aborted.`
-      );
-    }
+		try {
+			acronym = generateAcronym(workerUsername); // Generate acronym using the helper
+			if (!acronym) {
+				 console.warn(`[Main] No capital letters found in username '${workerUsername}'. Acronym will be empty.`);
+				 // Depending on requirements, you might want to throw an error here instead:
+				 // throw new Error(`Could not generate acronym for '${workerUsername}' (no capital letters).`);
+			}
+		} catch (error: unknown) { // Use unknown for catch block error
+			// Handle unexpected errors from generateAcronym
+			console.error(
+				`[Main] Failed to generate acronym for '${workerUsername}':`,
+				// Check if error is an instance of Error
+				error instanceof Error ? error.message : String(error)
+			);
+			// Stop server initialization if acronym generation fails critically
+			throw new Error(
+				`Acronym generation failed for bot '${workerUsername}'. Server startup aborted.`
+			);
+		}
 
-    // --- Conflict Check: Reserved "all" ---
-    if (acronym.toLowerCase() === 'all') {
-      throw new Error(
-          `[Main] Acronym conflict! Bot '${workerUsername}' generates the reserved acronym 'all'. Please change the username.`
-      );
-    }
+		// --- Conflict Check: Reserved "all" ---
+		if (acronym.toLowerCase() === 'all') {
+			throw new Error(
+				 `[Main] Acronym conflict! Bot '${workerUsername}' generates the reserved acronym 'all'. Please change the username.`
+			);
+		}
 
-    // --- Conflict Check: Duplicates ---
-    if (acronym && acronymMap.has(acronym)) { // Check only if acronym is not empty
-      const existingBot = acronymMap.get(acronym);
-      // Throw an error if duplicate is found
-      throw new Error(
-        `[Main] Duplicate acronym detected! Acronym '${acronym}' is generated by both '${existingBot}' and '${workerUsername}'. Please ensure bot usernames produce unique acronyms based on capital letters.`
-      );
-    }
 
-    // Store valid acronym and add options to the list for worker creation
-    if (acronym) { // Store only if acronym is not empty
-        acronymMap.set(acronym, workerUsername);
-    }
-    console.log(
-      `[Main] Acronym '${acronym || '(empty)'}' validated for bot '${workerUsername}'.`
-    );
-    validatedBotOptions.push({ ...options, acronym }); // Add acronym to options
-  }
-  console.log('[Main] Acronym validation complete.');
+		if (acronym && acronymMap.has(acronym)) {
+			const existingBot = acronymMap.get(acronym);
 
-  // --- Step 2: Create Workers with Validated Options ---
-  console.log('[Main] Creating worker threads...');
-  validatedBotOptions.forEach((optionsWithAcronym) => {
-    const workerUsername = optionsWithAcronym.username; // Get username from the validated options
-     if (!workerUsername) return; // Should not happen if validated correctly, but safe check
+			throw new Error(
+				`[Main] Duplicate acronym detected! Acronym '${acronym}' is generated by both '${existingBot}' and '${workerUsername}'. Please ensure bot usernames produce unique acronyms based on capital letters.`
+			);
+		}
 
-    console.log(`Creating worker for ${workerUsername} with acronym '${optionsWithAcronym.acronym || '(empty)'}'...`);
-    const worker = new Worker(path.resolve(__dirname, 'src/botWorker.js'), {
-      workerData: optionsWithAcronym, // Pass options WITH the acronym
-    });
 
-    workers.set(workerUsername, worker);
-    botStates.set(workerUsername, {}); // Initialize state
-    botLogs.set(workerUsername, []); // Initialize logs
+		if (acronym) {
+			 acronymMap.set(acronym, workerUsername);
+		}
+		console.log(
+			`[Main] Acronym '${acronym || '(empty)'}' validated for bot '${workerUsername}'.`
+		);
+		validatedBotOptions.push({ ...options, acronym });
+	}
+	console.log('[Main] Acronym validation complete.');
 
-    // --- Worker Event Listeners (Copied and adjusted from original) ---
-    worker.on('message', (message: any) => {
-      // Make sure message.payload.username exists where needed
-      const msgUsername = message.payload?.username;
 
-      switch (message.type) {
-        case 'initialized':
-          if (msgUsername) {
-             console.log(
-               `[Main] Worker ${msgUsername} initialized successfully.`
-             );
-             worker.postMessage({ type: 'getState' });
-           } else {
-             console.warn('[Main] Received \'initialized\' message without username.');
-           }
-          break;
-        case 'stateUpdate':
-          if (msgUsername) {
-             botStates.set(msgUsername, message.payload.state);
-             // Update logs based on state if conversationLog exists
-             if (message.payload.state?.conversationLog) {
-               botLogs.set(
-                 msgUsername,
-                 message.payload.state.conversationLog
-               );
-             }
-           } else {
-             console.warn('[Main] Received \'stateUpdate\' message without username.');
-           }
-          break;
-        case 'logEntry':
-          const logUsername = msgUsername;
-          if (logUsername) {
-              const entry = message.payload.entry;
-              const currentLogs = botLogs.get(logUsername) || [];
-              currentLogs.push(entry);
-              botLogs.set(logUsername, currentLogs);
-              // Optional: Append to file immediately (consider performance for high volume)
-              try {
-                  const logFilePath = `${LOGFILE_PATH_PREFIX}${logUsername}_conversation.log`;
-                  fs.appendFileSync(
-                      logFilePath,
-                      JSON.stringify(entry) + '\n',
-                      'utf8'
-                  );
-              } catch (e) {
-                  console.error(`[Main] Error writing log for ${logUsername}:`, e);
-              }
-          } else {
-             console.warn('[Main] Received \'logEntry\' message without username.');
-          }
-          break;
-        case 'llmRequest':
-          // Assuming payload structure includes botUsername for LLM requests
-          console.log(
-            `[Main] Handling LLM Request ${message.requestId} from ${message.payload?.botUsername || 'unknown worker'}`
-          );
-          handleProxiedLLMRequest(worker, message.requestId, message.payload); // Ensure handleProxiedLLMRequest gets worker context if needed
-          break;
-        case 'goalPlanProgress':
-        case 'goalPlanComplete':
-        case 'goalPlanError':
-           if (msgUsername) {
-                console.log(
-                    `[Main] Forwarding goal plan update type ${message.type} from ${msgUsername}`
-                );
-                // Emit with username for potentially targeted UI updates
-                io.emit(message.type, {
-                    username: msgUsername,
-                    data: message.payload.tree || message.payload.error
-                });
-            } else {
-                console.warn(`[Main] Received '${message.type}' message without username.`);
-                // Fallback: emit without username
-                io.emit(message.type, message.payload.tree || message.payload.error);
-            }
-          break;
-        case 'botError':
-        case 'botKicked':
-        case 'botEnd':
-        case 'initializationError':
-          console.error(
-            `[Main] Critical event from worker ${msgUsername || 'unknown'}: ${message.type}`,
-            message.payload
-          );
-          // Consider removing worker from 'workers' map here if it's a fatal error
-          break;
-        default:
-          console.warn(
-            `[Main] Received unknown message type from ${workerUsername}: ${message.type}`
-          );
-      }
-    });
+	console.log('[Main] Creating worker threads...');
+	validatedBotOptions.forEach((optionsWithAcronym) => {
+		const workerUsername = optionsWithAcronym.username;
+		 if (!workerUsername) return;
 
-    worker.on('error', (err) => {
-      console.error(`[Main] Worker ${workerUsername} error:`, err);
-      workers.delete(workerUsername);
-      botStates.delete(workerUsername); // Clean up state on error
-      botLogs.delete(workerUsername);   // Clean up logs on error
-    });
+		console.log(`Creating worker for ${workerUsername} with acronym '${optionsWithAcronym.acronym || '(empty)'}'...`);
+		const worker = new Worker(path.resolve(__dirname, 'src/botWorker.js'), {
+			workerData: optionsWithAcronym,
+		});
 
-    worker.on('exit', (code) => {
-      console.log(`[Main] Worker ${workerUsername} exited with code ${code}`);
-      workers.delete(workerUsername);
-      botStates.delete(workerUsername); // Clean up state on exit
-      botLogs.delete(workerUsername);   // Clean up logs on exit
-      if (code !== 0) {
-        console.error(`[Main] Worker ${workerUsername} exited abnormally!`);
-        // Consider restart logic here if desired
-      }
-    });
-  });
-  console.log('[Main] Worker creation loop finished.');
+		workers.set(workerUsername, worker);
+
+		botStates.set(workerUsername, {} as SerializedState);
+		botLogs.set(workerUsername, []);
+
+		// --- Worker Message Handling ---
+		worker.on('message', (message: WorkerMessage) => {
+			const msgUsername = ('payload' in message && message.payload && typeof message.payload === 'object' && 'username' in message.payload)
+									? message.payload.username
+									: undefined;
+
+
+			switch (message.type) {
+				case MessageType.Initialized:
+					if (msgUsername) {
+						 console.log(
+							 `[Main] Worker ${msgUsername} initialized successfully.`
+						 );
+						 // Request initial state after initialization
+						 worker.postMessage({ type: MessageType.GetState });
+					 } else {
+						 console.warn('[Main] Received \'initialized\' message without username.');
+					 }
+					break;
+				case MessageType.StateUpdate:
+					// Ensure payload and state exist before accessing
+					if (msgUsername && 'payload' in message && message.payload && message.payload.state) {
+						 botStates.set(msgUsername, message.payload.state);
+
+						 // Update logs if conversationLog is present in the state
+						 if (message.payload.state.conversationLog) {
+							 botLogs.set(
+								 msgUsername,
+								 message.payload.state.conversationLog
+							 );
+						 }
+					 } else {
+						 console.warn('[Main] Received \'stateUpdate\' message without username or state payload.');
+					 }
+					break;
+				case MessageType.LogEntry:
+					// Ensure payload and entry exist
+					if (msgUsername && 'payload' in message && message.payload && message.payload.entry) {
+						 const entry = message.payload.entry;
+						 const currentLogs = botLogs.get(msgUsername) || [];
+						 currentLogs.push(entry);
+						 botLogs.set(msgUsername, currentLogs);
+
+						 // Append to file log
+						 try {
+							 const logFilePath = `${LOGFILE_PATH_PREFIX}${msgUsername}_conversation.log`;
+							 fs.appendFileSync(
+								 logFilePath,
+								 JSON.stringify(entry) + '\n',
+								 'utf8'
+							 );
+						 } catch (e: unknown) { // Catch unknown error
+							 console.error(`[Main] Error writing log for ${msgUsername}:`, e instanceof Error ? e.message : String(e)); // Safe error logging
+						 }
+					 } else {
+						 console.warn('[Main] Received \'logEntry\' message without username or entry payload.');
+					 }
+					break;
+				case MessageType.LlmRequest:
+					// Ensure requestId and payload exist
+					if (message.requestId && 'payload' in message && message.payload) {
+						console.log(
+							`[Main] Handling LLM Request ${message.requestId} from ${msgUsername || 'unknown worker'}`
+						);
+						// Pass the specific payload type expected by handleProxiedLLMRequest
+						void handleProxiedLLMRequest(worker, message.requestId, message.payload as ProxiedLlmPayload);
+					} else {
+						 console.warn('[Main] Received \'llmRequest\' message without requestId or payload.');
+					}
+					break;
+				case MessageType.GoalPlanProgress:
+				case MessageType.GoalPlanComplete:
+				case MessageType.GoalPlanError:
+					 { // Block scope for type narrowing
+						 console.log(
+							 `[Main] Forwarding goal plan update type ${message.type} from ${msgUsername || 'unknown'}`
+						 );
+						 let dataToSend: unknown = undefined;
+						 if ('payload' in message && message.payload) {
+							 // Narrow types for safe access
+							 if (message.type === MessageType.GoalPlanProgress && 'tree' in message.payload) {
+								 dataToSend = (message.payload).tree;
+							 } else if (message.type === MessageType.GoalPlanComplete && 'tree' in message.payload) {
+								 dataToSend = (message.payload).tree;
+							 } else if (message.type === MessageType.GoalPlanError && 'error' in message.payload) {
+								 dataToSend = (message.payload).error;
+							 } else {
+								  console.warn(`[Main] Received '${message.type}' message with unexpected payload structure.`);
+							 }
+						 } else {
+							 console.warn(`[Main] Received '${message.type}' message without payload.`);
+						 }
+
+						 // Emit the determined data
+						 io.emit(message.type, {
+							 username: msgUsername,
+							 data: dataToSend,
+						 });
+					 }
+					break;
+				case MessageType.BotError:
+				case MessageType.BotKicked:
+				case MessageType.BotEnd:
+				case MessageType.InitializationError:
+					// Ensure payload exists for logging details
+					const errorDetails = ('payload' in message && message.payload) ? message.payload : 'No details available';
+					console.error(
+						`[Main] Critical event from worker ${msgUsername || 'unknown'}: ${message.type}`,
+						errorDetails
+					);
+					// Optionally add logic here to restart the worker or notify admin
+					break;
+				default:
+					// Use type assertion if necessary, or handle unknown types gracefully
+					// const unknownMessageType: never = message; // This would error if not all types handled
+					console.warn(
+						`[Main] Received unknown message type from ${workerUsername}: ${(message as WorkerMessage).type}`
+					);
+			}
+		});
+
+
+		worker.on('error', (err) => {
+			console.error(`[Main] Worker ${workerUsername} error:`, err);
+			workers.delete(workerUsername);
+			botStates.delete(workerUsername);
+			botLogs.delete(workerUsername);
+		});
+
+		worker.on('exit', (code) => {
+			console.log(`[Main] Worker ${workerUsername} exited with code ${code}`);
+			workers.delete(workerUsername);
+			botStates.delete(workerUsername);
+			botLogs.delete(workerUsername);
+			if (code !== 0) {
+				console.error(`[Main] Worker ${workerUsername} exited abnormally!`);
+				// Consider adding restart logic here
+			}
+		});
+	});
+	console.log('[Main] Worker creation loop finished.');
 }
 
 
-// --- LLM Proxy Handler ---
+
+type ProxiedLlmPayload =
+	| { type: 'chat'; data: ChatRequestData }
+	| { type: 'json'; data: JsonRequestData };
+
+// Function to handle LLM requests proxied from workers
+// Function to handle LLM requests proxied from workers
 async function handleProxiedLLMRequest(
   worker: Worker,
   requestId: string,
-  payload: any
+  // Use the specific union type for payload
+  payload: ProxiedLlmPayload
 ) {
+  // Destructure payload safely based on its type
   const { type, data } = payload;
-  let responsePayload: any;
-  try {
-    // Log the request received by main thread proxy
-    console.log(`[Main LLM Proxy] Request ${requestId} - Type: ${type}`);
-    // Optionally log full payload if needed: console.log(JSON.stringify(data));
 
+  let responsePayload: LlmResponsePayload;
+  try {
+    // Log the type of request being handled
+    console.log(`[Main LLM Proxy] Request ${requestId} - Type: ${type}`);
+
+    // Handle 'chat' type requests
     if (type === 'chat') {
-      // Assuming data = { model?, messages, tools?, tool_choice?, parallel_tool_calls? }
-      // Call the actual OpenAI API using the main thread's instance/wrapper
+      // Ensure data matches ChatRequestData structure implicitly
       const completion = await openai.chat.completions.create({
-        model: data.model || 'gpt-4o', // Use provided or default
+        model: data.model || 'gpt-4o',
         messages: data.messages,
         tools: data.tools,
         tool_choice: data.tool_choice,
         parallel_tool_calls: data.parallel_tool_calls,
       });
-      responsePayload = { response: completion }; // Send back the full completion object structure
+      responsePayload = { response: completion };
       console.log(`[Main LLM Proxy] Response ${requestId} - Success (Chat)`);
-    } else if (type === 'json') {
-      // Assuming data = { model?, systemMsg, userMsg, jsonSchema }
-      // Use callLLMJsonSchema directly in main thread
+    }
+    // Handle 'json' type requests
+    else if (type === 'json') {
+      // Ensure data matches JsonRequestData structure implicitly
       const result = await callLLMJsonSchema(
         data.systemMsg,
         data.userMsg,
-        data.jsonSchema
+        // Assert that the unknown schema is compatible with NamedJSONSchema
+        data.jsonSchema as NamedJSONSchema
       );
-      responsePayload = { response: result.parsed }; // Send back only the parsed object
+      responsePayload = { response: result.parsed };
       console.log(`[Main LLM Proxy] Response ${requestId} - Success (JSON)`);
     }
-    // Add 'tools' type if FunctionCaller uses a different proxy path
+    // Handle unsupported types
     else {
-      throw new Error(`Unsupported LLM proxy type: ${type}`);
+      // This case should be unreachable if ProxiedLlmPayload is defined correctly
+      // const exhaustiveCheck: never = type; // Use for exhaustiveness checking
+      // FIX: Cast 'type' (which is 'never' here) to 'string' for the error message.
+      throw new Error(`Unsupported LLM proxy type: ${type as string}`);
     }
-  } catch (error: any) {
+  // Catch any errors during API calls or processing
+  } catch (error: unknown) {
     console.error(
       `[Main LLM Proxy] Error processing request ${requestId}:`,
       error
     );
-    responsePayload = { error: error.message || String(error) };
+    // Create an error response payload, safely converting error to string
+    responsePayload = { error: error instanceof Error ? error.message : String(error) };
   }
 
-  // Send response back to the worker
+  // Send the response (or error) back to the worker
   worker.postMessage({
-    type: 'llmResponse',
+    type: MessageType.LlmResponse,
     requestId,
     payload: responsePayload,
   });
 }
 
-// --- Express & Socket.IO Setup ---
+// --- Express Setup ---
 app.use(express.static(path.join(__dirname, '../public')));
 
+// Serve the main HTML file for the root and goal-planner routes
 app.get('/', (req: Request, res: Response) => {
-  res.sendFile(path.join(__dirname, '../public/index.html'));
+	res.sendFile(path.join(__dirname, '../public/index.html'));
 });
 
 app.get('/goal-planner', (req: Request, res: Response) => {
-  res.sendFile(path.join(__dirname, '../public/index.html'));
+	res.sendFile(path.join(__dirname, '../public/index.html'));
 });
 
+// Endpoint to toggle LLM requests globally
 app.post('/toggle-llm', (req: Request, res: Response) => {
-  const newState = toggleLLMEnabled();
-  const message = newState ? 'LLM requests enabled.' : 'LLM requests disabled.';
-  res.json({ message: message, enabled: newState });
+	const newState = toggleLLMEnabled();
+	const message = newState ? 'LLM requests enabled.' : 'LLM requests disabled.';
+	res.json({ message: message, enabled: newState });
 });
 
+// --- Socket.IO Setup ---
 io.on('connection', (socket) => {
-  console.log('Browser connected via Socket.IO:', socket.id);
+	console.log('Browser connected via Socket.IO:', socket.id);
 
-  // Send initial state immediately if available
-  if (botStates.size > 0) {
-    const allCurrentStates: Record<string, any> = {};
-    botStates.forEach((state, username) => {
-      allCurrentStates[username] = {
-        ...state,
-        conversationLog: botLogs.get(username) || [],
-      }; // Combine state + log
-    });
-    socket.emit('allSharedStates', allCurrentStates);
-  }
+	// Send initial state snapshot to newly connected client
+	if (botStates.size > 0) {
+		// Construct a comprehensive initial state including logs
+		const allCurrentStates: Record<string, SerializedState & { conversationLog: LogEntry[] }> = {};
+		botStates.forEach((state, username) => {
+			// Combine state with logs
+			allCurrentStates[username] = {
+				...state, // Spread the existing state properties
+				conversationLog: botLogs.get(username) || [], // Add logs or empty array
+			};
+		});
+		socket.emit('allSharedStates', allCurrentStates);
+	}
 
-  // Setup interval for sending state updates to this specific client
-  const intervalId = setInterval(() => {
-    try {
-      const allCurrentStates: Record<string, any> = {};
-      // Construct state object for emission, combining latest state and logs
-      workers.forEach((_, username) => {
-        const state = botStates.get(username) || {};
-        const logs = botLogs.get(username) || [];
-        allCurrentStates[username] = { ...state, conversationLog: logs }; // Send combined data
-        // Add LLM metrics (assuming they are global in main thread)
-        allCurrentStates[username].llmMetrics = getLLMMetrics();
-      });
-      socket.emit('allSharedStates', allCurrentStates);
-    } catch (error) {
-      console.error('[Main] Error in server state update interval:', error);
-    }
-  }, 1000); // Update interval
+	// Periodically send updated state to all connected clients
+	const intervalId = setInterval(() => {
+		try {
+			// Create a structure to hold the state for all bots
+			const allCurrentStates: Record<string, Partial<SerializedState> & { conversationLog: LogEntry[], llmMetrics: ReturnType<typeof getLLMMetrics>}> = {};
 
-  socket.on('disconnect', () => {
-    clearInterval(intervalId);
-    console.log('Browser disconnected:', socket.id);
-  });
+			// Iterate through active workers/bots
+			workers.forEach((_, username) => {
+				// Get current state and logs for the bot
+				const state = botStates.get(username);
+				const logs = botLogs.get(username) || [];
 
-  // Handle goal planning requests from this client
-  socket.on(
-    'startGoalPlan',
-    async (data: { goal: string; mode?: 'bfs' | 'dfs' }) => {
-      try {
-        const goal = data.goal;
-        const mode = data.mode || 'bfs'; // Default to bfs
-        // Determine which bot should handle (e.g., AgentBot)
-        const targetWorker = workers.get('AgentBot'); // Example: hardcode AgentBot
-        if (!targetWorker) {
-          throw new Error('Target bot worker (AgentBot) not found.');
-        }
-        console.log(
-          `[Main] Relaying startGoalPlan to AgentBot worker for goal: "${goal}"`
-        );
-        // TODO: Store association between socket.id and this goal request
-        // so progress can be sent back specifically to this client.
-        targetWorker.postMessage({
-          type: 'startGoalPlan',
-          payload: { goal, mode },
-        });
-      } catch (err: any) {
-        console.error('[Main] Error starting goal plan:', err);
-        socket.emit(
-          'goalPlanError',
-          err.message || 'Unknown error starting goal plan'
-        );
-      }
-    }
-  );
+				// Initialize the entry for this bot if it doesn't exist
+				if (!allCurrentStates[username]) {
+					allCurrentStates[username] = { conversationLog: [], llmMetrics: getLLMMetrics() }; // Initialize with logs and metrics
+				}
+
+				// Merge the current state if it exists
+				if (state) {
+					Object.assign(allCurrentStates[username], state);
+				}
+
+				// Ensure logs and metrics are up-to-date
+				allCurrentStates[username].conversationLog = logs;
+				allCurrentStates[username].llmMetrics = getLLMMetrics(); // Get latest metrics
+			});
+			// Emit the combined state to all clients
+			socket.emit('allSharedStates', allCurrentStates);
+		} catch (error: unknown) { // Catch unknown errors
+			console.error('[Main] Error in server state update interval:', error instanceof Error ? error.message : String(error)); // Safe error logging
+		}
+	}, 1000); // Update interval (1 second)
+
+	// Clean up interval on client disconnect
+	socket.on('disconnect', () => {
+		clearInterval(intervalId);
+		console.log('Browser disconnected:', socket.id);
+	});
+
+	// Listener for starting a goal plan from the client
+	socket.on(
+		'startGoalPlan',
+		 // Define expected data structure
+		 (data: { goal: string; mode?: 'bfs' | 'dfs', username?: string }) => { // Added username
+			try {
+				const goal = data.goal;
+				const mode = data.mode || 'bfs'; // Default to 'bfs'
+				const targetUsername = data.username || 'AgentBot'; // Default to AgentBot if not specified
+
+				// Find the worker for the target bot
+				const targetWorker = workers.get(targetUsername);
+				if (!targetWorker) {
+					throw new Error(`Target bot worker (${targetUsername}) not found.`);
+				}
+				console.log(
+					`[Main] Relaying startGoalPlan to ${targetUsername} worker for goal: "${goal}"`
+				);
+
+				// Send message to the specific worker
+				targetWorker.postMessage({
+					type: MessageType.StartGoalPlan,
+					payload: { goal, mode }, // Send goal and mode
+				});
+			// Handle errors during the process
+			} catch (err: unknown) {
+				console.error('[Main] Error starting goal plan:', err);
+				// Emit an error back to the client who requested the plan
+				socket.emit(
+					'goalPlanError',
+					// Safely convert error to string
+					err instanceof Error ? err.message : 'Unknown error starting goal plan'
+				);
+			}
+		}
+	);
 });
 
-// --- Start Server ---
+// --- Server Start ---
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
-  console.log(`Dashboard: http://localhost:${PORT} \n`);
-  const runStartDateAndTime = new Date(Date.now());
-  console.log('Run Started at:', runStartDateAndTime.toLocaleString(), '\n');
-  // Initialize workers after server starts listening
-  initializeWorkers();
+	console.log(`Server running on http://localhost:${PORT}`);
+	console.log(`Dashboard: http://localhost:${PORT} \n`);
+	const runStartDateAndTime = new Date(Date.now());
+	console.log('Run Started at:', runStartDateAndTime.toLocaleString(), '\n');
+
+	// Initialize workers after server starts listening
+	initializeWorkers();
 });
 
-// Handle graceful shutdown
-process.on('SIGINT', async () => {
-  // Make the handler async
-  console.log('SIGINT received. Shutting down workers...');
+// --- Graceful Shutdown ---
+process.on('SIGINT', () => void (async () => { // Add void operator for the async IIFE
+	console.log('SIGINT received. Shutting down workers...');
+	const exitPromises: Promise<void>[] = [];
 
-  const exitPromises: Promise<void>[] = []; // Array to hold promises
+	workers.forEach((worker, username) => {
+		console.log(`[Main] Terminating worker ${username}...`);
+		const exitPromise = new Promise<void>((resolve, reject) => {
+			// Listen for exit event
+			worker.once('exit', (code) => {
+				console.log(`[Main] Worker ${username} exited with code ${code}`);
+				if (code !== 0) {
+					console.warn(`[Main] Worker ${username} exited abnormally.`);
+					// Optionally add logic here if abnormal exit needs special handling
+				}
+				resolve(); // Resolve promise on exit
+			});
+			// Listen for error during termination
+			worker.once('error', (err) => {
+				console.error(`[Main] Error during termination for ${username}:`, err);
+				reject(err); // Reject promise on error
+			});
 
-  workers.forEach((worker, username) => {
-    console.log(`[Main] Terminating worker ${username}...`);
-    // Create a promise that resolves when the worker exits
-    const exitPromise = new Promise<void>((resolve, reject) => {
-      worker.once('exit', (code) => {
-        console.log(`[Main] Worker ${username} exited with code ${code}`);
-        if (code !== 0) {
-          console.warn(`[Main] Worker ${username} exited abnormally.`);
-          // Decide if abnormal exit should prevent clean shutdown (reject)
-          // or just be logged (resolve)
-        }
-        resolve(); // Resolve the promise when exit event occurs
-      });
-      worker.once('error', (err) => {
-        console.error(`[Main] Error during termination for ${username}:`, err);
-        reject(err); // Reject the promise on error
-      });
+			// Initiate termination
+			void worker.terminate(); // Terminate doesn't return a promise, handle via events
+		});
+		exitPromises.push(exitPromise);
+	});
 
-      // Initiate termination *after* setting up listeners
-      worker.terminate();
-    });
-    exitPromises.push(exitPromise);
-  });
+	// Timeout for shutdown process
+	const shutdownTimeout = setTimeout(() => {
+		console.error('Shutdown timed out. Forcing exit.');
+		process.exit(1); // Force exit if workers don't terminate in time
+	}, 10000); // 10 second timeout
 
-  // Keep the overall timeout as a failsafe for the *entire* shutdown
-  const shutdownTimeout = setTimeout(() => {
-    console.error('Shutdown timed out. Forcing exit.');
-    process.exit(1);
-  }, 10000); // Increased timeout (e.g., 10 seconds)
-
-  try {
-    // Wait for all workers to emit 'exit'
-    await Promise.all(exitPromises);
-    console.log('[Main] All workers have exited.');
-    process.exit(0);
-  } catch (error) {
-    console.error('[Main] Error during worker termination:', error);
-    clearTimeout(shutdownTimeout); // Clear the failsafe timeout
-    process.exit(1); // Exit with error if waiting failed
-  }
-});
+	try {
+		// Wait for all worker exit promises to complete
+		await Promise.all(exitPromises);
+		console.log('[Main] All workers have exited.');
+		clearTimeout(shutdownTimeout); // Clear the timeout if shutdown is successful
+		process.exit(0); // Exit gracefully
+	} catch (error: unknown) { // Catch unknown errors during shutdown
+		console.error('[Main] Error during worker termination:', error instanceof Error ? error.message : String(error)); // Safe error logging
+		clearTimeout(shutdownTimeout); // Clear timeout on error
+		process.exit(1); // Exit with error code
+	}
+})()); // Immediately invoke the async function

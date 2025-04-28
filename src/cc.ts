@@ -1,15 +1,11 @@
 // src/cc.ts
 import { Bot } from 'mineflayer';
-import { Actions } from './actions';
 import { Memory } from './functions/memory/memory';
 import { Social } from './functions/social/social';
 import { Goals } from './goals';
 import { Observer } from './observer/observer';
 import { SharedAgentState } from './sharedAgentState';
 
-interface CognitiveControllerOptions {
-  // configuration parameters if needed
-}
 
 export class CognitiveController {
   private bot: Bot;
@@ -18,7 +14,6 @@ export class CognitiveController {
   private social: Social;
   private goals: Goals;
   private observer: Observer;
-  private actions: Actions;
 
   // Store interval IDs so we can clear them if needed later
   private fastLoopIntervalId: NodeJS.Timeout | null = null;
@@ -31,8 +26,7 @@ export class CognitiveController {
     social: Social,
     goals: Goals,
     observer: Observer,
-    actions: Actions,
-    options?: CognitiveControllerOptions
+
   ) {
     this.bot = bot;
     this.sharedState = sharedState;
@@ -40,7 +34,7 @@ export class CognitiveController {
     this.social = social;
     this.goals = goals;
     this.observer = observer;
-    this.actions = actions;
+
   }
 
   /**

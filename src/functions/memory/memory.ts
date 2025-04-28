@@ -9,7 +9,7 @@ export class Memory {
     this.sharedState = sharedState;
   }
 
-  public async addShortTermMemory(name: string, info: string): Promise<void> {
+  public addShortTermMemory(name: string, info: string) {
     const stm = this.sharedState.shortTermMemoryIndex;
 
     if (stm.has(name)) {
@@ -23,7 +23,7 @@ export class Memory {
         const oldestInfo = stm.get(oldestKey);
         if (oldestInfo) {
           stm.delete(oldestKey);
-          await this.stmToLtm(oldestKey, oldestInfo);
+          this.stmToLtm(oldestKey, oldestInfo);
         }
       }
     }
@@ -38,18 +38,18 @@ export class Memory {
     return info;
   }
 
-  public async removeShortTermMemory(name: string): Promise<void> {
+  public removeShortTermMemory(name: string){
     const stm = this.sharedState.shortTermMemoryIndex;
     if (stm.has(name)) {
       const info = stm.get(name);
       stm.delete(name);
       if (info) {
-        await this.stmToLtm(name, info);
+        this.stmToLtm(name, info);
       }
     }
   }
 
-  private async stmToLtm(name: string, info: string): Promise<void> {
+  private stmToLtm(name: string, info: string) {
     //rewrite this function so that memories can be moved by ID into long term memory
     this.sharedState.longTermMemoryIndex.set(name, info);
   }

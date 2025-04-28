@@ -1,50 +1,128 @@
 import React from "react";
-import { LogEntry } from "../types/log.types"; // Import the interface
+import { LogEntry } from "../types/log.types"; // Assuming LogEntry provides role, timestamp, content, metadata
+
+// Define more specific types for metadata content (adjust based on actual data structures)
+
+interface ApiResponseData {
+  id?: string;
+  model?: string;
+  usage?: {
+    prompt_tokens?: number;
+    completion_tokens?: number;
+    total_tokens?: number;
+    [key: string]: unknown; // Allow other properties if needed
+  };
+  choices?: Array<{
+    finish_reason?: string;
+    message?: {
+      tool_calls?: Array<Record<string, unknown>>; // Define tool call structure if known
+      [key: string]: unknown;
+    };
+    [key: string]: unknown;
+  }>;
+  // Allow other potential fields
+  [key: string]: unknown;
+}
+
+
+// Refine LogEntry if possible, otherwise assume metadata is Record<string, unknown> | undefined
+// Example refinement (ideal scenario):
+// interface LogEntryBase { timestamp?: string | number; content?: string; }
+// type LogEntry = LogEntryBase & (
+//   | { role: 'user' | 'system' | 'assistant'; metadata?: Record<string, unknown> } // Keep general metadata optional
+//   | { role: 'api_request'; metadata: { payload: ApiRequestPayload } }
+//   | { role: 'api_response'; metadata: { response: ApiResponseData } }
+//   | { role: 'api_error'; metadata: { error: ApiErrorData } }
+//   | { role: 'function'; metadata: FunctionMetadata }
+//   | { role: 'memory'; metadata: Record<string, unknown> }
+// );
+// If LogEntry cannot be changed, we'll work with Record<string, unknown> | undefined
 
 interface ChatLogProps {
   conversationLog?: LogEntry[]; // Use LogEntry[]
 }
 
-// Helper function to render metadata nicely
-const renderMetadata = (metadata: Record<string, any>, role: LogEntry['role']) => {
-    let specificMetadata: Record<string, any> = {};
+// Helper function to safely check if a value is an object and has a specific property
+function hasProperty<K extends string>(
+    obj: unknown,
+    key: K
+): obj is { [key in K]: unknown } {
+    return typeof obj === 'object' && obj !== null && key in obj;
+}
 
-    // Extract specific fields based on role for cleaner display
-    if (role === 'api_request' && metadata.payload) {
+// Helper function to safely check if a value is a non-null object
+function isObject(value: unknown): value is Record<string, unknown> {
+    return typeof value === 'object' && value !== null;
+}
+
+
+// Helper function to render metadata nicely
+const renderMetadata = (metadata: Record<string, unknown> | undefined, role: LogEntry['role']) => {
+    if (!metadata) {
+        return null;
+    }
+
+    let specificMetadata: Record<string, unknown> = {};
+
+    // Extract specific fields based on role for cleaner display using type guards
+    if (role === 'api_request' && hasProperty(metadata, 'payload')) {
         specificMetadata = { RequestPayload: metadata.payload };
-    } else if (role === 'api_response' && metadata.response) {
-        // Simplify response display (optional)
-        const simpleResponse = {
-            id: metadata.response.id,
-            model: metadata.response.model,
-            usage: metadata.response.usage,
-            finish_reason: metadata.response.choices?.[0]?.finish_reason,
-            tool_calls: metadata.response.choices?.[0]?.message?.tool_calls,
+    } else if (role === 'api_response' && hasProperty(metadata, 'response') && isObject(metadata.response)) {
+        // Safely access properties of response
+        const responseData = metadata.response as ApiResponseData; // Use type assertion after check or access safely
+        const simpleResponse: Partial<ApiResponseData> = {
+            id: responseData.id,
+            model: responseData.model,
+            usage: responseData.usage,
+            finish_reason: responseData.choices?.[0]?.finish_reason,
+            tool_calls: responseData.choices?.[0]?.message?.tool_calls,
         };
+         // Clean up undefined values from simpleResponse before assigning
+        Object.keys(simpleResponse).forEach(key => {
+            if (simpleResponse[key as keyof typeof simpleResponse] === undefined) {
+                delete simpleResponse[key as keyof typeof simpleResponse];
+            }
+        });
         specificMetadata = { ResponseDetails: simpleResponse };
-    } else if (role === 'api_error' && metadata.error) {
+
+    } else if (role === 'api_error' && hasProperty(metadata, 'error')) {
         specificMetadata = { ErrorDetails: metadata.error };
-    } else if (role === 'function' && (metadata.arguments || metadata.result)) {
-         specificMetadata = {
-             ...(metadata.arguments && { Arguments: metadata.arguments }),
-             ...(metadata.result && { Result: metadata.result }),
-         };
-    } else if (role === 'memory' && metadata) {
+    } else if (role === 'function') {
+        // Assume metadata *might* have arguments or result based on FunctionMetadata type
+      
+        const args = hasProperty(metadata, 'arguments') ? metadata.arguments : undefined;
+        const result = hasProperty(metadata, 'result') ? metadata.result : undefined;
+        const name = hasProperty(metadata, 'name') ? metadata.name : undefined;
+
+         const funcDetails: Record<string, unknown> = {};
+         if (name !== undefined) funcDetails.FunctionName = name;
+         if (args !== undefined) funcDetails.Arguments = args;
+         if (result !== undefined) funcDetails.Result = result;
+
+         if (Object.keys(funcDetails).length > 0) {
+             specificMetadata = funcDetails;
+         } else {
+             // Fallback: show raw metadata if specific keys aren't found
+             specificMetadata = metadata;
+         }
+
+    } else if (role === 'memory') {
          specificMetadata = metadata; // Show all metadata for memory
     } else {
-        // Fallback for other roles or generic metadata
+        // Fallback for other roles or generic metadata - show all
         specificMetadata = metadata;
     }
 
     // Filter out empty objects/arrays before rendering
     const filteredMetadata = Object.entries(specificMetadata).reduce((acc, [key, value]) => {
-        const isEmptyObject = typeof value === 'object' && value !== null && Object.keys(value).length === 0;
+        const isEmptyObject = isObject(value) && Object.keys(value).length === 0;
         const isEmptyArray = Array.isArray(value) && value.length === 0;
         if (!isEmptyObject && !isEmptyArray && value !== undefined && value !== null) {
+            // Ensure the accumulator knows its type
             acc[key] = value;
         }
         return acc;
-    }, {} as Record<string, any>);
+    }, {} as Record<string, unknown>); // Type the initial value of the accumulator
 
 
     if (Object.keys(filteredMetadata).length === 0) {
@@ -55,9 +133,11 @@ const renderMetadata = (metadata: Record<string, any>, role: LogEntry['role']) =
     <div className="chat-metadata">
       <strong>Details:</strong>
       <ul>
+        {/* Ensure 'value' is treated as 'unknown' and stringified */}
         {Object.entries(filteredMetadata).map(([key, value]) => (
           <li key={key}>
-            <strong>{key}:</strong> <pre>{JSON.stringify(value, null, 2)}</pre>
+            <strong>{key}:</strong> {/* Inner keys (within JSON) are styled by <pre> styles */}
+            <pre>{JSON.stringify(value, null, 2)}</pre>
           </li>
         ))}
       </ul>
@@ -73,10 +153,11 @@ const ChatLog: React.FC<ChatLogProps> = ({ conversationLog }) => {
       <div className="chat-log-content">
         {conversationLog && conversationLog.length > 0 ? (
           conversationLog.map((entry, index) => {
-            // No parsing needed, entry is already an object
-            const { role, timestamp, content, metadata } = entry;
+            // Destructure safely, assuming LogEntry structure
+            // If LogEntry type definition isn't strict, defaults might be needed
+            const { role, timestamp, content = '', metadata } = entry; // Provide default for content
 
-            // Format timestamp for better readability (optional)
+            // Format timestamp (ensure timestamp is string or number)
             const formattedTimestamp = timestamp
                 ? new Date(timestamp).toLocaleTimeString()
                 : "";
@@ -95,10 +176,12 @@ const ChatLog: React.FC<ChatLogProps> = ({ conversationLog }) => {
                 </div>
                 <div className="chat-entry-body">
                   <div className="chat-content">
-                    <p>{content}</p>
+                     {/* Render content safely */}
+                    <p>{typeof content === 'string' ? content : JSON.stringify(content)}</p>
                   </div>
                   {/* Render metadata using the helper */}
-                  {metadata && renderMetadata(metadata, role)}
+                  {/* Ensure metadata is passed correctly (it can be undefined) */}
+                  {renderMetadata(metadata, role)}
                 </div>
               </div>
             );
@@ -107,7 +190,7 @@ const ChatLog: React.FC<ChatLogProps> = ({ conversationLog }) => {
           <div className="chat-entry">Loading...</div>
         )}
       </div>
-      {/* Add styles for new roles */}
+      {/* Styles remain the same */}
       <style>{`
         .chat-log-container {
           font-family: Arial, sans-serif;
@@ -195,7 +278,7 @@ const ChatLog: React.FC<ChatLogProps> = ({ conversationLog }) => {
           margin-bottom: 4px;
         }
          .chat-metadata li strong { /* Make inner keys normal weight */
-            font-weight: normal;
+            font-weight: normal; /* This selects the <strong> inside <li> */
             color: #555; /* Dim inner keys slightly */
          }
         .chat-metadata pre { /* Style nested JSON */

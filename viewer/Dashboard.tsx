@@ -88,7 +88,8 @@ const Dashboard: React.FC = () => {
       if (data === undefined || data === null) return "Loading...";
       try {
           return JSON.stringify(data, null, 2);
-      } catch (e) {
+      } catch (err: unknown) {
+          
           return "Error displaying data";
       }
   }

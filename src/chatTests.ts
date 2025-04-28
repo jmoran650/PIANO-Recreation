@@ -35,7 +35,6 @@ export async function handleChatTestCommand(
 
   try {
     switch (command) {
-      // Commands using Observer (No change needed)
       case 'recipe':
       case 'craftable':
       case 'possible':
@@ -117,72 +116,6 @@ export async function handleChatTestCommand(
         break;
       }
 
-      // case "craft": {
-      //   const itemName = parts[1];
-      //   if (!itemName) {
-      //     bot.chat(`[${bot.username}] Usage: test craft <itemName>`);
-      //     return;
-      //   }
-
-      //   let tableBlock: Block | null = null;
-      //   const mcData = minecraftData(bot.version); // Get mcData instance
-
-      //   // Check if item requires a crafting table
-      //   const itemData = mcData.itemsByName[itemName];
-      //   const recipes = itemData ? bot.recipesAll(itemData.id, null, true) : [];
-      //   const requiresTable = recipes.some((r: any) => r.requiresTable);
-
-      //   bot.chat(`[${bot.username}] Attempting to craft ${itemName}. Requires table: ${requiresTable}`);
-
-      //   if (requiresTable) {
-      //      bot.chat(`[${bot.username}] Checking for crafting table...`);
-      //      tableBlock = findNearbyPlacedTable(bot, 100);
-
-      //      if (!tableBlock) {
-      //          bot.chat(`[${bot.username}] No table nearby. Checking inventory...`);
-      //          const tableItemInInventory = bot.inventory.findInventoryItem(
-      //             mcData.itemsByName["crafting_table"].id, null, false
-      //          );
-      //          if (tableItemInInventory) {
-      //              bot.chat(`[${bot.username}] Found table in inventory. Placing...`);
-      //              try {
-      //                  // Use BuildingService via agent.services
-      //                  tableBlock = await buildingService.placeCraftingTable();
-      //                  bot.chat(`[${bot.username}] Placed table from inventory.`);
-      //              } catch (placeErr) {
-      //                   bot.chat(`[${bot.username}] Failed to place table: ${placeErr}`);
-      //                   // Optionally re-throw or just return to stop the command
-      //                   throw placeErr; // Re-throw to be caught by outer catch block
-      //              }
-      //          } else {
-      //              bot.chat(`[${bot.username}] No table nearby or in inventory. Cannot craft ${itemName}.`);
-      //              return; // Stop the command
-      //          }
-      //      }
-
-      //      // Ensure proximity to the table if found/placed
-      //       if (tableBlock) {
-      //          const distance = bot.entity.position.distanceTo(tableBlock.position.offset(0.5, 0.5, 0.5));
-      //          if (distance > craftingService.INTERACTION_RANGE) {
-      //              bot.chat(`[${bot.username}] Moving closer to table...`);
-      //              try {
-      //                  await navigation.moveToInteractRange(tableBlock); // Use navigation
-      //                  bot.chat(`[${bot.username}] Moved closer to table.`);
-      //              } catch (moveErr) {
-      //                  bot.chat(`[${bot.username}] Failed to move to table: ${moveErr}`);
-      //                  throw moveErr; // Re-throw
-      //              }
-      //          } else {
-      //              bot.chat(`[${bot.username}] Already close enough to table.`);
-      //          }
-      //      }
-      //   } // end if (requiresTable)
-
-      //   // Use the CraftingService, passing the table if acquired
-      //   await craftingService.craft(itemName);
-      //   bot.chat(`[${bot.username}] Finished craft task for ${itemName}.`);
-      //   break;
-      // }
 
       case 'place': {
         const blockType = parts[1];
@@ -204,7 +137,7 @@ export async function handleChatTestCommand(
           return;
         }
         // Use the CombatService
-        await combatService.attack(mobType);
+        combatService.attack(mobType);
         bot.chat(`[${bot.username}] Initiated attack on ${mobType}.`);
         break;
       }
@@ -221,14 +154,15 @@ export async function handleChatTestCommand(
           `[${bot.username}] Unknown test command: '${command}'. Valid: recipe, craftable, possible, mine, craft, place, attack, allblocks, usetable, inv, pullup, goal:`
         );
     }
-  } catch (error: unknown) {
+  } catch (err: unknown) {
     // General error handling for the command execution
+    const msg = err instanceof Error ? err.message : String(err);
     console.error(
       `[${bot.username}] Error executing test command '${commandMessage}':`,
-      error
+      msg
     );
     bot.chat(
-      `[${bot.username}] Error running command: ${error.message || String(error)}`
+      `[${bot.username}] Error running command: ${msg}`
     );
   }
 }

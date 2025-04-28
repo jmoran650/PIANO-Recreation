@@ -3,7 +3,7 @@ import OpenAI from 'openai';
 import { type JSONSchema as StandardJSONSchema } from 'openai/lib/jsonschema';
 
 // Define the specific schema type required by the OpenAI API call, including 'name'
-interface NamedJSONSchema extends StandardJSONSchema {
+export interface NamedJSONSchema extends StandardJSONSchema {
   name: string;
   // You might need to refine this further based on exact OpenAI requirements,
   // but 'name' is the one flagged by the error.

@@ -1,20 +1,27 @@
-import { Vec3 } from 'vec3';
-import { LogEntry } from '../types/log.types'; // Import the new interface
+import OpenAI from "openai"; // Import the base OpenAI type
+import { Vec3 } from "vec3";
+import { LogEntry } from "../types/log.types";
 import {
   EquippedItems,
- VisibleBlockTypes,
- VisibleMobs,
-} from '../types/sharedAgentState.types';
+  VisibleBlockTypes,
+  VisibleMobs,
+} from "../types/sharedAgentState.types";
+// Import specific types from the OpenAI library's structure
+// Note: Depending on your OpenAI library version, the exact path might slightly differ.
+// Check node_modules/openai/resources/chat/completions.mjs or similar for exports.
+import type {
+  ChatCompletion,
+  ChatCompletionMessage,
+  ChatCompletionMessageToolCall,
+} from "openai/resources/chat/completions";
 
+// Removed the unused OpenAIResponsePayload interface
 
 export class SharedAgentState {
-
   public readonly botUsername: string;
 
   private _visibleBlockTypes: VisibleBlockTypes | null = null;
-  
   private _visibleMobs: VisibleMobs | null = null;
-
   private _playersNearby: string[] = [];
   private _inventory: string[] = [];
   private _botHealth = 20;
@@ -42,7 +49,13 @@ export class SharedAgentState {
 
   private _lockedInTask = false;
   private _craftingTablePositions: Vec3[] = [];
-  private _equippedItems: EquippedItems = { head: null, chest: null, legs: null, feet: null, offhand: null };
+  private _equippedItems: EquippedItems = {
+    head: null,
+    chest: null,
+    legs: null,
+    feet: null,
+    offhand: null,
+  };
 
   private _botPosition: { x: number; y: number; z: number } = {
     x: 0,
@@ -59,6 +72,7 @@ export class SharedAgentState {
     this._othersFeelingsTowardsSelf = new Map();
   }
 
+  // --- Getters and Setters (Unchanged) ---
   public get visibleBlockTypes() {
     return this._visibleBlockTypes;
   }
@@ -198,23 +212,32 @@ export class SharedAgentState {
   }
 
   public logMessage(
-    role: LogEntry['role'], // Use the role type from LogEntry
+    role: LogEntry["role"],
     content: string,
-    metadata?: any,
-    // Optional parameters for function calls
+    metadata?: Record<string, unknown>,
     functionName?: string,
-    functionArgs?: any,
+    functionArgs?: unknown,
     functionResult?: string
   ): void {
+    // Create the base entry object
     const entry: LogEntry = {
       timestamp: new Date().toISOString(),
       role,
       content,
       metadata: metadata || {},
-      ...(functionName && { functionName }), // Add if provided
-      ...(functionArgs && { arguments: functionArgs }), // Add if provided
-      ...(functionResult && { result: functionResult }), // Add if provided
     };
+
+    // Conditionally add optional properties
+    if (functionName !== undefined) {
+      entry.functionName = functionName;
+    }
+    if (functionArgs !== undefined) {
+      entry.arguments = functionArgs;
+    }
+    if (functionResult !== undefined) {
+      entry.result = functionResult;
+    }
+
     this._conversationLog.push(entry);
   }
 
@@ -265,90 +288,166 @@ export class SharedAgentState {
   }
 
   public getSharedStateAsText(): string {
-    const st = this;
-    let text = '';
-    text += `Bot Status: < Health: ${st.botHealth}, Hunger: ${st.botHunger} >`;
+    // --- (Unchanged) ---
+    let text = "";
+    text += `Bot Status: < Health: ${this.botHealth}, Hunger: ${this.botHunger} >`;
 
     const invSummary =
-      st.inventory && st.inventory.length > 0
-        ? st.inventory.join(', ')
-        : '(nothing)';
+      this.inventory && this.inventory.length > 0
+        ? this.inventory.join(", ")
+        : "(nothing)";
     text += `Inventory: < ${invSummary} >`;
 
-    text += `Position: < x=${st.botPosition.x.toFixed(
+    text += `Position: < x=${this.botPosition.x.toFixed(
       1
-    )}, y=${st.botPosition.y.toFixed(1)}, z=${st.botPosition.z.toFixed(1)} >`;
+    )}, y=${this.botPosition.y.toFixed(1)}, z=${this.botPosition.z.toFixed(
+      1
+    )} >`;
 
-    if (st.visibleMobs && st.visibleMobs.Mobs.length > 0) {
-      const sortedMobs = st.visibleMobs.Mobs.slice().sort(
+    if (this.visibleMobs && this.visibleMobs.Mobs.length > 0) {
+      const sortedMobs = this.visibleMobs.Mobs.slice().sort(
         (a, b) => a.distance - b.distance
       );
       const topTenClosestMobs = sortedMobs.slice(0, 10);
       const mobSummary = topTenClosestMobs
         .map((m) => `${m.name} (~${m.distance.toFixed(1)}m away)`)
-        .join(', ');
+        .join(", ");
       text += `Mobs: < ${mobSummary} >`;
     } else {
-      text += 'Mobs: < none >';
+      text += "Mobs: < none >";
     }
 
-    if (st.visibleBlockTypes && st.visibleBlockTypes.BlockTypes) {
-      const blocks = st.visibleBlockTypes.BlockTypes;
+    if (this.visibleBlockTypes && this.visibleBlockTypes.BlockTypes) {
+      const blocks = this.visibleBlockTypes.BlockTypes;
       const blockSummary = Object.entries(blocks)
         .map(([name, pos]) => `${name} (x=${pos.x}, y=${pos.y}, z=${pos.z})`)
-        .join(', ');
+        .join(", ");
       text += `Nearby Block Types: < ${blockSummary} >`;
     }
 
     const playersNearby =
-      st.playersNearby && st.playersNearby.length > 0
-        ? st.playersNearby.join(', ')
-        : 'none';
+      this.playersNearby && this.playersNearby.length > 0
+        ? this.playersNearby.join(", ")
+        : "none";
     text += `Nearby Players: < ${playersNearby} >`;
 
     return text;
   }
 
-  public logOpenAIRequest(endpoint: string, payload: any): void {
-    const entry: LogEntry = {
-      timestamp: new Date().toISOString(),
-      role: 'api_request',
-      content: `Request to ${endpoint}`,
-      endpoint,
-      payload,
-      metadata: { store: payload.store }, // Keep the store flag if needed
-    };
-    this._conversationLog.push(entry);
-  }
-
-  public logOpenAIResponse(endpoint: string, response: any): void {
-    let content = `Response from ${endpoint}`;
-    if (response?.choices?.[0]?.message?.content) {
-      content += `: "${response.choices[0].message.content.substring(
-        0,
-        50
-      )}..."`; // Add snippet
-    } else if (response?.choices?.[0]?.message?.tool_calls) {
-      content += ` (Tool Call: ${response.choices[0].message.tool_calls[0]?.function?.name})`;
+  public logOpenAIRequest(endpoint: string, payload: unknown): void {
+    // --- (Unchanged - Assuming payload structure check is sufficient here) ---
+    let storeValue: unknown = undefined;
+    if (typeof payload === "object" && payload !== null && "store" in payload) {
+      storeValue = (payload as { store?: unknown }).store;
     }
 
     const entry: LogEntry = {
       timestamp: new Date().toISOString(),
-      role: 'api_response',
-      content,
+      role: "api_request",
+      content: `Request to ${endpoint}`,
       endpoint,
-      response,
+      payload,
+      metadata: storeValue !== undefined ? { store: storeValue } : {},
     };
     this._conversationLog.push(entry);
   }
 
-  public logOpenAIError(endpoint: string, error: any): void {
+  /**
+   * Logs a successful response from the OpenAI API.
+   * Assumes the response is a valid ChatCompletion object.
+   * @param endpoint The API endpoint that was called.
+   * @param response The ChatCompletion response object from the OpenAI API.
+   */
+  public logOpenAIResponse(
+    endpoint: string,
+    // Use the specific type from the OpenAI library
+    response: ChatCompletion
+  ): void {
+    let contentSummary = `Response from ${endpoint}`;
+    let firstChoiceMessage: ChatCompletionMessage | null = null;
+
+    // Safely access choices and the message from the first choice
+    if (response.choices && response.choices.length > 0) {
+      firstChoiceMessage = response.choices[0].message;
+    }
+
+    if (firstChoiceMessage) {
+      // Check for text content
+      if (typeof firstChoiceMessage.content === "string") {
+        contentSummary += `: "${firstChoiceMessage.content.substring(
+          0,
+          50
+        )}..."`;
+      }
+      // Check for tool calls
+      else if (
+        firstChoiceMessage.tool_calls &&
+        Array.isArray(firstChoiceMessage.tool_calls) &&
+        firstChoiceMessage.tool_calls.length > 0
+      ) {
+        // Use the specific type for tool calls in the response
+        const firstToolCall: ChatCompletionMessageToolCall =
+          firstChoiceMessage.tool_calls[0];
+        // Safely access function name
+        if (firstToolCall.function && firstToolCall.function.name) {
+          contentSummary += ` (Tool Call: ${firstToolCall.function.name})`;
+        } else {
+          contentSummary += ` (Tool Call: unknown function)`; // Or log type if not function
+        }
+      }
+    } else {
+      contentSummary += ` (No message content or tool calls found in first choice)`;
+    }
+
     const entry: LogEntry = {
       timestamp: new Date().toISOString(),
-      role: 'api_error',
-      content: `Error from ${endpoint}: ${String(error)}`,
+      role: "api_response",
+      content: contentSummary, // Use the generated summary
       endpoint,
-      error: String(error), // Store error message
+      response: response, // Log the full response object
+    };
+    this._conversationLog.push(entry);
+  }
+
+  /**
+   * Logs an error received from the OpenAI API or during the request.
+   * @param endpoint The API endpoint that was called.
+   * @param error The error object.
+   */
+  public logOpenAIError(endpoint: string, error: unknown): void {
+    let errorMessage = "Unknown error";
+    let errorDetails: Record<string, unknown> = {};
+
+    // Check if it's an OpenAI APIError for structured details
+    if (error instanceof OpenAI.APIError) {
+      errorMessage = error.message || "OpenAI API Error";
+      errorDetails = {
+        status: error.status,
+        type: error.type,
+        code: error.code,
+        param: error.param,
+        // You might want to log error.headers if needed
+      };
+    } else if (error instanceof Error) {
+      // Handle standard JavaScript errors
+      errorMessage = error.message;
+      errorDetails = {
+        name: error.name,
+        stack: error.stack, // Optional: log stack trace
+      };
+    } else {
+      // Fallback for non-Error types
+      errorMessage = String(error);
+    }
+
+    const entry: LogEntry = {
+      timestamp: new Date().toISOString(),
+      role: "api_error",
+      content: `Error from ${endpoint}: ${errorMessage}`,
+      endpoint,
+      // Log structured details if available, otherwise the string representation
+      error:
+        errorDetails.status || errorDetails.name ? errorDetails : String(error),
     };
     this._conversationLog.push(entry);
   }

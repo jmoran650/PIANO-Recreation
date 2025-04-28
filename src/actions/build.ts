@@ -11,7 +11,7 @@ import {
   checkPlacementPossible,
   findSafePlacement,
   sleep,
-} from './helpers/helpers'; // Keep sleep if used by other methods
+} from './helpers/helpers';
 
 dotenv.config();
 
@@ -60,9 +60,11 @@ export class BuildingService {
     try {
       await this.bot.equip(furnaceItem, 'hand');
       console.log('[BuildingService] Equipped furnace.');
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`[BuildingService] Failed to equip furnace: ${msg}`); // Log error
       throw new Error(
-        `[BuildingService] Failed to equip furnace: ${err.message || err}`
+        `[BuildingService] Failed to equip furnace: ${msg}`
       );
     }
 
@@ -83,12 +85,12 @@ export class BuildingService {
         ? 'Reference block missing'
         : `Placement check failed on ref block '${referenceBlock.name}'`;
       throw new Error(
-        `[BuildingService] Cannot place furnace at ${safePos}: ${reason}.`
+        `[BuildingService] Cannot place furnace at ${safePos.toString()}: ${reason}.`
       );
     }
 
     console.log(
-      `[BuildingService] Attempting to place furnace at ${safePos} onto block ${referenceBlock.name} at ${referenceBlock.position}`
+      `[BuildingService] Attempting to place furnace at ${safePos.toString()} onto block ${referenceBlock.name} at ${referenceBlock.position.toString()}`
     );
 
     try {
@@ -99,21 +101,22 @@ export class BuildingService {
       const placedBlock = this.bot.blockAt(safePos);
       if (placedBlock?.name === 'furnace') {
         console.log(
-          `[BuildingService] Furnace placed successfully at ${safePos}.`
+          `[BuildingService] Furnace placed successfully at ${safePos.toString()}.`
         );
         // Optionally add to shared state if furnace positions are tracked
         // this.sharedState.addFurnacePosition(safePos);
         return placedBlock;
       } else {
         throw new Error(
-          `[BuildingService] Placed block at ${safePos}, but it is not a furnace (found ${placedBlock?.name}).`
+          `[BuildingService] Placed block at ${safePos.toString()}, but it is not a furnace (found ${placedBlock?.name}).`
         );
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
       console.error(
-        `[BuildingService] Error placing furnace: ${err.message || err}`
+        `[BuildingService] Error placing furnace: ${msg}`
       );
-      throw new Error(`Error placing furnace: ${err.message || err}`);
+      throw new Error(`[BuildingService] Error placing furnace: ${msg}`);
     }
   }
 
@@ -135,9 +138,11 @@ export class BuildingService {
     try {
       await this.bot.equip(chestItem, 'hand');
       console.log('[BuildingService] Equipped chest.');
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`[BuildingService] Failed to equip chest: ${msg}`); // Log error
       throw new Error(
-        `[BuildingService] Failed to equip chest: ${err.message || err}`
+        `[BuildingService] Failed to equip chest: ${msg}`
       );
     }
 
@@ -157,12 +162,12 @@ export class BuildingService {
         ? 'Reference block missing'
         : `Placement check failed on ref block '${referenceBlock.name}'`;
       throw new Error(
-        `[BuildingService] Cannot place chest at ${safePos}: ${reason}.`
+        `[BuildingService] Cannot place chest at ${safePos.toString()}: ${reason}.`
       );
     }
 
     console.log(
-      `[BuildingService] Attempting to place chest at ${safePos} onto block ${referenceBlock.name} at ${referenceBlock.position}`
+      `[BuildingService] Attempting to place chest at ${safePos.toString()} onto block ${referenceBlock.name} at ${referenceBlock.position.toString()}`
     );
 
     try {
@@ -177,21 +182,22 @@ export class BuildingService {
       ) {
         // Account for trapped chests if applicable
         console.log(
-          `[BuildingService] Chest placed successfully at ${safePos}.`
+          `[BuildingService] Chest placed successfully at ${safePos.toString()}.`
         );
         // Optionally add to shared state if chest positions are tracked
         // this.sharedState.addChestPosition(safePos);
         return placedBlock;
       } else {
         throw new Error(
-          `[BuildingService] Placed block at ${safePos}, but it is not a chest (found ${placedBlock?.name}).`
+          `[BuildingService] Placed block at ${safePos.toString()}, but it is not a chest (found ${placedBlock?.name}).`
         );
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
       console.error(
-        `[BuildingService] Error placing chest: ${err.message || err}`
+        `[BuildingService] Error placing chest: ${msg}`
       );
-      throw new Error(`Error placing chest: ${err.message || err}`);
+      throw new Error(`[BuildingService] Error placing chest: ${msg}`);
     }
   }
 
@@ -220,9 +226,11 @@ export class BuildingService {
     try {
       await this.bot.equip(blockItem, 'hand');
       console.log(`[BuildingService] Equipped ${blockType}.`);
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`[BuildingService] Failed to equip ${blockType}: ${msg}`); // Log error
       throw new Error(
-        `[BuildingService] Failed to equip ${blockType}: ${err.message || err}`
+        `[BuildingService] Failed to equip ${blockType}: ${msg}`
       );
     }
 
@@ -242,12 +250,12 @@ export class BuildingService {
         ? 'Reference block missing'
         : `Placement check failed on ref block '${referenceBlock.name}'`;
       throw new Error(
-        `[BuildingService] Cannot place ${blockType} at ${safePos}: ${reason}.`
+        `[BuildingService] Cannot place ${blockType} at ${safePos.toString()}: ${reason}.`
       );
     }
 
     console.log(
-      `[BuildingService] Attempting to place ${blockType} at ${safePos} onto block ${referenceBlock.name} at ${referenceBlock.position}`
+      `[BuildingService] Attempting to place ${blockType} at ${safePos.toString()} onto block ${referenceBlock.name} at ${referenceBlock.position.toString()}`
     );
 
     try {
@@ -265,17 +273,17 @@ export class BuildingService {
         // Check if placedBlock is not null
         if (placedBlock.name === expectedBlockName) {
           console.log(
-            `[BuildingService] Placed ${blockType} successfully at ${safePos}.`
+            `[BuildingService] Placed ${blockType} successfully at ${safePos.toString()}.`
           );
           if (placedBlock?.name === 'crafting_table') {
-            console.log(`[BuildingService] Internal placement: BuildingService placeBlock was used to place a crafting table at ${safePos}!`);
+            console.log(`[BuildingService] Internal placement: BuildingService placeBlock was used to place a crafting table at ${safePos.toString()}!`);
             this.sharedState.addCraftingTablePosition(safePos);
           }
-          return placedBlock; 
-          
+          return placedBlock;
+
         } else {
           console.warn(
-            `[BuildingService] Placed block at ${safePos}, but expected ${expectedBlockName} and found ${placedBlock.name}. Returning found block.`
+            `[BuildingService] Placed block at ${safePos.toString()}, but expected ${expectedBlockName} and found ${placedBlock.name}. Returning found block.`
           );
           // Return the unexpected block type, it's still a valid Block
           return placedBlock;
@@ -283,17 +291,18 @@ export class BuildingService {
       } else {
         // If placedBlock is null after placement, something went wrong.
         console.error(
-          `[BuildingService] Error placing ${blockType}: Block at target position ${safePos} is null after placement attempt.`
+          `[BuildingService] Error placing ${blockType}: Block at target position ${safePos.toString()} is null after placement attempt.`
         );
         throw new Error(
-          `Failed to place ${blockType}: Block not found at target location after placement.`
+          `[BuildingService] Failed to place ${blockType}: Block not found at target location after placement.`
         );
       }
-    } catch (err: any) {
-      console.error(
-        `[BuildingService] Error placing ${blockType}: ${err.message || err}`
-      );
-      throw new Error(`Error placing ${blockType}: ${err.message || err}`); // Re-throw original or new error
+    } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error(
+            `[BuildingService] Error placing ${blockType}: ${msg}`
+        );
+        throw new Error(`[BuildingService] Error placing ${blockType}: ${msg}`); // Re-throw original or new error
     }
   }
 }

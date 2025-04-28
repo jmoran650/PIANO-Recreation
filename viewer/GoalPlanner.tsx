@@ -20,8 +20,17 @@ interface TreeNode extends StepNode {
   substeps: TreeNode[];
 }
 
-/** 
- * Utility to build a hierarchical structure from the flat StepNode array 
+// Define a type for the LLM metrics state
+type LlmMetricsData = Record<string, unknown>; // Use a more specific type if the structure is known
+
+// Define a type for the data received via the 'sharedState' event
+interface SharedStateData {
+    llmMetrics: LlmMetricsData;
+    // Add other properties if present in the shared state
+}
+
+/**
+ * Utility to build a hierarchical structure from the flat StepNode array
  */
 function buildHierarchy(flatNodes: StepNode[]): TreeNode | null {
   if (!flatNodes || flatNodes.length === 0) return null;
@@ -49,7 +58,8 @@ const socket = io();
 const GoalPlanner: React.FC = () => {
   const [userGoal, setUserGoal] = useState<string>("");
   const [goalTree, setGoalTree] = useState<TreeNode | null>(null);
-  const [llmMetrics, setLlmMetrics] = useState<any>({});
+  // Use the specific type for llmMetrics state
+  const [llmMetrics, setLlmMetrics] = useState<LlmMetricsData>({});
 
   // NEW: BFS/DFS mode toggle
   const [mode, setMode] = useState<"bfs" | "dfs">("bfs");
@@ -83,8 +93,16 @@ const GoalPlanner: React.FC = () => {
       console.error("Socket event 'goalPlanError':", errorMsg);
     });
 
-    socket.on("sharedState", (state: any) => {
-      setLlmMetrics(state.llmMetrics);
+    // Use the specific type for the received state data
+    socket.on("sharedState", (state: SharedStateData) => {
+      // Check if llmMetrics exists before setting
+      if (state && state.llmMetrics) {
+         setLlmMetrics(state.llmMetrics);
+      } else {
+         console.warn("Received sharedState without llmMetrics:", state);
+         // Optionally set to empty object or handle as needed
+         setLlmMetrics({});
+      }
     });
 
     return () => {
@@ -156,11 +174,22 @@ const GoalPlanner: React.FC = () => {
       .attr("transform", (d) => `translate(${d.x},${d.y})`)
       // On click, we capture that node's data
       .on("click", (_, d) => {
-        setSelectedNode(d.data); // store StepNode in state
+         // Ensure d and d.data are defined before setting state
+        if (d && d.data) {
+            setSelectedNode(d.data); // store StepNode in state
+        } else {
+            console.error("Clicked node with invalid data:", d);
+        }
       });
 
     // Simple text + background rectangle approach
     nodeGroup.each(function (d) {
+      // Check if d and d.data are valid before proceeding
+      if (!d || !d.data) {
+        console.error("Attempting to render node with invalid data:", d);
+        return; // Skip rendering this invalid node
+      }
+
       const group = d3.select(this);
       const labelText = d.data.funcCall
         ? `${d.data.step} => ${d.data.funcCall}`
@@ -174,7 +203,14 @@ const GoalPlanner: React.FC = () => {
         .style("fill", "#fff")
         .text(labelText);
 
-      const bbox = (textElement.node() as SVGTextElement).getBBox();
+      // Add a check for textElement.node() existence
+      const textNode = textElement.node();
+      if (!textNode) {
+        console.error("Could not get text node for:", labelText);
+        return;
+      }
+
+      const bbox = (textNode).getBBox();
       const paddingRect = 8;
       const rectWidth = bbox.width + paddingRect * 2;
       const rectHeight = bbox.height + paddingRect * 2;
