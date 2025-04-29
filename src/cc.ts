@@ -1,4 +1,5 @@
 // src/cc.ts
+/* eslint-disable */
 import { Bot } from 'mineflayer';
 import { Memory } from './functions/memory/memory';
 import { Social } from './functions/social/social';
@@ -83,17 +84,6 @@ export class CognitiveController {
     );
     this.sharedState.playersNearby = playersNearby.map((p) => p.username);
 
-    // Social alignment check
-    if (playersNearby.length > 0) {
-      const isBehaviorAligned = this.social.analyzeBehavior({
-        alignment: 'aligned',
-      });
-      if (!isBehaviorAligned) {
-        this.bot.chat(
-          '[CC] Not aligned with others, reconsidering approach...'
-        );
-      }
-    }
 
     // 3. Evaluate goals
     const currentLongTermGoal = this.goals.getCurrentLongTermGoal();

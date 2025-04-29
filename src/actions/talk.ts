@@ -33,8 +33,9 @@ export class TalkService {
     try {
         this.bot.chat(message);
         console.log(`[TalkService] Sent chat message: "${message}"`);
-    } catch (error) {
-        console.error(`[TalkService] Error sending chat message: ${error}`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+        console.error(`[TalkService] Error sending chat message: ${msg}`);
         // Depending on desired robustness, you might want to re-throw or handle differently
     }
   }

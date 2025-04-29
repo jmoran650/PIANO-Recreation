@@ -38,7 +38,7 @@ export class Goals {
   /**
    * Example breakdown logic using an LLM (stub).
    */
-  public async breakDownGoalWithLLM(goal: string): Promise<string[]> {
+  public breakDownGoalWithLLM(goal: string) {
     if (goal.toLowerCase().includes('iron pickaxe')) {
       return [
         'mine iron ore (find iron ore, travel to iron ore, mine it)',

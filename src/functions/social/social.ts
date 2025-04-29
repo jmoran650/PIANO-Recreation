@@ -35,15 +35,7 @@ export class Social {
     );
   }
 
-  /**
-   * Analyzes the current social context to see if the bot's behavior is "aligned."
-   */
-  public analyzeBehavior(socialContext: any): boolean {
-    if (socialContext && socialContext.alignment) {
-      return socialContext.alignment === 'aligned';
-    }
-    return true;
-  }
+
 
   /**
    * Analyzes the bot's own goals in comparison to others' goals to determine compatibility.

@@ -3,6 +3,7 @@
     "target": "ES2020",
     "module": "CommonJS",
     "jsx": "react-jsx",
+    "allowJs": true,
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
@@ -20,7 +21,8 @@
     "goalPlanAppServer.ts",
     "treeviewer/goal-planner-app/src/goalPlanner.ts",
     "types/**/*",
-    "src/botWorker.ts"
+    "src/botWorker.ts",
+    "./webpack.config.cjs"
   ],
-  "exclude": ["node_modules", "dist", "**/*.test.ts"]
+  "exclude": ["node_modules", "dist/*", "**/*.test.ts"]
 }

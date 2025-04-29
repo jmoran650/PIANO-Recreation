@@ -1,47 +1,39 @@
-// src/botWorker.ts
 import dotenv from 'dotenv';
-import { parentPort, workerData } from 'worker_threads';
+import { parentPort, workerData, isMainThread } from 'worker_threads';
 import { AgentBot, BotOptions, createAgentBot } from './createAgentBot';
-import { StepNode, buildGoalTree } from './goalPlanner';
-// Import the actual SerializedState interface and the serialize function
-import { SerializedState, serializeSharedState } from './server/serverUtils'; // Adjusted path and added import
+import { StepNode, buildGoalTree } from './goalPlanner'; // Assuming goalPlanner exists
+
+import { SerializedState, serializeSharedState } from './server/serverUtils';
 import { handleChatTestCommand } from './chatTests';
 import type { LogEntry } from '../types/log.types';
-import OpenAI from 'openai'; // Keep for OpenAI type definitions
+import OpenAI from 'openai';
 
 dotenv.config();
 
-// --- Defined Types based on server implementation ---
+// --- Interfaces & Enums ---
 
-// For LlmRequest type='chat'
 export interface ChatRequestData {
   messages: OpenAI.Chat.ChatCompletionMessageParam[];
-  model?: string; // Optional as server provides default
+  model?: string;
   tools?: OpenAI.Chat.ChatCompletionTool[];
   tool_choice?: OpenAI.Chat.ChatCompletionToolChoiceOption;
-  parallel_tool_calls?: boolean; // Added based on server usage
-  // Add other potential parameters used by openai.chat.completions.create if needed
+  parallel_tool_calls?: boolean;
 }
 
-// For LlmRequest type='json'
 export interface JsonRequestData {
   systemMsg: string;
   userMsg: string;
-  jsonSchema: unknown; // Type accurately if a JSON schema type definition is available
-  // Add other parameters used by callLLMJsonSchema if needed
+  jsonSchema: unknown;
 }
 
-// Type for the parsed JSON response from 'json' mode LLM calls
-type ParsedJsonResponse = unknown; // Or a more specific type/generic if possible
+type ParsedJsonResponse = unknown;
 
-// --- Constants ---
 const ALL_PREFIX = 'all:';
 const TEST_COMMAND_PREFIX = 'test ';
 const BLOCKS_COMMAND = 'blocks';
 const MOBS_COMMAND = 'mobs';
 const TOME_COMMAND = 'tome';
 
-// --- Message Types and Payloads ---
 export enum MessageType {
   GetState = 'getState',
   StateUpdate = 'stateUpdate',
@@ -59,11 +51,9 @@ export enum MessageType {
   BotEnd = 'botEnd',
 }
 
-// Specific Payload Interfaces
-interface StateUpdatePayload { username: string; state: SerializedState; } // Use imported SerializedState
-// LlmRequestPayload uses specific data types based on 'type' discriminator (handled in WorkerMessage union)
+interface StateUpdatePayload { username: string; state: SerializedState; }
 export interface LlmResponsePayload {
-    response?: unknown; // Simplified from unknown | undefined, as unknown includes undefined
+    response?: unknown;
     error?: string;
 }
 export interface StartGoalPlanPayload { goal: string; mode: 'bfs' | 'dfs'; }
@@ -77,14 +67,11 @@ export interface BotErrorPayload { username: string; error: string; }
 export interface BotKickedPayload { username: string; reason: string; }
 export interface BotEndPayload { username: string; reason: string; }
 
-// Discriminated Union for Worker Messages
 export type WorkerMessage =
   | { type: MessageType.GetState; requestId?: string }
   | { type: MessageType.StateUpdate; requestId?: string; payload: StateUpdatePayload }
-  // Refined LlmRequest: payload depends on type discriminator
   | { type: MessageType.LlmRequest; requestId: string; payload: { type: 'chat', data: ChatRequestData } }
   | { type: MessageType.LlmRequest; requestId: string; payload: { type: 'json', data: JsonRequestData } }
-  // LlmResponse payload structure is consistent, but 'response' content type varies
   | { type: MessageType.LlmResponse; requestId: string; payload: LlmResponsePayload }
   | { type: MessageType.StartGoalPlan; requestId?: string; payload: StartGoalPlanPayload }
   | { type: MessageType.GoalPlanProgress; requestId?: string; payload: GoalPlanProgressPayload }
@@ -97,31 +84,30 @@ export type WorkerMessage =
   | { type: MessageType.BotKicked; requestId?: string; payload: BotKickedPayload }
   | { type: MessageType.BotEnd; requestId?: string; payload: BotEndPayload };
 
-
 interface ParsedChatMessage {
   isTargeted: boolean;
   isPrefixed: boolean;
   command: string;
 }
 
-// --- Global Worker State ---
+// --- Worker State ---
 let agentBotInstance: AgentBot | null = null;
-const botOptions = workerData as BotOptions;
-const botUsername: string = botOptions.username;
-const botAcronym: string | undefined = botOptions.acronym;
+// REMOVED Top-level access to workerData:
+// const botOptions = workerData as BotOptions;
+// const botUsername: string = botOptions.username;
+// const botAcronym: string | undefined = botOptions.acronym;
 
-// LLM Proxy State - resolve type depends on what handleLlmResponse resolves with
 const llmRequestPromises = new Map<
   string,
   {
-    resolve: (value: unknown) => void; // Simplified resolve type (unknown | undefined) -> unknown
+    resolve: (value: unknown) => void;
     reject: (reason?: unknown) => void;
-    requestType: 'chat' | 'json'; // Store the original request type
+    requestType: 'chat' | 'json';
   }
 >();
 let llmRequestIdCounter = 0;
 
-// --- Utility Functions (Unchanged) ---
+// --- Utility Functions ---
 function assertIsWorkerThread(): void {
   if (!parentPort) {
     throw new Error('This script must be run as a worker thread.');
@@ -132,42 +118,47 @@ function safePostMessage(message: WorkerMessage): void {
   if (parentPort) {
     parentPort.postMessage(message);
   } else {
-    logWarn(`parentPort is null, cannot send message type: ${message.type}`);
+    // Use logWarn, but we need botUsername context, maybe pass it or log generically
+    console.warn(`[Worker UNKNOWN] parentPort is null, cannot send message type: ${message.type}`);
   }
 }
 
-function logInfo(message: string, ...optionalParams: unknown[]): void {
-  console.log(`[Worker ${botUsername}] ${message}`, ...optionalParams);
+// Modified logging functions to accept username prefix
+function logInfo(message: string, botUsername: string | null = null, ...optionalParams: unknown[]): void {
+  const prefix = botUsername ? `[Worker ${botUsername}]` : '[Worker UNKNOWN]';
+  console.log(`${prefix} ${message}`, ...optionalParams);
 }
 
-function logWarn(message: string, ...optionalParams: unknown[]): void {
-  console.warn(`[Worker ${botUsername}] ${message}`, ...optionalParams);
+function logWarn(message: string, botUsername: string | null = null, ...optionalParams: unknown[]): void {
+  const prefix = botUsername ? `[Worker ${botUsername}]` : '[Worker UNKNOWN]';
+  console.warn(`${prefix} ${message}`, ...optionalParams);
 }
 
-function logError(message: string, ...optionalParams: unknown[]): void {
-  console.error(`[Worker ${botUsername}] ${message}`, ...optionalParams);
+function logError(message: string, botUsername: string | null = null, ...optionalParams: unknown[]): void {
+  const prefix = botUsername ? `[Worker ${botUsername}]` : '[Worker UNKNOWN]';
+  console.error(`${prefix} ${message}`, ...optionalParams);
 }
 
-// --- Initialization Functions (Unchanged) ---
+// --- Initialization and Event Setup ---
 async function initializeBotInstance(options: BotOptions): Promise<AgentBot> {
   try {
     const bot = await createAgentBot(options);
     if (!bot) {
       throw new Error('createAgentBot returned null or undefined.');
     }
-    logInfo('Bot instance created.');
+    // Log info will happen inside runWorker now
     return bot;
   } catch (error) {
-    logError('Failed during createAgentBot:', error);
-    throw error;
+    // Log error will happen inside runWorker now
+    throw error; // Re-throw to be caught by runWorker
   }
 }
 
-function setupBotEventListeners(botInstance: AgentBot): void {
+function setupBotEventListeners(botInstance: AgentBot, botUsername: string): void {
   const { bot } = botInstance;
 
   bot.on('error', (err) => {
-    logError('Bot Error:', err);
+    logError('Bot Error:', botUsername, err); // Use updated log function
     safePostMessage({
       type: MessageType.BotError,
       payload: { username: botUsername, error: String(err) },
@@ -175,7 +166,7 @@ function setupBotEventListeners(botInstance: AgentBot): void {
   });
 
   bot.on('kicked', (reason, loggedIn) => {
-    logError(`Kicked: ${reason} (Logged In: ${loggedIn})`);
+    logError(`Kicked: ${reason} (Logged In: ${loggedIn})`, botUsername); // Use updated log function
     safePostMessage({
       type: MessageType.BotKicked,
       payload: { username: botUsername, reason },
@@ -184,7 +175,7 @@ function setupBotEventListeners(botInstance: AgentBot): void {
   });
 
   bot.on('end', (reason) => {
-    logInfo(`Disconnected: ${reason}`);
+    logInfo(`Disconnected: ${reason}`, botUsername); // Use updated log function
     safePostMessage({
       type: MessageType.BotEnd,
       payload: { username: botUsername, reason },
@@ -192,10 +183,10 @@ function setupBotEventListeners(botInstance: AgentBot): void {
     process.exit(0);
   });
 
-  logInfo('Critical bot event listeners (error, kicked, end) attached.');
+  logInfo('Critical bot event listeners (error, kicked, end) attached.', botUsername); // Use updated log function
 }
 
-function setupStateLogging(botInstance: AgentBot): void {
+function setupStateLogging(botInstance: AgentBot, botUsername: string): void {
   const sharedState = botInstance.sharedState;
 
   const originalLogMessage = sharedState.logMessage.bind(sharedState);
@@ -223,38 +214,36 @@ function setupStateLogging(botInstance: AgentBot): void {
     if (entry) {
       safePostMessage({
         type: MessageType.LogEntry,
-        payload: { username: botUsername, entry },
+        payload: { username: botUsername, entry }, // Use passed username
       });
     }
   };
 
+  // Keep request/response/error logging internal to sharedState if needed,
+  // or modify them to post messages if required. Example:
   sharedState.logOpenAIRequest = (endpoint, payload) => {
     originalLogOpenAIRequest(endpoint, payload);
+    // Optionally post this info if needed by main thread
   };
 
-  // Corrected: Ensure logOpenAIResponse uses unknown type
-  sharedState.logOpenAIResponse = (endpoint: string, response: unknown) => { // Type is unknown
-    // Type guard remains necessary as response is unknown
+  sharedState.logOpenAIResponse = (endpoint: string, response: unknown) => {
     if (typeof response === 'object' && response !== null && 'choices' in response) {
          originalLogOpenAIResponse(endpoint, response as OpenAI.Chat.Completions.ChatCompletion);
     } else {
-        logWarn(`[State Logging] logOpenAIResponse received non-ChatCompletion object for endpoint ${endpoint}:`, response);
-        // Handle logging of unknown response structure if necessary
-        // Depending on requirements, you might still want to log the 'unknown' structure here
-        // originalLogOpenAIResponse(endpoint, response); // This might cause downstream type errors if original expects ChatCompletion
+        logWarn(`[State Logging] logOpenAIResponse received non-ChatCompletion object for endpoint ${endpoint}:`, botUsername, response);
     }
+    // Optionally post this info
   };
-
 
   sharedState.logOpenAIError = (endpoint, error) => {
     originalLogOpenAIError(endpoint, error);
+    // Optionally post this info
   };
 
-  logInfo('SharedAgentState logging overrides configured.');
+  logInfo('SharedAgentState logging overrides configured.', botUsername); // Use updated log function
 }
 
-
-// --- Chat Handling Logic (Largely Unchanged, check observer usage) ---
+// --- Chat Handling ---
 function parseChatMessage(
   message: string,
   botAcronymValue: string | undefined
@@ -271,12 +260,12 @@ function parseChatMessage(
         commandMessage = message.substring(botAcronymValue!.length).trim();
         isPrefixed = true;
         isTargeted = true;
-        logInfo(`Targeted by own acronym prefix '${botAcronymValue!}'.`);
+        // Logging handled in setupChatListener
     } else if (lowerMessage.startsWith(allPrefixLower)) {
         commandMessage = message.substring(ALL_PREFIX.length).trim();
         isPrefixed = true;
         isTargeted = true;
-        logInfo(`Targeted by '${ALL_PREFIX}' prefix.`);
+        // Logging handled in setupChatListener
     } else {
         commandMessage = message.trim();
         isPrefixed = false;
@@ -287,14 +276,15 @@ function parseChatMessage(
     return { isTargeted, isPrefixed, command: commandMessage };
 }
 
-
 async function handleTestCommand(
   agent: AgentBot,
   senderUsername: string,
-  testCommandArgs: string
+  testCommandArgs: string,
+  botUsername: string // Pass botUsername for logging
 ): Promise<void> {
   logInfo(
-    `Handling 'test' command: "${testCommandArgs}" from ${senderUsername}`
+    `Handling 'test' command: "${testCommandArgs}" from ${senderUsername}`,
+    botUsername // Use updated log function
   );
   try {
     await handleChatTestCommand(agent, senderUsername, testCommandArgs);
@@ -302,6 +292,7 @@ async function handleTestCommand(
     const errorMessage = error instanceof Error ? error.message : String(error);
     logError(
       `Error executing test command "${testCommandArgs}":`,
+      botUsername, // Use updated log function
       errorMessage
     );
     agent.bot.chat(
@@ -313,11 +304,12 @@ async function handleTestCommand(
 async function handleGeneralCommand(
   agent: AgentBot,
   senderUsername: string,
-  command: string
+  command: string,
+  botUsername: string // Pass botUsername for logging
 ): Promise<void> {
   const { observer, bot } = agent;
    if (!observer) {
-      logError("Observer not found in handleGeneralCommand");
+      logError("Observer not found in handleGeneralCommand", botUsername); // Use updated log function
       return;
    }
 
@@ -346,155 +338,138 @@ async function handleGeneralCommand(
       break;
     }
     case TOME_COMMAND:
-      logInfo(`Executing /tp command for user ${senderUsername}`);
+      logInfo(`Executing /tp command for user ${senderUsername}`, botUsername); // Use updated log function
       bot.chat(`/tp ${senderUsername}`);
       break;
 
     default:
-       logInfo(`Ignoring unknown general command: ${command}`);
+       logInfo(`Ignoring unknown general command: ${command}`, botUsername); // Use updated log function
       break;
   }
 }
 
-function setupChatListener(agent: AgentBot): void {
+function setupChatListener(agent: AgentBot, botUsername: string, botAcronym: string | undefined): void {
     assertIsWorkerThread();
 
-    const currentBotAcronym = botAcronym;
+    const currentBotAcronym = botAcronym; // Use passed acronym
 
     if (!currentBotAcronym) {
-        logWarn('Bot acronym is missing, prefix matching might not work as expected.');
+        logWarn('Bot acronym is missing, prefix matching might not work as expected.', botUsername); // Use updated log function
     }
 
     const { bot, observer } = agent;
-    const currentBotUsername = bot.username;
+    const currentBotUsername = botUsername; // Use passed username
 
     if (!observer) {
-        logError('Observer not available! Cannot handle chat messages properly.');
+        logError('Observer not available! Cannot handle chat messages properly.', botUsername); // Use updated log function
         return;
     }
-    // Ensure observer.recentChats is expected structure before using push
     if (!observer.recentChats || !Array.isArray(observer.recentChats)) {
-         logError('observer.recentChats is missing or not an array! Cannot store chat.');
-         // Decide if this is fatal or if chat can proceed without storing
-         // Initialize it perhaps?
-         // observer.recentChats = []; // Uncomment to initialize if missing
-         // return; // Uncomment to make it fatal
+         logError('observer.recentChats is missing or not an array! Cannot store chat.', botUsername); // Use updated log function
+         // Optionally initialize: observer.recentChats = [];
+         // Optionally return if fatal
     }
 
     bot.removeAllListeners('chat');
-    logInfo('Attaching chat listener in botWorker...');
+    logInfo('Attaching chat listener in botWorker...', botUsername); // Use updated log function
 
     bot.on('chat', async (username: string, message: string) => {
         if (username === currentBotUsername) return; // Ignore self
 
         const parsed = parseChatMessage(message, currentBotAcronym);
 
-        logInfo(`Parsed chat from ${username}: Targeted=${parsed.isTargeted}, Prefixed=${parsed.isPrefixed}, Command="${parsed.command}"`);
+        logInfo(`Parsed chat from ${username}: Targeted=${parsed.isTargeted}, Prefixed=${parsed.isPrefixed}, Command="${parsed.command}"`, botUsername); // Use updated log function
 
-        // Store all non-self messages in recentChats if observer exists and has the array
+        // Store non-self messages
         if (observer.recentChats && Array.isArray(observer.recentChats)) {
             const formattedMessage = `${username}: ${message}`;
             observer.recentChats.push(formattedMessage);
-            // Optional: Keep recentChats capped to a certain size
-            // if (observer.recentChats.length > MAX_RECENT_CHATS) {
-            //     observer.recentChats.shift();
-            // }
         }
 
-        // Handle 'test' command regardless of prefix (if it starts with 'test ')
+        // Handle 'test' command
         if (parsed.command.toLowerCase().startsWith(TEST_COMMAND_PREFIX)) {
             const testArgs = parsed.command.substring(TEST_COMMAND_PREFIX.length).trim();
-            logInfo(`Handling as TEST command: "${testArgs}"`);
-            await handleTestCommand(agent, username, testArgs);
+            logInfo(`Handling as TEST command: "${testArgs}"`, botUsername); // Use updated log function
+            await handleTestCommand(agent, username, testArgs, botUsername); // Pass botUsername
         }
-        // Handle built-in commands only if prefixed OR if it's one of the specific non-prefixed allowed commands
+        // Handle built-in commands
         else if (parsed.isPrefixed || [BLOCKS_COMMAND, MOBS_COMMAND, TOME_COMMAND].includes(parsed.command.toLowerCase())) {
              const lowerCommand = parsed.command.toLowerCase();
              if ([BLOCKS_COMMAND, MOBS_COMMAND, TOME_COMMAND].includes(lowerCommand)) {
-                 logInfo(`Handling as BUILT-IN command: "${parsed.command}"`);
-                 await handleGeneralCommand(agent, username, parsed.command);
+                 logInfo(`Handling as BUILT-IN command: "${parsed.command}"`, botUsername); // Use updated log function
+                 await handleGeneralCommand(agent, username, parsed.command, botUsername); // Pass botUsername
              } else if (parsed.isPrefixed) {
-                 // If it was prefixed but wasn't 'test' or a known built-in, maybe pass to LLM or log?
-                 logInfo(`Received prefixed command, but not 'test' or known built-in: "${parsed.command}". Passing to observer.`);
-                 // The message is already added to recentChats above. Further LLM processing would happen elsewhere.
+                 logInfo(`Received prefixed command, but not 'test' or known built-in: "${parsed.command}". Passing to observer.`, botUsername); // Use updated log function
              }
         } else {
-            // Non-prefixed, non-test, non-built-in command message.
-            // Already added to recentChats. No further action needed here.
-            logInfo(`Received non-prefixed, non-test, non-builtin message: "${parsed.command}". Logged in observer.`);
+            logInfo(`Received non-prefixed, non-test, non-builtin message: "${parsed.command}". Logged in observer.`, botUsername); // Use updated log function
         }
     });
 }
 
-
 // --- Main Thread Message Handling ---
-
-function handleGetState(instance: AgentBot): void {
+function handleGetState(instance: AgentBot, botUsername: string): void { // Pass username
   try {
-    // Use the imported serializeSharedState function
     const state: SerializedState = serializeSharedState(instance.sharedState);
     safePostMessage({
       type: MessageType.StateUpdate,
-      payload: { username: botUsername, state },
+      payload: { username: botUsername, state }, // Use passed username
     });
   } catch (error) {
-    logError('Error serializing state:', error);
-    // Optionally send an error back to the main thread
+    logError('Error serializing state:', botUsername, error); // Use updated log function
   }
 }
 
-// Handle LlmResponse, resolving the correct promise type
 function handleLlmResponse(payload: LlmResponsePayload, requestId: string): void {
   const resolver = llmRequestPromises.get(requestId);
   if (resolver) {
-    logInfo(`Received LLM response for request ${requestId} (Type: ${resolver.requestType})`);
+    // Log generically or derive username from requestId if needed
+    logInfo(`Received LLM response for request ${requestId} (Type: ${resolver.requestType})`, null); // Generic log
     if (payload.error) {
       resolver.reject(new Error(payload.error));
     } else {
-      // Resolve with the received response (type is unknown)
-      // The value `undefined` is assignable to `unknown` if payload.response is missing.
       resolver.resolve(payload.response);
     }
     llmRequestPromises.delete(requestId);
   } else {
-    logWarn(`No promise found for LLM response ID ${requestId}`);
+    logWarn(`No promise found for LLM response ID ${requestId}`, null); // Generic log
   }
 }
-
 
 async function handleStartGoalPlan(
   instance: AgentBot,
-  payload: StartGoalPlanPayload
+  payload: StartGoalPlanPayload,
+  botUsername: string // Pass username
 ): Promise<void> {
-  logInfo(`Received startGoalPlan request: ${payload.goal}`);
-  try {
-    const tree: StepNode[] = await buildGoalTree(
-      payload.goal,
-      payload.mode,
-      (updatedTree: StepNode[]) => {
-        safePostMessage({
-          type: MessageType.GoalPlanProgress,
-          payload: { username: botUsername, tree: updatedTree },
-        });
-      },
-      instance.sharedState
-    );
-    safePostMessage({
-      type: MessageType.GoalPlanComplete,
-      payload: { username: botUsername, tree },
-    });
-  } catch (error: unknown) {
-    const errorMessage =
-      error instanceof Error ? error.message : 'Unknown goal planning error';
-    logError('Error during goal planning:', errorMessage);
-    safePostMessage({
-      type: MessageType.GoalPlanError,
-      payload: { username: botUsername, error: errorMessage },
-    });
-  }
+   logInfo(`Received startGoalPlan request: ${payload.goal}`, botUsername); // Use updated log function
+   try {
+     const tree: StepNode[] = await buildGoalTree( // Make sure buildGoalTree is correctly imported/defined
+       payload.goal,
+       payload.mode,
+       (updatedTree: StepNode[]) => {
+         safePostMessage({
+           type: MessageType.GoalPlanProgress,
+           payload: { username: botUsername, tree: updatedTree }, // Use username
+         });
+       },
+       instance.sharedState
+     );
+     safePostMessage({
+       type: MessageType.GoalPlanComplete,
+       payload: { username: botUsername, tree }, // Use username
+     });
+   } catch (error: unknown) {
+     const errorMessage =
+       error instanceof Error ? error.message : 'Unknown goal planning error';
+     logError('Error during goal planning:', botUsername, errorMessage); // Use updated log function
+     safePostMessage({
+       type: MessageType.GoalPlanError,
+       payload: { username: botUsername, error: errorMessage }, // Use username
+     });
+   }
 }
 
-function setupMessageListener(): void {
+function setupMessageListener(botUsername: string): void { // Pass username and acronym
   if (!parentPort) {
     throw new Error('ParentPort is null');
   }
@@ -502,72 +477,62 @@ function setupMessageListener(): void {
   parentPort.on('message', (message: WorkerMessage) => {
     (async () => {
       if (!agentBotInstance) {
-        logWarn(`Received message type ${message.type} before initialization.`);
+        logWarn(`Received message type ${message.type} before initialization.`, botUsername); // Use updated log function
         return;
       }
 
+      // Pass botUsername and botAcronym down to handlers if they need it
       switch (message.type) {
         case MessageType.GetState:
-          handleGetState(agentBotInstance);
+          handleGetState(agentBotInstance, botUsername); // Pass username
           break;
-
         case MessageType.LlmResponse:
-          // No need to check message.requestId here, handleLlmResponse does it
           handleLlmResponse(message.payload, message.requestId);
           break;
-
         case MessageType.StartGoalPlan:
-           // Check if payload exists (it should based on the type definition)
            if (message.payload) {
-               await handleStartGoalPlan(agentBotInstance, message.payload);
+               await handleStartGoalPlan(agentBotInstance, message.payload, botUsername); // Pass username
            } else {
-               logWarn(`Received ${message.type} message without payload.`);
+               logWarn(`Received ${message.type} message without payload.`, botUsername); // Use updated log function
            }
           break;
-
-        // Add cases for other message types if needed...
-        // case MessageType.StateUpdate: // Example: Should worker handle state updates?
-        // case MessageType.LlmRequest: // Example: Should worker handle requests meant for main?
-        // etc.
-
+        // ... other cases ...
         default:
-           // Use message.type directly, removed 'as any' cast
-          logWarn(`Received unhandled message type: ${message.type}`);
+          logWarn(`Received unhandled message type: ${message.type}`, botUsername); // Use updated log function
       }
     })().catch(err => {
-        logError('Error in message handler:', err);
-         // Optionally send an error back to the main thread if the handler fails
-        // safePostMessage({ type: MessageType.BotError, payload: { username: botUsername, error: String(err) } });
+        logError('Error in message handler:', botUsername, err); // Use updated log function
     });
   });
-  logInfo('Main thread message listener attached.');
+  logInfo('Main thread message listener attached.', botUsername); // Use updated log function
 }
 
-// --- LLM Proxy Function (Overloaded) ---
-
-// Overload for 'chat' requests
+// --- LLM Proxy ---
+// Define overloads first
 export function proxyLLMRequest(
     type: 'chat',
-    data: ChatRequestData
-): Promise<OpenAI.Chat.Completions.ChatCompletion>; // Keep specific type here for callers
+    data: ChatRequestData,
+    botUsername: string // Added botUsername parameter
+): Promise<OpenAI.Chat.Completions.ChatCompletion>;
 
-// Overload for 'json' requests
 export function proxyLLMRequest(
     type: 'json',
-    data: JsonRequestData
-): Promise<ParsedJsonResponse>; // ParsedJsonResponse is unknown
+    data: JsonRequestData,
+    botUsername: string // Added botUsername parameter
+): Promise<ParsedJsonResponse>;
 
-
-// Implementation signature
+// Implementation
 export function proxyLLMRequest(
     type: 'chat' | 'json',
-    data: ChatRequestData | JsonRequestData
-): Promise<unknown> { // Implementation returns Promise<unknown> due to union simplification
+    data: ChatRequestData | JsonRequestData,
+    botUsername: string // Added botUsername parameter
+): Promise<unknown> {
   assertIsWorkerThread();
 
+  // Use the passed botUsername for the requestId
   const requestId = `${botUsername}_${llmRequestIdCounter++}`;
+  logInfo(`Proxying LLM Request ${requestId} (Type: ${type})`, botUsername); // Use updated log function
 
-  // Construct the specific message object based on the type
   let messageToSend: WorkerMessage;
   if (type === 'chat') {
       messageToSend = {
@@ -583,50 +548,83 @@ export function proxyLLMRequest(
       };
   }
 
-  // Promise resolves with 'unknown' because the response could be ChatCompletion or ParsedJsonResponse (unknown)
   const promise = new Promise<unknown>((resolve, reject) => {
-     // Store the original request type along with resolvers
     llmRequestPromises.set(requestId, { resolve, reject, requestType: type });
-    safePostMessage(messageToSend); // Send the correctly typed message
+    safePostMessage(messageToSend);
   });
 
-  // Type assertion might be needed where this promise is awaited, based on the original 'type' requested
   return promise;
 }
 
-
-// --- Worker Initialization Sequence (Unchanged) ---
-
+// --- Worker Entry Point ---
 async function runWorker(): Promise<void> {
   assertIsWorkerThread();
-  logInfo(`Initializing... Acronym: '${botAcronym || '(none)'}'`);
+
+  // MOVED ACCESS HERE:
+  const botOptions = workerData as BotOptions;
+
+  // Add null/undefined check for workerData
+  if (!botOptions) {
+      logError('Critical error: workerData is null or undefined inside worker.', null); // Log generically
+      safePostMessage({
+          type: MessageType.InitializationError,
+          payload: { username: 'unknown', error: 'workerData is missing or invalid' },
+      });
+      process.exit(1);
+      return; // Keep TS happy
+  }
+
+   // Check if username exists and is valid
+   if (typeof botOptions.username !== 'string' || !botOptions.username) {
+        logError('Critical error: botOptions.username is missing or invalid inside worker.', null); // Log generically
+        safePostMessage({
+            type: MessageType.InitializationError,
+            payload: { username: 'unknown', error: 'botOptions.username is missing or invalid' },
+        });
+        process.exit(1);
+        return; // Keep TS happy
+   }
+
+  // Now safely access properties
+  const botUsername: string = botOptions.username;
+  const botAcronym: string | undefined = botOptions.acronym;
+  // --- End moved access ---
+
+  // Now we have botUsername, use it for logging
+  logInfo(`Initializing Worker... Username: '${botUsername}', Acronym: '${botAcronym || '(none)'}'`, botUsername);
 
   try {
+    // Pass the locally retrieved botOptions
     agentBotInstance = await initializeBotInstance(botOptions);
 
-    setupBotEventListeners(agentBotInstance);
-    setupStateLogging(agentBotInstance);
-    setupChatListener(agentBotInstance);
-    setupMessageListener();
+    // Pass username/acronym to setup functions that need them
+    setupBotEventListeners(agentBotInstance, botUsername);
+    setupStateLogging(agentBotInstance, botUsername);
+    setupChatListener(agentBotInstance, botUsername, botAcronym);
+    setupMessageListener(botUsername); // Pass necessary context
 
     safePostMessage({
       type: MessageType.Initialized,
-      payload: { username: botUsername },
+      payload: { username: botUsername }, // Use local botUsername
     });
-    logInfo('Initialization complete. Worker is ready.');
+    logInfo('Initialization complete. Worker is ready.', botUsername);
   } catch (err: unknown) {
     const errorMessage = err instanceof Error ? err.message : String(err);
-    logError(`Worker initialization failed: ${errorMessage}`);
+    // Use botUsername if available, otherwise 'unknown'
+    const usernameForError = botUsername || 'unknown';
+    logError(`Worker initialization failed: ${errorMessage}`, usernameForError);
     safePostMessage({
       type: MessageType.InitializationError,
-      payload: { username: botUsername, error: errorMessage },
+      payload: { username: usernameForError, error: errorMessage },
     });
     process.exit(1);
   }
 }
 
-// --- Start the Worker ---
-runWorker().catch((error) => {
-  logError('Unhandled error during worker execution:', error);
-  process.exit(1);
-});
+if (!isMainThread) {
+  runWorker().catch((error) => {
+    // Log generically as username might not be available if error is early
+    logError('Unhandled error during worker execution:', null, error);
+    process.exit(1); // Ensure exit on unhandled error in worker context
+  });
+}
