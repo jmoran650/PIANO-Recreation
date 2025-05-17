@@ -7,8 +7,11 @@
   "scripts": {
     "build": "concurrently \"tsc\" \"webpack\"",
     "start": "npm run build && node dist/goalPlanAppServer.js",
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "postinstall": "for f in patches/*.patch; do patch -p1 --forward --silent < \"$f\" || true; done"
+    "test": "node --test tests",
+    "postinstall": "for f in patches/*.patch; do patch -p1 --forward --silent < \"$f\" || true; done",
+    "test:goals": "node --test tests/goals",
+    "test:memory": "node --test tests/memory",
+    "test:utils": "node --test tests/utils"
   },
   "author": "",
   "license": "ISC",
