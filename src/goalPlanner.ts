@@ -1,6 +1,7 @@
 /*******************
  * src/goalPlanner.ts DEPRECATED
  *******************/
+/*eslint-disable*/
 import { v4 as uuidv4 } from 'uuid';
 import { callLLM, callLLMJsonSchema } from '../utils/llmWrapper';
 import {
